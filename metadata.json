@@ -1,0 +1,6 @@
+{
+  "name": "GRAVEL SKY",
+  "description": "A 60fps pixel-art anime action JRPG set in a ruined industrial wasteland. Play as Sena Ibuki, wield the Railcut, upgrade skills, trade scrap gear at Kettle camp, and hunt multi-phase bosses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

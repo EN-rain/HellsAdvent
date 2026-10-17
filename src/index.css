@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #0B0D10;
+    color: #D9D2C3;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.pixelated {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: url('/assets/ui_cursor.png') 8 8, crosshair;
+}
+
+.scanlines {
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    rgba(255, 255, 255, 0) 50%,
+    rgba(11, 13, 16, 0.38) 50%,
+    rgba(11, 13, 16, 0.38)
+  );
+  background-size: 100% 4px;
+}
+
+/* Custom thin scrollbar for inventory/shop lists */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0D10;
+}
+::-webkit-scrollbar-thumb {
+  background: #3A3F47;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #00F0FF;
+}
