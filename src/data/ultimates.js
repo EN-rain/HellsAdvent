@@ -51,6 +51,17 @@ export const ULTIMATE_CAST_RULES = {
   shortUltimatesNonGameplayScale: 0.7, // compresses non-gameplay steps by 30%
   reduceFlashesBoneTintFrames: 3,
   reduceFlashesMaxPerSecond: 3,
+  impactFrames: {
+    slashCutFrames: 2,
+    slashShatterFrames: 4,
+    groundSlamFrames: 3,
+    pierceVectorFrames: 2,
+    pierceFinisherFrames: 3,
+    railSlugFrames: 4,
+    mineBlastFrames: 3,
+    scrapCrushFrames: 3,
+    scrapFinalCrushFrames: 4,
+  },
 };
 
 /**
@@ -111,9 +122,14 @@ function buildSenaCutSteps({
         totalCuts: cutsCount,
         blinkOffsetPx: 24,
         shakePx: 4,
-        invertFrames: 0,
+        invertFrames: 1,
         damageMult: damageMultPerCut,
         applyBleed,
+        impactFrame: {
+          kind: 'slashCut',
+          frames: 2,
+          color: applyBleed ? PALETTE.blood : PALETTE.signal,
+        },
       },
     });
   }
@@ -135,10 +151,15 @@ function buildSenaCutSteps({
         totalCuts: cutsCount,
         damageMultPerCut,
         applyBleed,
-        whiteFlashFrames: 0,
+        whiteFlashFrames: 1,
         shakePx: 8,
         boneDebrisCount: 16,
         letterboxOut: true,
+        impactFrame: {
+          kind: 'slashShatter',
+          frames: 4,
+          color: applyBleed ? PALETTE.blood : PALETTE.signal,
+        },
       },
     },
     {
@@ -214,8 +235,13 @@ function buildRailSlugSteps() {
       range: 1400,
       lineWidth: 90,
       applyMarkedDuration: 8.0,
-      whiteFlashFrames: 0,
+      whiteFlashFrames: 1,
       shakePx: 14,
+      impactFrame: {
+        kind: 'rail',
+        frames: 4,
+        color: PALETTE.brass,
+      },
     },
   });
 
@@ -284,6 +310,8 @@ function buildTenCountSteps() {
 
   // Release: 10 bolts in a tight line down cursor direction (600% ATK total = 60% each)
   for (let b = 0; b < 10; b++) {
+    const isFirst = b === 0;
+    const isLast = b === 9;
     steps.push({
       t: 1330 + b * 45,
       action: 'rookFireTenCountBolt',
@@ -294,8 +322,16 @@ function buildTenCountSteps() {
         damageMult: 0.60, // 10 x 60% = 600% ATK total
         range: 520,
         speed: 920,
-        shakePx: 3,
-        whiteFlashFrames: b === 0 ? 1 : 0,
+        shakePx: isLast ? 5 : 3,
+        whiteFlashFrames: isFirst || isLast ? 1 : 0,
+        impactFrame:
+          isFirst || isLast
+            ? {
+                kind: 'pierceVector',
+                frames: isLast ? 3 : 2,
+                color: PALETTE.brass,
+              }
+            : null,
       },
     });
   }
@@ -373,6 +409,11 @@ function buildDeadGroundSteps() {
       params: {
         whiteFlashFrames: 1,
         shakePx: 5,
+        impactFrame: {
+          kind: 'mineBlast',
+          frames: 3,
+          color: PALETTE.brass,
+        },
       },
     },
     {
@@ -510,6 +551,11 @@ export const ULTIMATES = {
           counterBurstMult: 0.80,
           whiteFlashFrames: 1,
           shakePx: 6,
+          impactFrame: {
+            kind: 'groundSlam',
+            frames: 3,
+            color: PALETTE.signal,
+          },
         },
       },
       {
@@ -665,6 +711,11 @@ export const ULTIMATES = {
           applyMarkedDuration: 5.0,
           whiteFlashFrames: 1,
           shakePx: 8,
+          impactFrame: {
+            kind: 'rail',
+            frames: 4,
+            color: PALETTE.brass,
+          },
         },
       },
       {
@@ -772,6 +823,11 @@ export const ULTIMATES = {
           whiteFlashFrames: 1,
           shakePx: 7,
           spawnCrater: true,
+          impactFrame: {
+            kind: 'crush',
+            frames: 4,
+            color: PALETTE.verdigris,
+          },
         },
       },
       {
@@ -866,6 +922,11 @@ export const ULTIMATES = {
           shakePx: 5,
           spawnCrater: true,
           keepLevitating: true,
+          impactFrame: {
+            kind: 'crush',
+            frames: 3,
+            color: PALETTE.verdigris,
+          },
         },
       },
       {
@@ -881,6 +942,11 @@ export const ULTIMATES = {
           shakePx: 5,
           spawnCrater: true,
           keepLevitating: true,
+          impactFrame: {
+            kind: 'crush',
+            frames: 3,
+            color: PALETTE.verdigris,
+          },
         },
       },
       {
@@ -896,6 +962,11 @@ export const ULTIMATES = {
           shakePx: 6,
           spawnCrater: true,
           keepLevitating: false,
+          impactFrame: {
+            kind: 'crush',
+            frames: 4,
+            color: PALETTE.verdigris,
+          },
         },
       },
       {
@@ -981,6 +1052,11 @@ export const ULTIMATES = {
           shakePx: 5,
           spawnCrater: true,
           keepLevitating: true,
+          impactFrame: {
+            kind: 'crush',
+            frames: 3,
+            color: PALETTE.verdigris,
+          },
         },
       },
       {
@@ -996,6 +1072,11 @@ export const ULTIMATES = {
           shakePx: 6,
           spawnCrater: true,
           keepLevitating: true,
+          impactFrame: {
+            kind: 'crush',
+            frames: 3,
+            color: PALETTE.verdigris,
+          },
         },
       },
       {
@@ -1011,6 +1092,11 @@ export const ULTIMATES = {
           shakePx: 8,
           spawnCrater: true,
           keepLevitating: false,
+          impactFrame: {
+            kind: 'crush',
+            frames: 4,
+            color: PALETTE.verdigris,
+          },
         },
       },
       {

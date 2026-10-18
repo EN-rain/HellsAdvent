@@ -666,6 +666,18 @@ export class UltimateSequencer {
   ) {
     const p = step.params || {};
 
+    if (p.impactFrame) {
+      this.triggerImpactFrame({
+        x: p.impactFrame.x !== undefined ? p.impactFrame.x : player.x,
+        y: p.impactFrame.y !== undefined ? p.impactFrame.y : player.y,
+        angle: p.impactFrame.angle !== undefined ? p.impactFrame.angle : (this.aimAngle || 0),
+        color: p.impactFrame.color || (player.classId === 'rook' ? PALETTE.brass : player.classId === 'ines' ? PALETTE.verdigris : PALETTE.signal),
+        kind: p.impactFrame.kind || 'slash',
+        frames: p.impactFrame.frames || 2,
+        camera,
+      });
+    }
+
     switch (step.action) {
       case 'startCast': {
         this.worldFrozen = !!p.freezeWorld;
@@ -1573,11 +1585,11 @@ export class UltimateSequencer {
       drawBresenhamCircle(ctx, sx, sy, 32, PALETTE.bone, 1.0);
       drawBresenhamCircle(ctx, sx, sy, 18, accent, 1.0);
       drawBresenhamCircle(ctx, sx, sy, 6, '#FFFFFF', 1.0);
-    } else if (data.kind === 'slash') {
+    } else if (data.kind === 'slash' || data.kind === 'slashCut' || data.kind === 'slashShatter') {
       // Melee Seven Cuts / Riposte Impact Frame:
       // Sharp graphic action slash lines radiating from the hit point
       const angle = data.angle || 0;
-      const rays = 16;
+      const rays = data.kind === 'slashShatter' ? 24 : 16;
       for (let r = 0; r < rays; r++) {
         const a = (r / rays) * Math.PI * 2 + (data.seed % 0.5);
         const len = 70 + (r % 3) * 80;
@@ -1603,6 +1615,27 @@ export class UltimateSequencer {
       ctx.fillRect(sx - 4, sy - 4, 8, 8);
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(sx - 2, sy - 2, 4, 4);
+    } else if (data.kind === 'pierceVector') {
+      const angle = data.angle || 0;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      const nx = -sinA;
+      const ny = cosA;
+      for (let i = -4; i <= 4; i++) {
+        const off = i * 16;
+        drawPixelLine(ctx, sx + nx * off, sy + ny * off, sx + nx * off + cosA * 450, sy + ny * off + sinA * 450, i % 2 === 0 ? PALETTE.brass : PALETTE.bone, 2);
+      }
+      drawBresenhamCircle(ctx, sx, sy, 20, PALETTE.bone, 1.0);
+    } else if (data.kind === 'groundSlam' || data.kind === 'mineBlast') {
+      for (let r = 0; r < 24; r++) {
+        const a = (r / 24) * Math.PI * 2;
+        const len = 50 + (r % 4) * 35;
+        const ex = Math.round(sx + Math.cos(a) * len);
+        const ey = Math.round(sy + Math.sin(a) * len);
+        drawPixelLine(ctx, sx, sy, ex, ey, r % 2 === 0 ? accent : PALETTE.bone, (r % 3 === 0) ? 2 : 1);
+      }
+      drawBresenhamCircle(ctx, sx, sy, 36, accent, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 18, PALETTE.bone, 1.0);
     } else {
       // General Burst / Crush Impact Frame:
       // Radial explosive shards
