@@ -155,39 +155,37 @@ export const CLASSES = {
         },
       },
       {
-        id: 'railSpike',
+        id: 'railParry',
         slot: 3,
         hotkey: '3',
-        name: 'Rail Spike',
-        icon: 'railSpike',
+        name: 'Rail Parry',
+        icon: 'railParry',
         maxLevel: 5,
         costPerLevel: 1,
-        baseDamageMult: 1.80,
-        damagePerLevel: 0.20,
-        basePierce: 2,
-        piercePerLevel: 1,
-        range: 420,
-        speed: 620,
-        baseCooldown: 6.0,
-        cooldownPerLevel: 0,
-        staminaCost: 15,
-        desc: 'Hurl a sharpened rail piece that pierces enemies in a 420px line.',
-        getStats(lvl = 1) {
+        parryDuration: 0.60,
+        baseDamageMult: 3.50,
+        damagePerLevel: 0.30,
+        baseCooldown: 8.0,
+        cooldownPerLevel: 0.5,
+        staminaCost: 16,
+        desc: 'Assume a primed parry stance for 0.6s. Negates 100% of the next hit and triggers an instant counter Riposte for 350% ATK (guaranteed Crit) and +2 Momentum.',
+        getStats(lvl = 1, ownedNodes = []) {
           const l = Math.max(1, Math.min(5, lvl));
+          const hasRebar = ownedNodes.includes('rebar');
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            pierce: this.basePierce + (l - 1) * this.piercePerLevel,
-            range: this.range,
-            cooldown: this.baseCooldown,
+            parryDuration: +(this.parryDuration + (hasRebar ? 0.20 : 0)).toFixed(2),
+            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel + (hasRebar ? 0.60 : 0)).toFixed(2),
+            cooldown: +(this.baseCooldown - (l - 1) * this.cooldownPerLevel).toFixed(1),
             staminaCost: this.staminaCost,
+            hasCounterShockwave: hasRebar,
           };
         },
-        formatComparison(lvl, nextLvl) {
-          const cur = this.getStats(lvl);
-          const nxt = this.getStats(nextLvl);
+        formatComparison(lvl, nextLvl, ownedNodes = []) {
+          const cur = this.getStats(lvl, ownedNodes);
+          const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
-            `Pierce: ${cur.pierce} -> ${nxt.pierce} targets`,
+            `Riposte Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
       },
@@ -352,11 +350,11 @@ export const CLASSES = {
         masterNodes: [
           {
             id: 'rebar',
-            name: 'Rebar',
+            name: 'Rebar Riposte',
             icon: 'rebar',
             tier: 3,
             cost: 3,
-            desc: 'Rail Spike throws 3 spikes in a spread, and spikes apply Pinned for 1s.',
+            desc: 'Rail Parry timing window +0.2s, and Riposte triggers a 120px shockwave that pins enemies for 1.5s.',
           },
           {
             id: 'counterweight',
@@ -513,59 +511,51 @@ export const CLASSES = {
         },
       },
       {
-        id: 'tripwire',
+        id: 'rapidFire',
         slot: 3,
         hotkey: '3',
-        name: 'Tripwire',
-        icon: 'tripwire',
+        name: 'Rapid Fire',
+        icon: 'rapidFire',
         maxLevel: 5,
         costPerLevel: 1,
-        baseDamageMult: 1.20, // 120% ATK
-        damagePerLevel: 0.20, // +20% per level
-        baseDuration: 8.0,
-        durationPerLevel: 1.0, // +1s per level
-        lineLength: 140,
-        maxLines: 3,
-        slowPct: 0.40,
-        slowDuration: 2.0,
-        baseCooldown: 10.0,
-        cooldownPerLevel: 0,
-        staminaCost: 18,
-        desc: 'Throw a spool that lays a 140px wire line for 8s. Crossing enemies take 120% ATK and Slow 40% for 2s.',
+        baseDuration: 4.0,
+        durationPerLevel: 0.5,
+        attackSpeedMult: 2.0,
+        baseCooldown: 12.0,
+        cooldownPerLevel: 0.5,
+        staminaCost: 15,
+        desc: 'Overclock the springgun for 4.0s. Refills magazine immediately, grants +100% Attack Speed, and basic shots consume no ammo.',
         getStats(lvl = 1, ownedNodes = []) {
           const l = Math.max(1, Math.min(5, lvl));
           const hasSpareSpools = ownedNodes.includes('spareSpools');
           const hasPressurePlates = ownedNodes.includes('pressurePlates');
           return {
-            damageMult: hasPressurePlates
-              ? +(3.00 + (l - 1) * this.damagePerLevel).toFixed(2)
-              : +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            duration: this.baseDuration + (l - 1) * this.durationPerLevel,
-            maxLines: hasPressurePlates ? 4 : this.maxLines + (hasSpareSpools ? 2 : 0),
-            cooldown: this.baseCooldown - (hasSpareSpools ? 2.0 : 0),
+            duration: +(this.baseDuration + (l - 1) * this.durationPerLevel + (hasSpareSpools ? 1.5 : 0)).toFixed(1),
+            cooldown: +(this.baseCooldown - (l - 1) * this.cooldownPerLevel - (hasSpareSpools ? 2.0 : 0)).toFixed(1),
+            attackSpeedMult: this.attackSpeedMult,
             staminaCost: this.staminaCost,
+            hasExplosiveBolts: hasPressurePlates,
           };
         },
         formatComparison(lvl, nextLvl, ownedNodes = []) {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
             `Duration: ${cur.duration.toFixed(1)}s -> ${nxt.duration.toFixed(1)}s`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
       },
     ],
     ultimate: {
-      id: 'tenCount',
+      id: 'railSlug',
       hotkey: 'R',
-      name: 'Ten Count',
-      icon: 'tenCount',
-      totalDamageMult: 6.0, // 600% ATK total
-      bolts: 10,
-      chargeTime: 1.0,
-      range: 520,
-      desc: 'Rook plants his feet, aims along a red laser line for 1s, then fires 10 piercing bolts for 600% total ATK.',
+      name: 'Anti-Materiel Rail Slug',
+      icon: 'railSlug',
+      totalDamageMult: 10.0, // 1000% ATK total
+      range: 800,
+      chargeTime: 1.2,
+      desc: 'Rook locks into a braced stance and supercharges a monolithic tungsten rail slug across the screen for 1000% ATK, piercing all enemies and obstacles.',
     },
     passives: [
       {
@@ -693,19 +683,19 @@ export const CLASSES = {
         journeymanNodes: [
           {
             id: 'spareSpools',
-            name: 'Spare Spools',
+            name: 'Drum Mag',
             icon: 'spareSpools',
             tier: 2,
             cost: 2,
-            desc: 'Tripwire max lines +2 and cooldown reduced by 2s.',
+            desc: 'Rapid Fire duration +1.5s and cooldown reduced by 2s.',
           },
           {
             id: 'barbed',
-            name: 'Barbed',
+            name: 'Barbed Bolts',
             icon: 'barbed',
             tier: 2,
             cost: 2,
-            desc: 'Tripwire applies Bleed (15% ATK/s for 4s) and its Slow increases to 60%.',
+            desc: 'During Rapid Fire, bolts apply Bleed (15% ATK/s for 4s) and Slow 40% on hit.',
           },
           {
             id: 'caltropPocket',
@@ -719,19 +709,19 @@ export const CLASSES = {
         masterNodes: [
           {
             id: 'pressurePlates',
-            name: 'Pressure Plates',
+            name: 'Explosive Bolts',
             icon: 'pressurePlates',
             tier: 3,
             cost: 3,
-            desc: 'Tripwire places proximity mines that explode for 300% ATK in an 80px radius (max 4 mines).',
+            desc: 'During Rapid Fire, bolts detonate on impact for 60% bonus AOE damage in a 45px blast.',
           },
           {
             id: 'chainReaction',
-            name: 'Chain Reaction',
+            name: 'Split Shot',
             icon: 'chainReaction',
             tier: 3,
             cost: 3,
-            desc: 'When a mine explodes, all active wire lines and mines pulse for 100% ATK.',
+            desc: 'During Rapid Fire, bolts pierce 2 additional enemies and fly 25% faster.',
           },
           {
             id: 'deadGround',

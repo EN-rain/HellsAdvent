@@ -153,6 +153,9 @@ export class Player {
     this.groundBreakStun = 1.0;
 
     this.railSpikeTimer = 0;
+    this.parryTimer = 0;
+    this.isSprinting = false;
+    this.sprintDustTick = 0;
 
     this.ultimatePhaseTimer = 0;
     this.ultimateCutIndex = 0;
@@ -319,7 +322,7 @@ export class Player {
   }
 
   isTimeStopped() {
-    return this.ultimates ? this.ultimates.worldFrozen : false;
+    return this.ultimateActive || (this.ultimates ? this.ultimates.worldFrozen : false);
   }
 
   getCutInTimer() {
@@ -361,29 +364,6 @@ export class Player {
     }
     this.dead = true;
     return goldLost;
-  }
-
-  useSkillByIndex(idx, worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world) {
-    if (idx === 0) return this.trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera);
-    if (idx === 1) return this.trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera);
-    if (idx === 2) return this.trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera);
-    return false;
-  }
-
-  useUltimate(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world, accessibility) {
-    if (this.ultimates) {
-      return this.ultimates.tryCast(
-        this,
-        spawner,
-        projectiles,
-        particles,
-        camera,
-        worldMouseX,
-        worldMouseY,
-        accessibility
-      );
-    }
-    return this.tryUltimate(worldMouseX, worldMouseY, spawner, particles, camera);
   }
 
   tryManualReload(particles = null) {
@@ -439,6 +419,12 @@ export class Player {
     this.gold = data.gold ?? 120;
     this.skillPoints = data.skillPoints ?? 1;
     this.skills = data.skills ? { ...data.skills } : {};
+    if (this.skills.tripwire && !this.skills.rapidFire) {
+      this.skills.rapidFire = this.skills.tripwire;
+    }
+    if (this.skills.railSpike && !this.skills.railParry) {
+      this.skills.railParry = this.skills.railSpike;
+    }
     this.passives = data.passives ? { ...data.passives } : {};
     this.ownedNodes = data.ownedNodes ? [...data.ownedNodes] : [];
     this.equipped = data.equipped ? { ...data.equipped } : { head: null, body: null, legs: null };
@@ -942,6 +928,17 @@ export class Player {
       return false;
     }
 
+    // Check Rail Parry window
+    if ((this.parryTimer > 0 || this.statuses.has('parrying')) && this.classId === 'sena' && this.classBehavior) {
+      this.parryTimer = 0;
+      this.statuses.remove('parrying');
+      this.invulnTimer = Math.max(this.invulnTimer, 0.35);
+      if (typeof this.classBehavior.triggerRiposte === 'function') {
+        this.classBehavior.triggerRiposte(sourceEntity, sourceX, sourceY, spawner, particles, camera);
+      }
+      return false; // 100% damage negated on successful parry!
+    }
+
     // Check if attack is frontal for Sena's Brace / Guarding
     const hitFromAngle = Math.atan2(sourceY - this.y, sourceX - this.x);
     let isFrontal = false;
@@ -1007,7 +1004,7 @@ export class Player {
     // Ultimate Charge from taking damage:
     // +0.8 for every 1% of max HP lost (counterweight doubles for Girder blocks)
     const hpLossPct = (finalDmg / Math.max(1, this.maxHp)) * 100;
-    if (this.ultimates) {
+    if (this.ultimates && typeof this.ultimates.addDamageTakenCharge === 'function') {
       this.ultimates.addDamageTakenCharge(
         this,
         hpLossPct,
@@ -1019,7 +1016,7 @@ export class Player {
     }
 
     // Hold the Line (Girder Master): every hit taken during Dug In returns 80% ATK in a 120px burst
-    if (this.statuses.has('dugIn') && spawner) {
+    if (this.statuses.has('dugIn') && spawner && typeof spawner.queryRadius === 'function') {
       const burstTargets = spawner.queryRadius(this.x, this.y, 120);
       if (particles) {
         particles.spawnShockwave(this.x, this.y, 120, PALETTE.signal, 0.2);
@@ -1078,8 +1075,7 @@ export class Player {
   }
 
   respawnAtKettle() {
-    const goldLost = Math.floor(this.gold * PLAYER_CONFIG.deathGoldPenalty);
-    this.gold = Math.max(0, this.gold - goldLost);
+    this.animState = 'idle';
     this.x = WORLD_CONFIG.kettleCenter.x;
     this.y = WORLD_CONFIG.kettleCenter.y + 42;
     this.vx = 0;
@@ -1093,7 +1089,7 @@ export class Player {
     this.ultimateActive = false;
     this.statuses.clearCombatStatusesOnLoad();
     this.recalculateStats(true);
-    return goldLost;
+    return;
   }
 
   update(dt, input, arg2, arg3, arg4, arg5, arg6, arg7) {
@@ -1210,12 +1206,15 @@ export class Player {
     if (this.comboResetTimer > 0) this.comboResetTimer = Math.max(0, this.comboResetTimer - dt);
     if (this.attackTimer > 0) this.attackTimer = Math.max(0, this.attackTimer - dt);
     if (this.railSpikeTimer > 0) this.railSpikeTimer = Math.max(0, this.railSpikeTimer - dt);
+    if (this.parryTimer > 0) this.parryTimer = Math.max(0, this.parryTimer - dt);
 
-    // Stamina regeneration
-    this.stamina = Math.min(
-      this.maxStamina,
-      this.stamina + this.getStaminaRegenPerSec() * dt
-    );
+    // Stamina regeneration (paused while sprinting)
+    if (!this.isSprinting) {
+      this.stamina = Math.min(
+        this.maxStamina,
+        this.stamina + this.getStaminaRegenPerSec() * dt
+      );
+    }
 
     // Update Class Behavior module
     if (this.classId === 'rook') {
@@ -1228,7 +1227,17 @@ export class Player {
 
     // 3. Update Generic Ultimate Sequencer (runs all 9 class ultimates from /src/data/ultimates.js)
     if (this.ultimates) {
-      this.ultimates.update(dt, this, spawner, projectiles, particles, camera);
+      this.ultimates.update(
+        dt,
+        this,
+        input,
+        spawner,
+        projectiles,
+        particles,
+        camera,
+        world,
+        this.accessibility || { reduceFlashes: false, shortUltimates: false }
+      );
       if (this.ultimates.active && this.ultimates.movementLocked) {
         this.vx = 0;
         this.vy = 0;
@@ -1322,24 +1331,45 @@ export class Player {
       !this.statuses.cannotMove() &&
       !(this.classId === 'rook' && this.classBehavior.tenCountState === 'charging');
 
+    let isSprinting = false;
     if (canMove && input) {
       const keys = input.keys || input;
       const isUp = !!(input.up || keys.KeyW || keys.ArrowUp || keys.up);
       const isDown = !!(input.down || keys.KeyS || keys.ArrowDown || keys.down);
       const isLeft = !!(input.left || keys.KeyA || keys.ArrowLeft || keys.left);
       const isRight = !!(input.right || keys.KeyD || keys.ArrowRight || keys.right);
+      const shiftPressed = !!(keys.ShiftLeft || keys.ShiftRight || input.ShiftLeft || input.ShiftRight);
 
       if (isUp) moveY -= 1;
       if (isDown) moveY += 1;
       if (isLeft) moveX -= 1;
       if (isRight) moveX += 1;
+
+      if (shiftPressed && this.stamina > 0 && (moveX !== 0 || moveY !== 0)) {
+        isSprinting = true;
+      }
     }
+    this.isSprinting = isSprinting;
 
     const moveLen = Math.hypot(moveX, moveY);
     if (moveLen > 0) {
       moveX /= moveLen;
       moveY /= moveLen;
-      const moveMult = this.attackTimer > 0 ? 0.45 : 1.0;
+      let moveMult = this.attackTimer > 0 ? 0.45 : 1.0;
+
+      if (this.isSprinting) {
+        moveMult *= 1.50; // +50% sprint speed boost
+        this.stamina = Math.max(0, this.stamina - 14 * dt);
+        if (this.stamina <= 0) {
+          this.isSprinting = false;
+        }
+        this.sprintDustTick = (this.sprintDustTick || 0) + dt;
+        if (this.sprintDustTick >= 0.14 && particles && typeof particles.spawnDustPuff === 'function') {
+          this.sprintDustTick = 0;
+          particles.spawnDustPuff(this.x, this.y + 10, 1, -moveX * 16, -moveY * 16);
+        }
+      }
+
       this.vx = moveX * this.speed * moveMult;
       this.vy = moveY * this.speed * moveMult;
       this.x = this.clampCoord(this.x + this.vx * dt);
@@ -1352,6 +1382,19 @@ export class Player {
     } else {
       this.vx = 0;
       this.vy = 0;
+    }
+
+    // 8. Basic Attack: triggered by left click or while holding left mouse
+    if (input && input.mouseDown && this.attackTimer <= 0) {
+      this.tryBasicAttack(
+        input.worldMouseX,
+        input.worldMouseY,
+        spawner,
+        projectiles,
+        particles,
+        camera,
+        onHitStop
+      );
     }
 
     // Update animation state
@@ -1438,7 +1481,6 @@ export class Player {
 
       for (let i = 0; i < pool.length; i++) {
         const enemy = pool[i];
-        enemy.frozenWhiteByUltimate = false;
         const pipe = computeDamagePipeline({
           baseDamage: Math.max(this.baseAtkForPipeline * 1.8, perTargetBase),
           atkBuffPct: this.statuses.getAtkBonusPct(),
@@ -1473,9 +1515,6 @@ export class Player {
     }
 
     if (this.ultimatePhaseTimer >= 1.38) {
-      for (let i = 0; i < this.ultimateTargetPool.length; i++) {
-        this.ultimateTargetPool[i].frozenWhiteByUltimate = false;
-      }
       this.ultimateActive = false;
     }
   }

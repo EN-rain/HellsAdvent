@@ -337,6 +337,43 @@ export const STATUSES = {
     },
   },
 
+  rapidFire: {
+    id: 'rapidFire',
+    name: 'Rapid Fire',
+    kind: 'buff',
+    color: PALETTE.brass,
+    defaultDuration: 4.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {
+      attackSpeedMult: 2.0, // +100% attack speed
+    },
+    cleansable: false,
+    icon: 'rapidFire',
+    tags: ['classMechanic', 'buff'],
+    getTooltip(inst) {
+      const dur = inst.duration ? inst.duration.toFixed(1) : '4.0';
+      return `Rapid Fire active (${dur}s): +100% Attack Speed. Basic shots consume no ammo.`;
+    },
+  },
+
+  parrying: {
+    id: 'parrying',
+    name: 'Parrying',
+    kind: 'buff',
+    color: PALETTE.signal,
+    defaultDuration: 0.6,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {},
+    cleansable: false,
+    icon: 'railParry',
+    tags: ['classMechanic', 'buff'],
+    getTooltip() {
+      return 'Primed parry stance: Negates 100% of the next hit and triggers an instant Riposte.';
+    },
+  },
+
   guarding: {
     id: 'guarding',
     name: 'Guarding',

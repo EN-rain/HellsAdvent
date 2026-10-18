@@ -299,10 +299,10 @@ export function SaveSlotScreen({ engine, onBack }) {
   const slots = engine.getSaveSlotsSummary();
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col justify-between bg-[#0B0D10] p-8 select-none">
+    <div className="fixed inset-0 z-30 flex flex-col justify-between bg-[#0B0D10] p-6 select-none overflow-y-auto">
       <ParallaxWastelandCanvas />
 
-      <div className="relative z-10 flex items-center justify-between border-b border-[#3A3F47] pb-3">
+      <div className="relative z-10 flex items-center justify-between border-b border-[#3A3F47] pb-3 shrink-0">
         <div>
           <h2 className="text-lg font-bold tracking-wider text-[#00F0FF]">
             SELECT SAVE LEDGER (3 SLOTS)
@@ -322,7 +322,7 @@ export function SaveSlotScreen({ engine, onBack }) {
         </button>
       </div>
 
-      <div className="relative z-10 my-auto grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full mx-auto">
+      <div className="relative z-10 my-auto grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full mx-auto py-4">
         {slots.map((slot) => {
           const accent = slot.accentColor || PALETTE.signal;
           return (

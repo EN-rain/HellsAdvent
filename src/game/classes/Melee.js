@@ -117,7 +117,9 @@ export class MeleeBehavior {
     // Hold the Line (Girder Master): 6s Dug In stand aura drawing enemies within 300px
     if (this.holdTheLineTimer > 0) {
       this.holdTheLineTimer = Math.max(0, this.holdTheLineTimer - dt);
-      const nearby = spawner.queryRadius(p.x, p.y, 300);
+      const nearby = spawner && typeof spawner.queryRadius === 'function'
+        ? spawner.queryRadius(p.x, p.y, 300)
+        : [];
       for (let i = 0; i < nearby.length; i++) {
         const e = nearby[i];
         if (!e.active || e.hp <= 0 || e.tier === 'boss') continue;
@@ -171,7 +173,26 @@ export class MeleeBehavior {
     sound.playSlash(nextStep);
 
     const reach = hitCfg.range + 12;
-    const candidates = spawner.queryRadius(p.x, p.y, reach + 32);
+
+    if (particles && typeof particles.spawnSlash === 'function') {
+      const halfArc = (hitCfg.arc || 1.6) * 0.45;
+      const a1 = p.attackAngle - halfArc;
+      const a2 = p.attackAngle + halfArc;
+      const r = reach * 0.95;
+      particles.spawnSlash(
+        p.x + Math.cos(a1) * (r * 0.35),
+        p.y + Math.sin(a1) * (r * 0.35),
+        p.x + Math.cos(a2) * r,
+        p.y + Math.sin(a2) * r,
+        nextStep === 3 ? PALETTE.signal : PALETTE.bone,
+        0.13,
+        'lunge'
+      );
+    }
+
+    const candidates = spawner && typeof spawner.queryRadius === 'function'
+      ? spawner.queryRadius(p.x, p.y, reach + 32)
+      : [];
     let hitAny = false;
 
     for (let i = 0; i < candidates.length; i++) {
@@ -232,7 +253,7 @@ export class MeleeBehavior {
     if (hitAny) {
       p.addUltimateCharge(4.5);
       sound.playHit(nextStep === 3);
-      camera.shake(nextStep === 3 ? 4 : 2, 0.09);
+      if (camera && typeof camera.shake === 'function') camera.shake(nextStep === 3 ? 4 : 2, 0.09);
       if (onHitStop) onHitStop(0.05);
     }
 
@@ -282,11 +303,15 @@ export class MeleeBehavior {
 
     p.x = x2;
     p.y = y2;
-    particles.spawnSlash(x1, y1, x2, y2, PALETTE.signal, 0.15, 'lunge');
+    if (particles && typeof particles.spawnSlash === 'function') {
+      particles.spawnSlash(x1, y1, x2, y2, PALETTE.signal, 0.15, 'lunge');
+    }
 
     const midX = (x1 + x2) * 0.5;
     const midY = (y1 + y2) * 0.5;
-    const candidates = spawner.queryRadius(midX, midY, 160);
+    const candidates = spawner && typeof spawner.queryRadius === 'function'
+      ? spawner.queryRadius(midX, midY, 160)
+      : [];
     let hitCount = 0;
     let killedAny = false;
 
@@ -327,7 +352,9 @@ export class MeleeBehavior {
           particles,
           camera
         );
-        particles.spawnCrossCutFlash(enemy.x, enemy.y);
+        if (particles && typeof particles.spawnCrossCutFlash === 'function') {
+          particles.spawnCrossCutFlash(enemy.x, enemy.y);
+        }
 
         const killed = prevHp > 0 && enemy.hp <= 0;
         if (killed) killedAny = true;
@@ -339,13 +366,15 @@ export class MeleeBehavior {
     // Quick Edge (Cutter Journeyman): resets Lunge cooldown on a kill
     if (killedAny && p.hasNode('quickEdge')) {
       p.cooldowns.skill1 = 0;
-      particles.spawnDamageNumber(p.x, p.y - 24, 0, true, 'RESET!', PALETTE.signal);
+      if (particles && typeof particles.spawnDamageNumber === 'function') {
+        particles.spawnDamageNumber(p.x, p.y - 24, 0, true, 'RESET!', PALETTE.signal);
+      }
     }
 
     if (hitCount > 0) {
       p.addUltimateCharge(hitCount * 4.5);
       sound.playHit(true);
-      camera.shake(4, 0.12);
+      if (camera && typeof camera.shake === 'function') camera.shake(4, 0.12);
       if (onHitStop) onHitStop(0.05);
     }
   }
@@ -383,7 +412,7 @@ export class MeleeBehavior {
     const hasCarve = p.hasNode('carve');
 
     sound.playSkillGroundBreak();
-    camera.shake(3, 0.18);
+    if (camera && typeof camera.shake === 'function') camera.shake(3, 0.18);
 
     // Heavy Landing (Anvil Journeyman): grants 15% damage reduction for 3s
     if (p.hasNode('heavyLanding')) {
@@ -399,21 +428,27 @@ export class MeleeBehavior {
       // Carve (Flenser Master): forward 3-slash cone, 260% ATK, no stun
       for (const offsetAngle of [-0.35, 0, 0.35]) {
         const a = p.attackAngle + offsetAngle;
-        particles.spawnSlash(
-          p.x,
-          p.y,
-          p.x + Math.cos(a) * radius,
-          p.y + Math.sin(a) * radius,
-          PALETTE.signal,
-          0.22,
-          'lunge'
-        );
+        if (particles && typeof particles.spawnSlash === 'function') {
+          particles.spawnSlash(
+            p.x,
+            p.y,
+            p.x + Math.cos(a) * radius,
+            p.y + Math.sin(a) * radius,
+            PALETTE.signal,
+            0.22,
+            'lunge'
+          );
+        }
       }
     } else {
-      particles.spawnGroundBreakEffect(p.x, p.y, radius);
+      if (particles && typeof particles.spawnGroundBreakEffect === 'function') {
+        particles.spawnGroundBreakEffect(p.x, p.y, radius);
+      }
     }
 
-    const candidates = spawner.queryRadius(p.x, p.y, radius + 36);
+    const candidates = spawner && typeof spawner.queryRadius === 'function'
+      ? spawner.queryRadius(p.x, p.y, radius + 36)
+      : [];
     let hitCount = 0;
 
     for (let i = 0; i < candidates.length; i++) {
@@ -469,12 +504,13 @@ export class MeleeBehavior {
   }
 
   /**
-   * Skill 3 — Rail Spike (or Rebar 3-spike spread + 1s Pinned if Girder node owned)
+   * Skill 3 — Rail Parry / Riposte
    */
-  trySkill3(worldMouseX, worldMouseY, projectiles, particles, camera) {
+  trySkill3(worldMouseX, worldMouseY, arg3, arg4, arg5, arg6) {
     const p = this.player;
     const skillDef = this.cfg.skills[2];
-    const stats = skillDef.getStats(p.skills.railSpike || 1);
+    const lvl = p.skills.railParry || p.skills.railSpike || 1;
+    const stats = skillDef.getStats(lvl, p.ownedNodes);
     const stamCost = p.statuses.has('redline') ? 0 : stats.staminaCost;
 
     if (p.cooldowns.skill3 > 0 || p.stamina < stamCost) return false;
@@ -482,38 +518,105 @@ export class MeleeBehavior {
     p.cooldowns.skill3 = stats.cooldown;
     p.maxCooldowns.skill3 = stats.cooldown;
 
+    const particles = (arg4 && typeof arg4.spawnParticle === 'function')
+      ? arg4
+      : (arg5 && typeof arg5.spawnParticle === 'function' ? arg5 : (arg3 && typeof arg3.spawnParticle === 'function' ? arg3 : null));
+    const camera = (arg5 && typeof arg5.shake === 'function')
+      ? arg5
+      : (arg6 && typeof arg6.shake === 'function' ? arg6 : null);
+
     const baseAngle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
     p.facingDir = angleTo4Facing(baseAngle);
     p.facingX = Math.cos(baseAngle) >= 0 ? 1 : -1;
-    p.railSpikeTimer = 0.25;
+    p.attackAngle = baseAngle;
 
-    // 4px recoil backward
-    p.x = p.clampCoord(p.x - Math.cos(baseAngle) * 4);
-    p.y = p.clampCoord(p.y - Math.sin(baseAngle) * 4);
+    // Enter primed parry stance for duration
+    p.parryTimer = stats.parryDuration;
+    p.statuses.apply('parrying', { duration: stats.parryDuration, sourceName: 'Rail Parry' }, p, particles);
 
-    const hasRebar = p.hasNode('rebar');
-    const angles = hasRebar ? [baseAngle - 0.22, baseAngle, baseAngle + 0.22] : [baseAngle];
+    sound.playReloadStart();
+    if (camera && typeof camera.shake === 'function') camera.shake(2, 0.06);
+    if (particles && typeof particles.spawnFloatingText === 'function') {
+      particles.spawnFloatingText(p.x, p.y - 18, 'PARRY!', PALETTE.signal);
+    }
+    return true;
+  }
 
-    for (const ang of angles) {
-      projectiles.spawn({
-        x: p.x + Math.cos(ang) * 14,
-        y: p.y + Math.sin(ang) * 14,
-        angle: ang,
-        speed: 620,
-        maxRange: stats.range,
-        radius: 8,
-        damage: p.baseAtkForPipeline * stats.damageMult,
-        isPlayer: true,
-        pierce: stats.pierce,
-        type: 'railSpike',
-        color: PALETTE.signal,
-        onHitStatus: hasRebar ? { id: 'pinned', duration: 1.0, sourceName: 'Rebar' } : null,
-      });
+  triggerRiposte(sourceEntity, sourceX, sourceY, spawner, particles, camera) {
+    const p = this.player;
+    const skillDef = this.cfg.skills[2];
+    const lvl = p.skills.railParry || p.skills.railSpike || 1;
+    const stats = skillDef.getStats(lvl, p.ownedNodes);
+
+    // 1. Audio & Camera: Crisp metallic deflection CLANG!
+    if (sound && typeof sound.playShieldBlock === 'function') {
+      sound.playShieldBlock();
+    } else if (sound && typeof sound.playHit === 'function') {
+      sound.playHit(true);
+    }
+    if (camera && typeof camera.shake === 'function') camera.shake(6, 0.16);
+    if (particles && typeof particles.triggerHitStop === 'function') {
+      particles.triggerHitStop(0.08);
     }
 
-    sound.playSkillRailSpike();
-    camera.shake(2, 0.08);
-    return true;
+    // 2. Momentum +2
+    this.addMomentum(2, particles);
+
+    // 3. Counter slash angle towards source
+    const ang = (sourceX !== undefined && sourceY !== undefined)
+      ? Math.atan2(sourceY - p.y, sourceX - p.x)
+      : (p.attackAngle || 0);
+
+    p.facingDir = angleTo4Facing(ang);
+    p.facingX = Math.cos(ang) >= 0 ? 1 : -1;
+
+    // Visual: Sharp crimson/signal counter-slash
+    const len = 48;
+    const perp = ang + Math.PI * 0.5;
+    const sx1 = p.x - Math.cos(perp) * len;
+    const sy1 = p.y - Math.sin(perp) * len;
+    const sx2 = p.x + Math.cos(perp) * len;
+    const sy2 = p.y + Math.sin(perp) * len;
+
+    if (particles && typeof particles.spawnSlash === 'function') {
+      particles.spawnSlash(sx1, sy1, sx2, sy2, PALETTE.signal, 0.28, 'heavySlash');
+    }
+
+    // 4. Hit targets in frontal 130px arc for 350% ATK (guaranteed Crit)
+    const targets = (spawner && typeof spawner.queryRadius === 'function')
+      ? spawner.queryRadius(p.x, p.y, 130)
+      : (sourceEntity ? [sourceEntity] : []);
+
+    for (let i = 0; i < targets.length; i++) {
+      const e = targets[i];
+      if (!e.active || e.hp <= 0) continue;
+      const targetAng = Math.atan2(e.y - p.y, e.x - p.x);
+      let diff = targetAng - ang;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      if (Math.abs(diff) <= Math.PI * 0.65 || e === sourceEntity) {
+        const pipe = computeDamagePipeline({
+          baseDamage: p.baseAtkForPipeline * stats.damageMult,
+          atkBuffPct: p.statuses.getAtkBonusPct(),
+          isCrit: true,
+          critMult: p.critMult || 1.5,
+          targetStatuses: e.statuses,
+          targetBaseDef: e.def || 0,
+          sourceName: 'Riposte',
+          targetName: e.name,
+        });
+        e.takeDamage(pipe.finalDamage, targetAng, 160, true, p, spawner, particles, camera);
+
+        if (stats.hasCounterShockwave && e.active) {
+          e.statuses.apply('pinned', { duration: 1.5, sourceName: 'Rebar Riposte' }, e, particles);
+        }
+      }
+    }
+
+    if (particles && typeof particles.spawnFloatingText === 'function') {
+      particles.spawnFloatingText(p.x, p.y - 24, 'RIPOSTE! 350%', PALETTE.signal);
+    }
+    sound.playSlash(true);
   }
 
   /**
@@ -531,8 +634,10 @@ export class MeleeBehavior {
       this.holdTheLineTimer = 6.0;
       p.statuses.apply('dugIn', { duration: 6.0, sourceName: 'Hold the Line' }, p, particles);
       sound.playSkillGroundBreak();
-      camera.shake(5, 0.2);
-      particles.spawnGroundBreakEffect(p.x, p.y, 140);
+      if (camera && typeof camera.shake === 'function') camera.shake(5, 0.2);
+      if (particles && typeof particles.spawnGroundBreakEffect === 'function') {
+        particles.spawnGroundBreakEffect(p.x, p.y, 140);
+      }
       return true;
     }
 
@@ -548,18 +653,14 @@ export class MeleeBehavior {
     p.ultimateReleased = false;
     p.statuses.apply('untouchable', { duration: 1.6, sourceName: 'Seven Cuts' }, p, null);
 
-    const targets = spawner
-      .queryRadius(p.x, p.y, 300)
-      .filter((e) => e.active && e.hp > 0);
+    const targets = (spawner && typeof spawner.queryRadius === 'function')
+      ? spawner.queryRadius(p.x, p.y, 300).filter((e) => e.active && e.hp > 0)
+      : [];
     p.ultimateTargetPool = targets;
     p.ultimateTotalDamage = Math.max(12, p.baseAtkForPipeline * 5.0);
 
-    for (let i = 0; i < targets.length; i++) {
-      targets[i].frozenWhiteByUltimate = true;
-    }
-
     sound.playUltimateStart();
-    camera.shake(4, 0.14);
+    if (camera && typeof camera.shake === 'function') camera.shake(4, 0.14);
     return true;
   }
 
@@ -573,6 +674,13 @@ export class MeleeBehavior {
     if (this.isGuarding) {
       const dirX = p.facingX >= 0 ? 1 : -1;
       drawPixelLine(ctx, sx + dirX * 12, sy - 10, sx + dirX * 14, sy + 8, PALETTE.signal, 2);
+    }
+
+    // Draw Rail Parry primed stance
+    if (p.parryTimer > 0) {
+      const dirX = p.facingX >= 0 ? 1 : -1;
+      drawPixelLine(ctx, sx + dirX * 10, sy - 14, sx + dirX * 10, sy + 14, PALETTE.signal, 3);
+      drawPixelLine(ctx, sx + dirX * 6, sy - 8, sx + dirX * 14, sy + 8, PALETTE.brass, 2);
     }
 
     // Draw Hold the Line Dug In 120px / 300px ring

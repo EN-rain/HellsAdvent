@@ -75,7 +75,7 @@ function buildSenaCutSteps({
       nonGameplay: true,
       params: {
         freezeWorld: true,
-        twoToneWorld: true,
+        twoToneWorld: false,
         letterbox: 0.12,
         untouchable: true,
         lockMovement: true,
@@ -111,7 +111,7 @@ function buildSenaCutSteps({
         totalCuts: cutsCount,
         blinkOffsetPx: 24,
         shakePx: 4,
-        invertFrames: 1,
+        invertFrames: 0,
         damageMult: damageMultPerCut,
         applyBleed,
       },
@@ -135,7 +135,7 @@ function buildSenaCutSteps({
         totalCuts: cutsCount,
         damageMultPerCut,
         applyBleed,
-        whiteFlashFrames: 1,
+        whiteFlashFrames: 0,
         shakePx: 8,
         boneDebrisCount: 16,
         letterboxOut: true,
@@ -150,6 +150,81 @@ function buildSenaCutSteps({
       },
     }
   );
+
+  return steps;
+}
+
+/**
+ * Helper to build Rook's Anti-Materiel Rail Slug timeline
+ */
+function buildRailSlugSteps() {
+  const steps = [
+    {
+      t: 0,
+      action: 'startCast',
+      nonGameplay: true,
+      params: {
+        freezeWorld: true,
+        twoToneWorld: false,
+        letterbox: 0.12,
+        untouchable: true,
+        lockMovement: true,
+      },
+    },
+    {
+      t: 80,
+      action: 'cutInEnter',
+      nonGameplay: true,
+      params: {
+        titleCard: 'RAIL SLUG',
+        slideFromRight: true,
+        speedLines8Dir: true,
+      },
+    },
+    {
+      t: 330,
+      action: 'cutInExit',
+      nonGameplay: true,
+      params: {
+        zoom: 1.15,
+        aimLineRange: 1400,
+        aimLineColor: PALETTE.brass,
+        chargeDurationMs: 1000,
+      },
+    },
+  ];
+
+  for (let i = 0; i < 5; i++) {
+    steps.push({
+      t: 380 + i * 180,
+      action: 'rookChargeTick',
+      nonGameplay: false,
+      params: { tickIndex: i, totalTicks: 5 },
+    });
+  }
+
+  steps.push({
+    t: 1300,
+    action: 'rookReleaseRailSlug',
+    nonGameplay: false,
+    params: {
+      damageMult: 12.0, // 1200% ATK direct rail impact
+      aoeDamageMult: 3.5, // 350% ATK secondary kinetic blast
+      aoeRadius: 80, // 80px radius detonation around each hit target
+      range: 1400,
+      lineWidth: 90,
+      applyMarkedDuration: 8.0,
+      whiteFlashFrames: 0,
+      shakePx: 14,
+    },
+  });
+
+  steps.push({
+    t: 1650,
+    action: 'endCast',
+    nonGameplay: true,
+    params: {},
+  });
 
   return steps;
 }
@@ -186,7 +261,6 @@ function buildTenCountSteps() {
       action: 'cutInExit',
       nonGameplay: true,
       params: {
-        unfreezeWorld: true,
         zoom: 1.12,
         aimLineRange: 520,
         aimLineColor: PALETTE.blood,
@@ -268,7 +342,6 @@ function buildDeadGroundSteps() {
       action: 'cutInExit',
       nonGameplay: true,
       params: {
-        unfreezeWorld: true,
         zoom: 1.10,
         fieldRadius: 220,
       },
@@ -469,6 +542,27 @@ export const ULTIMATES = {
   // ===========================================================================
   // 2) ROOK MATSUDA — TEN COUNT (Hand), LONG COUNT (Surveyor), DEAD GROUND (Minelayer)
   // ===========================================================================
+  railSlug: {
+    id: 'railSlug',
+    classId: 'rook',
+    branch: null,
+    nodeRequired: null,
+    name: 'Anti-Materiel Rail Slug',
+    titleCard: 'RAIL SLUG',
+    hotkey: 'R',
+    icon: 'railSlug',
+    accent: PALETTE.brass,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: false,
+    totalDamageMult: 12.0,
+    range: 1400,
+    lineWidth: 90,
+    summary: '1200% ATK · 90px Wide Corridor · 80px AOE Detonations',
+    desc: 'Rook locks into a braced stance and supercharges a colossal 90px-wide anti-materiel tungsten rail slug across 1400px. Pierces all enemies for 1200% ATK, marking targets and detonating 80px kinetic AOE shockwaves (350% ATK) on every enemy struck.',
+    steps: buildRailSlugSteps(),
+  },
+
   tenCount: {
     id: 'tenCount',
     classId: 'rook',
@@ -536,7 +630,6 @@ export const ULTIMATES = {
         action: 'cutInExit',
         nonGameplay: true,
         params: {
-          unfreezeWorld: true,
           zoom: 1.15,
           aimLineRange: 620,
           aimLineColor: PALETTE.brass,
@@ -654,7 +747,6 @@ export const ULTIMATES = {
         action: 'cutInExit',
         nonGameplay: true,
         params: {
-          unfreezeWorld: true,
           zoom: 1.12,
         },
       },
@@ -738,7 +830,6 @@ export const ULTIMATES = {
         action: 'cutInExit',
         nonGameplay: true,
         params: {
-          unfreezeWorld: true,
           zoom: 1.08,
         },
       },
@@ -863,7 +954,6 @@ export const ULTIMATES = {
         action: 'cutInExit',
         nonGameplay: true,
         params: {
-          unfreezeWorld: true,
           zoom: 1.15,
         },
       },
@@ -945,7 +1035,7 @@ export function getActiveUltimateForPlayer(classId = 'sena', ownedNodes = []) {
   if (classId === 'rook') {
     if (ownedNodes.includes('longCount')) return ULTIMATES.longCount;
     if (ownedNodes.includes('deadGround')) return ULTIMATES.deadGround;
-    return ULTIMATES.tenCount;
+    return ULTIMATES.railSlug || ULTIMATES.tenCount;
   }
   if (classId === 'ines') {
     if (ownedNodes.includes('craneDrop')) return ULTIMATES.craneDrop;

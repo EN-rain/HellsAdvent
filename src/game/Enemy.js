@@ -26,6 +26,7 @@ export class Enemy {
   constructor() {
     this.uid = NEXT_ENEMY_UID++;
     this.active = false;
+    this.dead = false;
     this.id = 'tinRat';
     this.name = 'Tin Rat';
     this.subtitle = '';
@@ -56,7 +57,6 @@ export class Enemy {
     this.hitFlashFrames = 0;
     this.squashTimer = 0;
     this.contactCooldown = 0;
-    this.frozenWhiteByUltimate = false;
 
     // Unique Common behavioral tells & status timers
     this.ratTwitchTimer = 0;
@@ -86,10 +86,15 @@ export class Enemy {
     this.patternIndex = 0;
   }
 
+  get status() {
+    return this.statuses;
+  }
+
   initFromConfig(cfg, x, y, scaleMult = 1.0) {
     spriteRegistry.init();
     this.uid = NEXT_ENEMY_UID++;
     this.active = true;
+    this.dead = false;
     this.id = cfg.id;
     this.name = cfg.name;
     this.subtitle = cfg.subtitle || '';
@@ -120,7 +125,6 @@ export class Enemy {
     this.hitFlashFrames = 0;
     this.squashTimer = 0;
     this.contactCooldown = 0;
-    this.frozenWhiteByUltimate = false;
 
     this.ratTwitchTimer = 0;
     this.ratLungeCooldown = 1.8 + Math.random();
@@ -223,6 +227,7 @@ export class Enemy {
 
   _onDeath(player, spawner, particles, camera) {
     this.active = false;
+    this.dead = true;
     this.telegraphActive = false;
 
     const baseGold =
@@ -233,7 +238,11 @@ export class Enemy {
     if (player) {
       player.gainXpAndGold(this.xp, finalGold, particles);
       if (player.ultimates) {
-        player.ultimates.addKillCharge(player, this.tier);
+        if (typeof player.ultimates.addKillCharge === 'function') {
+          player.ultimates.addKillCharge(player, this.tier);
+        } else if (typeof player.ultimates.onEnemyKilled === 'function') {
+          player.ultimates.onEnemyKilled(player, this.tier);
+        }
       }
       // Ines Scrap Orbit: +1 scrap piece when an enemy dies within 200px
       if (player.classId === 'ines' && player.classBehavior) {
@@ -344,9 +353,12 @@ export class Enemy {
       this.telegraphImpactFlashTimer = Math.max(0, this.telegraphImpactFlashTimer - dt);
     }
 
-    // Freeze enemies inside Sena's Seven Cuts time-stop
-    if (player.classId === 'sena' && player.ultimateActive) return;
-    this.frozenWhiteByUltimate = false;
+    // Freeze enemies during any player ultimate (Melee, Archer, and Trasher)
+    const isUltFrozen =
+      player.ultimateActive ||
+      (player.ultimates && player.ultimates.active && player.ultimates.worldFrozen) ||
+      (player.isTimeStopped && player.isTimeStopped());
+    if (isUltFrozen) return;
 
     // Update StatusSystem (DoT ticks, Stagger meter, Lifted drop impact)
     this.statuses.update(dt, this, particles, (dotDmg) => {
@@ -590,7 +602,9 @@ export class Enemy {
 
       let sepX = 0;
       let sepY = 0;
-      const neighbors = spawner.queryRadius(this.x, this.y, this.radius * 2.1);
+      const neighbors = (spawner && typeof spawner.queryRadius === 'function')
+        ? spawner.queryRadius(this.x, this.y, this.radius * 2.1)
+        : [];
       for (let i = 0; i < neighbors.length; i++) {
         const other = neighbors[i];
         if (other === this || !other.active) continue;
@@ -857,8 +871,8 @@ export class Enemy {
         }
       }
 
-      if (this.id === 'motherSump' && spawner.getActiveCount() < 36) {
-        const slot = spawner._getFreeEnemy();
+      if (this.id === 'motherSump' && spawner && typeof spawner.getActiveCount === 'function' && spawner.getActiveCount() < 36) {
+        const slot = typeof spawner._getFreeEnemy === 'function' ? spawner._getFreeEnemy() : null;
         if (slot) {
           slot.initFromConfig(ENEMIES_CONFIG.commons.lyeLeech, this.x + 28, this.y + 18, 1.2);
         }
@@ -991,7 +1005,6 @@ export class Enemy {
 
       if (
         this.hitFlashFrames > 0 ||
-        this.frozenWhiteByUltimate ||
         (isStaggered && Math.floor(this.animClock * 16) % 2 === 0)
       ) {
         spriteCanvas = isRight ? entry.whiteRight[fIdx] : entry.whiteLeft[fIdx];

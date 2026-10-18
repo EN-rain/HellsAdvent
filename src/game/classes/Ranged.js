@@ -202,16 +202,45 @@ export class RangedBehavior {
               pierce: 999,
               type: 'rookBolt',
               color: PALETTE.brass,
+              isUltimateProjectile: true,
               onHitStatus: { id: 'marked', duration: 5.0, sourceName: 'Long Count' },
             });
             sound.playUltimateReleaseCrack();
-            camera.shake(7, 0.25);
+            if (camera && typeof camera.shake === 'function') camera.shake(7, 0.25);
             this.tenCountState = 'none';
             p.ultimateActive = false;
           } else {
-            this.tenCountState = 'firing';
-            this.tenCountTimer = 0;
-            this.tenCountBoltsFired = 0;
+            // Anti-Materiel Rail Slug: supercharged colossal tungsten rail slug (1200% ATK, 1400px range, 90px wide, pierce 999)
+            projectiles.spawn({
+              x: p.x + Math.cos(this.tenCountAngle) * 16,
+              y: p.y + Math.sin(this.tenCountAngle) * 16,
+              angle: this.tenCountAngle,
+              speed: 1600,
+              maxRange: 1400,
+              radius: 45,
+              damage: p.baseAtkForPipeline * 12.0,
+              isPlayer: true,
+              pierce: 999,
+              type: 'rookBolt',
+              color: PALETTE.brass,
+              isUltimateProjectile: true,
+              onHitStatus: { id: 'marked', duration: 8.0, sourceName: 'Rail Slug' },
+            });
+            if (particles && typeof particles.spawnRailBeam === 'function') {
+              particles.spawnRailBeam(
+                p.x,
+                p.y,
+                p.x + Math.cos(this.tenCountAngle) * 1400,
+                p.y + Math.sin(this.tenCountAngle) * 1400,
+                90,
+                0.5
+              );
+            }
+            sound.playUltimateReleaseCrack();
+            if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+            if (camera && typeof camera.shake === 'function') camera.shake(14, 0.35);
+            this.tenCountState = 'none';
+            p.ultimateActive = false;
           }
         }
       } else if (this.tenCountState === 'firing') {
@@ -231,9 +260,10 @@ export class RangedBehavior {
             pierce: 999,
             type: 'rookBolt',
             color: PALETTE.brass,
+            isUltimateProjectile: true,
           });
           sound.playSpringgunShot(true);
-          camera.shake(2, 0.06);
+          if (camera && typeof camera.shake === 'function') camera.shake(2, 0.06);
         }
         if (this.tenCountBoltsFired >= 10) {
           this.tenCountState = 'none';
@@ -284,7 +314,9 @@ export class RangedBehavior {
       if (trap.kind === 'wire') {
         const midX = (trap.x1 + trap.x2) * 0.5;
         const midY = (trap.y1 + trap.y2) * 0.5;
-        const enemies = spawner.queryRadius(midX, midY, 95);
+        const enemies = spawner && typeof spawner.queryRadius === 'function'
+          ? spawner.queryRadius(midX, midY, 95)
+          : [];
         const segLenSq =
           (trap.x2 - trap.x1) * (trap.x2 - trap.x1) +
           (trap.y2 - trap.y1) * (trap.y2 - trap.y1);
@@ -341,7 +373,9 @@ export class RangedBehavior {
           }
         }
       } else if (trap.kind === 'mine') {
-        const enemies = spawner.queryRadius(trap.x, trap.y, trap.radius + 26);
+        const enemies = spawner && typeof spawner.queryRadius === 'function'
+          ? spawner.queryRadius(trap.x, trap.y, trap.radius + 26)
+          : [];
         let triggered = false;
         for (let j = 0; j < enemies.length; j++) {
           const e = enemies[j];
@@ -358,7 +392,9 @@ export class RangedBehavior {
         trap.tickTimer += dt;
         if (trap.tickTimer >= 0.5) {
           trap.tickTimer = 0;
-          const enemies = spawner.queryRadius(trap.x, trap.y, trap.radius + 20);
+          const enemies = spawner && typeof spawner.queryRadius === 'function'
+            ? spawner.queryRadius(trap.x, trap.y, trap.radius + 20)
+            : [];
           for (let j = 0; j < enemies.length; j++) {
             const e = enemies[j];
             if (!e.active || e.hp <= 0) continue;
@@ -385,10 +421,14 @@ export class RangedBehavior {
   _detonateMine(mine, spawner, particles, camera, onHitStop) {
     const p = this.player;
     sound.playSkillGroundBreak();
-    camera.shake(4, 0.14);
-    particles.spawnGroundBreakEffect(mine.x, mine.y, mine.blastRadius);
+    if (camera && typeof camera.shake === 'function') camera.shake(4, 0.14);
+    if (particles && typeof particles.spawnGroundBreakEffect === 'function') {
+      particles.spawnGroundBreakEffect(mine.x, mine.y, mine.blastRadius);
+    }
 
-    const targets = spawner.queryRadius(mine.x, mine.y, mine.blastRadius + 28);
+    const targets = spawner && typeof spawner.queryRadius === 'function'
+      ? spawner.queryRadius(mine.x, mine.y, mine.blastRadius + 28)
+      : [];
     for (let i = 0; i < targets.length; i++) {
       const e = targets[i];
       if (!e.active || e.hp <= 0) continue;
@@ -416,7 +456,9 @@ export class RangedBehavior {
           const midX = (other.x1 + other.x2) * 0.5;
           const midY = (other.y1 + other.y2) * 0.5;
           particles.spawnSlash(other.x1, other.y1, other.x2, other.y2, PALETTE.brass, 0.18, 'lunge');
-          const nearWire = spawner.queryRadius(midX, midY, 85);
+          const nearWire = spawner && typeof spawner.queryRadius === 'function'
+            ? spawner.queryRadius(midX, midY, 85)
+            : [];
           for (const e of nearWire) {
             if (!e.active || e.hp <= 0) continue;
             const pipe = computeDamagePipeline({
@@ -451,8 +493,9 @@ export class RangedBehavior {
       return false;
     }
 
-    if (this.reloading) return false;
-    if (this.ammo <= 0) {
+    const isRapid = p.statuses.has('rapidFire');
+    if (this.reloading && !isRapid) return false;
+    if (this.ammo <= 0 && !isRapid) {
       this.startReload();
       return false;
     }
@@ -473,29 +516,40 @@ export class RangedBehavior {
       p.statuses.consume('settled');
     }
 
-    this.ammo -= 1;
-    if (this.ammo <= 0) {
-      p.statuses.remove('cleanMag');
-      this.startReload();
+    if (!isRapid) {
+      this.ammo -= 1;
+      if (this.ammo <= 0) {
+        p.statuses.remove('cleanMag');
+        this.startReload();
+      }
     }
+
+    const hasBarbed = p.hasNode('barbed');
+    const hasChain = p.hasNode('chainReaction');
+    const hasExplosive = p.hasNode('pressurePlates');
 
     projectiles.spawn({
       x: p.x + Math.cos(angle) * 14,
       y: p.y + Math.sin(angle) * 14,
       angle,
-      speed: this.cfg.basicAttack.speed,
+      speed: isRapid ? this.cfg.basicAttack.speed * 1.25 : this.cfg.basicAttack.speed,
       maxRange: this.cfg.basicAttack.range,
       radius: 7,
       damage: p.baseAtkForPipeline * this.cfg.basicAttack.damageMult,
       atkBuffPct: atkBonus,
       isPlayer: true,
-      pierce: 1 + (hasSettled ? 1 : 0),
+      pierce: 1 + (hasSettled ? 1 : 0) + (isRapid && hasChain ? 2 : 0),
       type: 'rookBolt',
-      color: PALETTE.brass,
+      color: isRapid ? PALETTE.signal : PALETTE.brass,
       useRookDistanceBonus: true,
+      onHitStatus: (isRapid && hasBarbed)
+        ? { id: 'bleed', duration: 4.0, sourceAtk: p.atk, sourceName: 'Barbed Rapid Fire' }
+        : null,
+      explosiveRadius: (isRapid && hasExplosive) ? 45 : 0,
+      explosiveDamageMult: (isRapid && hasExplosive) ? 0.60 : 0,
     });
 
-    sound.playSpringgunShot(hasSettled);
+    sound.playSpringgunShot(hasSettled || isRapid);
     return true;
   }
 
@@ -536,7 +590,7 @@ export class RangedBehavior {
         useRookDistanceBonus: true,
       });
       sound.playSpringgunShot(true);
-      camera.shake(4, 0.12);
+      if (camera && typeof camera.shake === 'function') camera.shake(4, 0.12);
     } else {
       const fanRad = (40 * Math.PI) / 180;
       for (let i = 0; i < 5; i++) {
@@ -558,7 +612,7 @@ export class RangedBehavior {
         });
       }
       sound.playSpringgunShot(false);
-      camera.shake(2, 0.08);
+      if (camera && typeof camera.shake === 'function') camera.shake(2, 0.08);
     }
 
     return true;
@@ -607,67 +661,40 @@ export class RangedBehavior {
     });
 
     sound.playSpringgunShot(true);
-    camera.shake(3, 0.1);
+    if (camera && typeof camera.shake === 'function') camera.shake(3, 0.1);
     return true;
   }
 
   /**
-   * Skill 3 — Tripwire (or Pressure Plates mine if Minelayer Master node owned)
+   * Skill 3 — Rapid Fire (overclocks springgun for duration, refills mag, 0 ammo consumption, 2x fire rate)
    */
   trySkill3(worldMouseX, worldMouseY, particles) {
     const p = this.player;
     const skillDef = this.cfg.skills[2];
-    const stats = skillDef.getStats(p.skills.tripwire || 1, p.ownedNodes);
+    const lvl = p.skills.rapidFire || p.skills.tripwire || 1;
+    const stats = skillDef.getStats(lvl, p.ownedNodes);
 
     if (p.cooldowns.skill3 > 0 || p.stamina < stats.staminaCost) return false;
     p.stamina -= stats.staminaCost;
     p.cooldowns.skill3 = stats.cooldown;
     p.maxCooldowns.skill3 = stats.cooldown;
 
-    const hasPressurePlates = p.hasNode('pressurePlates');
-    const activeKind = hasPressurePlates ? 'mine' : 'wire';
-    const currentSameKind = this.traps.filter((t) => t.kind === activeKind);
-    if (currentSameKind.length >= stats.maxLines) {
-      const oldestIdx = this.traps.findIndex((t) => t.kind === activeKind);
-      if (oldestIdx !== -1) this.traps.splice(oldestIdx, 1);
-    }
+    // Interrupt reload & immediately refill magazine
+    this.reloading = false;
+    this.reloadTimer = 0;
+    this.reloadLockout = false;
+    this.ammo = this.maxMag;
 
-    const angle = Math.atan2(worldMouseY - p.y, worldMouseX - p.x);
-    const dist = Math.min(180, Math.hypot(worldMouseX - p.x, worldMouseY - p.y));
-    const cx = p.clampCoord(p.x + Math.cos(angle) * dist);
-    const cy = p.clampCoord(p.y + Math.sin(angle) * dist);
-
-    if (hasPressurePlates) {
-      this.traps.push({
-        kind: 'mine',
-        x: cx,
-        y: cy,
-        radius: 22,
-        blastRadius: 80,
-        damageMult: stats.damageMult,
-        life: stats.duration,
-        maxLife: stats.duration,
-      });
-    } else {
-      // 140px wire line perpendicular to throw angle
-      const perp = angle + Math.PI * 0.5;
-      const half = 70;
-      this.traps.push({
-        kind: 'wire',
-        x1: cx - Math.cos(perp) * half,
-        y1: cy - Math.sin(perp) * half,
-        x2: cx + Math.cos(perp) * half,
-        y2: cy + Math.sin(perp) * half,
-        damageMult: stats.damageMult,
-        life: stats.duration,
-        maxLife: stats.duration,
-        hitMap: new Map(),
-      });
-    }
+    p.statuses.apply(
+      'rapidFire',
+      { duration: stats.duration, sourceName: 'Rapid Fire' },
+      p,
+      particles
+    );
 
     sound.playReloadStart();
-    if (particles) {
-      particles.spawnDustPuff(cx, cy, 1, 0, 0);
+    if (particles && typeof particles.spawnFloatingText === 'function') {
+      particles.spawnFloatingText(p.x, p.y - 18, 'RAPID FIRE!', PALETTE.brass);
     }
     return true;
   }
@@ -697,7 +724,7 @@ export class RangedBehavior {
     }
 
     sound.playUltimateStart();
-    camera.shake(3, 0.12);
+    if (camera && typeof camera.shake === 'function') camera.shake(3, 0.12);
     return true;
   }
 
@@ -751,14 +778,25 @@ export class RangedBehavior {
       }
     }
 
-    // 2. Ten Count / Long Count red aim line while charging
+    // 2. Rail Slug / Ten Count charging aim line & corridor bounds
     if (this.tenCountState === 'charging') {
       const s = camera.worldToScreen(p.x, p.y);
       const sx = Math.round(s.x);
       const sy = Math.round(s.y);
-      const ex = sx + Math.round(Math.cos(this.tenCountAngle) * 320);
-      const ey = sy + Math.round(Math.sin(this.tenCountAngle) * 320);
-      drawPixelLine(ctx, sx, sy, ex, ey, PALETTE.blood, p.hasNode('longCount') ? 2 : 1);
+      const rRange = p.hasNode('longCount') ? 720 : 1400;
+      const ex = sx + Math.round(Math.cos(this.tenCountAngle) * rRange);
+      const ey = sy + Math.round(Math.sin(this.tenCountAngle) * rRange);
+      drawPixelLine(ctx, sx, sy, ex, ey, PALETTE.brass, 1);
+
+      if (!p.hasNode('longCount')) {
+        // 90px wide corridor guides
+        const cosA = Math.cos(this.tenCountAngle);
+        const sinA = Math.sin(this.tenCountAngle);
+        const nx = -sinA * 45;
+        const ny = cosA * 45;
+        drawPixelLine(ctx, sx + nx, sy + ny, ex + nx, ey + ny, PALETTE.brass, 1);
+        drawPixelLine(ctx, sx - nx, sy - ny, ex - nx, ey - ny, PALETTE.brass, 1);
+      }
     }
 
     // 3. Reload bar above Rook's head when reloading

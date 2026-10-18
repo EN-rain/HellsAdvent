@@ -181,28 +181,26 @@ export class ProjectilePool {
       timeStopped = !!arg6 || !!(player && player.isTimeStopped && player.isTimeStopped());
     }
 
-    if (timeStopped) {
-      return;
-    }
-
-    // Update Lye Strider acid puddles (1 Corrode stack/s on player)
-    for (let i = this.acidPuddles.length - 1; i >= 0; i--) {
-      const p = this.acidPuddles[i];
-      p.life -= dt;
-      if (p.life <= 0) {
-        this.acidPuddles.splice(i, 1);
-        continue;
-      }
-      p.tickTimer += dt;
-      if (p.tickTimer >= 1.0) {
-        p.tickTimer = 0;
-        if (player && !player.dead && Math.hypot(player.x - p.x, player.y - p.y) <= p.radius + player.radius) {
-          player.statuses.apply(
-            'corrode',
-            { duration: 8.0, sourceName: 'Lye Strider Puddle' },
-            player,
-            particles
-          );
+    if (!timeStopped) {
+      // Update Lye Strider acid puddles (1 Corrode stack/s on player)
+      for (let i = this.acidPuddles.length - 1; i >= 0; i--) {
+        const p = this.acidPuddles[i];
+        p.life -= dt;
+        if (p.life <= 0) {
+          this.acidPuddles.splice(i, 1);
+          continue;
+        }
+        p.tickTimer += dt;
+        if (p.tickTimer >= 1.0) {
+          p.tickTimer = 0;
+          if (player && !player.dead && Math.hypot(player.x - p.x, player.y - p.y) <= p.radius + player.radius) {
+            player.statuses.apply(
+              'corrode',
+              { duration: 8.0, sourceName: 'Lye Strider Puddle' },
+              player,
+              particles
+            );
+          }
         }
       }
     }
@@ -228,6 +226,9 @@ export class ProjectilePool {
     for (let i = 0; i < this.pool.length; i++) {
       const proj = this.pool[i];
       if (!proj.active) continue;
+
+      // During time-stop, freeze all regular projectiles; only ultimate projectiles travel
+      if (timeStopped && !proj.isUltimateProjectile) continue;
 
       if (proj.stuckInGround) {
         proj.stuckTimer -= dt;
@@ -352,6 +353,30 @@ export class ProjectilePool {
                   proj.pierceRemaining += 1;
                   break;
                 }
+              }
+            }
+
+            // Explosive Bolt (Rapid Fire node): detonate in an AOE blast on hit
+            if (proj.explosiveRadius && proj.explosiveRadius > 0) {
+              const expRad = proj.explosiveRadius;
+              proj.explosiveRadius = 0;
+              if (particles && typeof particles.spawnDustPuff === 'function') {
+                particles.spawnDustPuff(enemy.x, enemy.y, 4, 0, 0);
+              }
+              const blastCandidates = getCandidates(enemy.x, enemy.y, expRad);
+              for (const be of blastCandidates) {
+                if (!be.active || be.hp <= 0 || be.uid === enemy.uid) continue;
+                const bPipe = computeDamagePipeline({
+                  baseDamage: player.baseAtkForPipeline * (proj.explosiveDamageMult || 0.6),
+                  atkBuffPct: proj.atkBuffPct || player.statuses.getAtkBonusPct(),
+                  isCrit: false,
+                  critMult: 1.0,
+                  targetStatuses: be.statuses,
+                  targetBaseDef: be.def || 0,
+                  sourceName: 'Explosive Bolt',
+                  targetName: be.name,
+                });
+                be.takeDamage(bPipe.finalDamage, Math.atan2(be.y - enemy.y, be.x - enemy.x), 60, false, player, spawner, particles, camera);
               }
             }
 

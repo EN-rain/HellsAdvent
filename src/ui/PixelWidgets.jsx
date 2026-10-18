@@ -570,15 +570,18 @@ export function PixelIcon({ itemId, size = 32 }) {
         ctx.fillRect(4, 13, 8, 2);
         break;
       }
+      case 'skill_railParry':
       case 'skill_railSpike': {
         ctx.fillStyle = PALETTE.soot;
         ctx.fillRect(0, 0, 16, 16);
-        ctx.fillStyle = PALETTE.slag;
-        ctx.fillRect(2, 7, 9, 3);
         ctx.fillStyle = PALETTE.signal;
-        ctx.fillRect(9, 6, 5, 5);
+        ctx.fillRect(3, 11, 10, 2);
+        ctx.fillRect(7, 2, 2, 12);
         ctx.fillStyle = PALETTE.bone;
-        ctx.fillRect(4, 8, 8, 1);
+        ctx.fillRect(8, 3, 1, 10);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 5, 2, 2);
+        ctx.fillRect(10, 8, 2, 2);
         break;
       }
       case 'skill_sevenCuts': {
@@ -619,28 +622,32 @@ export function PixelIcon({ itemId, size = 32 }) {
         ctx.fillRect(1, 10, 3, 2);
         break;
       }
+      case 'skill_rapidFire':
       case 'skill_tripwire': {
         ctx.fillStyle = PALETTE.soot;
         ctx.fillRect(0, 0, 16, 16);
-        ctx.fillStyle = PALETTE.rust;
-        ctx.fillRect(2, 4, 2, 9);
-        ctx.fillRect(12, 4, 2, 9);
         ctx.fillStyle = PALETTE.brass;
-        ctx.fillRect(4, 8, 8, 1);
-        ctx.fillStyle = PALETTE.bone;
-        ctx.fillRect(2, 4, 2, 2);
-        ctx.fillRect(12, 4, 2, 2);
+        ctx.fillRect(3, 4, 9, 2);
+        ctx.fillRect(5, 7, 8, 2);
+        ctx.fillRect(2, 10, 10, 2);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(11, 4, 3, 2);
+        ctx.fillRect(12, 7, 3, 2);
+        ctx.fillRect(11, 10, 3, 2);
         break;
       }
+      case 'skill_railSlug':
       case 'skill_tenCount': {
         ctx.fillStyle = PALETTE.soot;
         ctx.fillRect(0, 0, 16, 16);
         ctx.fillStyle = PALETTE.brass;
-        ctx.fillRect(4, 2, 8, 2);
-        ctx.fillRect(2, 6, 12, 1);
-        ctx.fillRect(6, 2, 1, 12);
-        ctx.fillStyle = PALETTE.blood;
-        ctx.fillRect(7, 7, 3, 3);
+        ctx.fillRect(2, 6, 10, 4);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(12, 7, 3, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(1, 4, 1, 8);
+        ctx.fillRect(4, 5, 6, 1);
+        ctx.fillRect(4, 10, 6, 1);
         break;
       }
       // INES SKILLS

@@ -6,7 +6,7 @@
  * - Ground stain decals capped at 60, lasting 20s.
  */
 
-import { PALETTE } from '../data/config.js';
+import { PALETTE, SHOP_ITEMS } from '../data/config.js';
 import {
   drawPixelLine,
   drawBresenhamCircle,
@@ -97,6 +97,9 @@ export class ParticlePool {
     // Loot & Grounded Scrap Pickups (gold, xp, item drops, and magnetic scrap for Ines)
     this.pickups = [];
     this.hitStopTimer = 0;
+
+    // Heavy Anti-Materiel Rail Gun Beams
+    this.railBeams = [];
   }
 
   clear() {
@@ -107,6 +110,7 @@ export class ParticlePool {
     for (let i = 0; i < this.numbers.length; i++) this.numbers[i].active = false;
     this.decals = [];
     this.pickups = [];
+    this.railBeams = [];
     this.hitStopTimer = 0;
   }
 
@@ -433,6 +437,44 @@ export class ParticlePool {
     return null;
   }
 
+  spawnSlash(x1, y1, x2, y2, color = PALETTE.signal, arg6 = 0.15, arg7 = 'lunge') {
+    let duration = 0.15;
+    let kind = 'lunge';
+    if (typeof arg6 === 'number') {
+      duration = arg6;
+      if (typeof arg7 === 'string') kind = arg7;
+    } else if (typeof arg6 === 'string') {
+      kind = arg6;
+      if (typeof arg7 === 'number') duration = arg7;
+    }
+    return this.spawnSlashLine(x1, y1, x2, y2, color, kind, duration);
+  }
+
+  // Colossal Anti-Materiel Rail Gun Beam (90px wide multi-tier kinetic corridor across 1400px)
+  spawnRailBeam(x1, y1, x2, y2, width = 90, duration = 0.5) {
+    this.railBeams.push({
+      x1: Math.round(x1),
+      y1: Math.round(y1),
+      x2: Math.round(x2),
+      y2: Math.round(y2),
+      width,
+      life: duration,
+      maxLife: duration,
+      seed: Math.random() * 1000,
+    });
+    if (this.railBeams.length > 8) this.railBeams.shift();
+
+    // Spawn kinetic sparks and flechettes along the corridor
+    const dist = Math.hypot(x2 - x1, y2 - y1);
+    const steps = Math.min(24, Math.round(dist / 50));
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const px = x1 + (x2 - x1) * t;
+      const py = y1 + (y2 - y1) * t;
+      this.spawnSparks(px, py, 4, PALETTE.brass);
+    }
+  }
+
   spawnDamageNumber(x, y, amount, isCrit = false, customText = null, customColor = null) {
     for (let i = 0; i < this.numbers.length; i++) {
       const n = this.numbers[i];
@@ -445,8 +487,8 @@ export class ParticlePool {
           customText !== null
             ? customText
             : isCrit
-            ? `${Math.round(amount)}!`
-            : `${Math.round(amount)}`;
+              ? `${Math.round(amount)}!`
+              : `${Math.round(amount)}`;
         n.color = customColor || (isCrit ? PALETTE.brass : PALETTE.bone);
         n.isCrit = isCrit;
         n.life = isCrit ? 0.85 : 0.65;
@@ -536,12 +578,15 @@ export class ParticlePool {
           } else if (pk.type === 'xp') {
             player.gainXp(pk.value, this);
           } else if (pk.type === 'item' && pk.itemId) {
-            if (pk.itemId === 'gauzeRoll' || pk.itemId === 'sugarTin') {
+            const itemDef = SHOP_ITEMS[pk.itemId];
+            if (itemDef?.consumable) {
               player.supplies[pk.itemId] = (player.supplies[pk.itemId] || 0) + 1;
-              this.spawnFloatingText(player.x, player.y - 22, '+1 GAUZE', PALETTE.signal);
+              const label = itemDef.name || pk.itemId;
+              this.spawnFloatingText(player.x, player.y - 22, `+1 ${label.toUpperCase()}`, PALETTE.signal);
             } else if (!player.ownedEquipment.includes(pk.itemId)) {
               player.ownedEquipment.push(pk.itemId);
-              this.spawnFloatingText(player.x, player.y - 22, `FOUND GEAR`, PALETTE.brass);
+              const label = itemDef?.name || 'GEAR';
+              this.spawnFloatingText(player.x, player.y - 22, `FOUND ${label.toUpperCase()}`, PALETTE.brass);
             }
           }
           this.pickups.splice(i, 1);
@@ -620,6 +665,15 @@ export class ParticlePool {
       if (!s.active) continue;
       s.life -= dt;
       if (s.life <= 0) s.active = false;
+    }
+
+    // Update rail beams
+    for (let i = this.railBeams.length - 1; i >= 0; i--) {
+      const b = this.railBeams[i];
+      b.life -= dt;
+      if (b.life <= 0) {
+        this.railBeams.splice(i, 1);
+      }
     }
 
     // Update floating damage numbers
@@ -830,6 +884,71 @@ export class ParticlePool {
         const q2y = (s.y2 + my) * 0.5;
         drawPixelLine(ctx, s.x1 - camX, s.y1 - camY, s.x2 - camX, s.y2 - camY, s.color, 1);
         drawPixelLine(ctx, q1x - camX, q1y - camY, q2x - camX, q2y - camY, s.color, 3);
+      }
+    }
+
+    // 3.5. Colossal Anti-Materiel Rail Gun Beam Corridor (Multi-layered 90px kinetic beam)
+    if (this.railBeams && this.railBeams.length > 0) {
+      for (let i = 0; i < this.railBeams.length; i++) {
+        const b = this.railBeams[i];
+        if (b.life <= 0) continue;
+        const progress = 1 - Math.max(0, b.life / b.maxLife);
+
+        const sx1 = Math.round(b.x1 - camX);
+        const sy1 = Math.round(b.y1 - camY);
+        const sx2 = Math.round(b.x2 - camX);
+        const sy2 = Math.round(b.y2 - camY);
+
+        const dx = sx2 - sx1;
+        const dy = sy2 - sy1;
+        const len = Math.hypot(dx, dy);
+        if (len < 1) continue;
+        const nx = -dy / len;
+        const ny = dx / len;
+
+        const maxW = b.width || 90;
+        // Peak width rapidly in first 15% of life, then taper
+        const curW = Math.max(10, Math.round(maxW * (progress < 0.15 ? (progress / 0.15) : (1 - (progress - 0.15) * 0.4))));
+
+        ctx.save();
+
+        // Layer 1: Outer Ionization Plasma Envelope (90px wide amber/brass dithered edges)
+        const outerSteps = 7;
+        for (let s = 1; s <= outerSteps; s++) {
+          const off = Math.round((curW * 0.5) * (s / outerSteps));
+          const col = s % 2 === 0 ? PALETTE.brass : PALETTE.rust;
+          drawPixelLine(ctx, sx1 + nx * off, sy1 + ny * off, sx2 + nx * off, sy2 + ny * off, col, 1);
+          drawPixelLine(ctx, sx1 - nx * off, sy1 - ny * off, sx2 - nx * off, sy2 - ny * off, col, 1);
+        }
+
+        // Layer 2: High-Voltage Mid Energy Core (Solid vibrant brass beam)
+        const midW = Math.max(6, Math.round(curW * 0.45));
+        for (let m = -midW / 2; m <= midW / 2; m += 2) {
+          drawPixelLine(ctx, sx1 + nx * m, sy1 + ny * m, sx2 + nx * m, sy2 + ny * m, PALETTE.brass, 2);
+        }
+
+        // Layer 3: Blazing Tungsten Kinetic Core (Bone-gold and center pure white needle)
+        const coreW = Math.max(2, Math.round(curW * 0.18));
+        for (let c = -coreW / 2; c <= coreW / 2; c += 1) {
+          drawPixelLine(ctx, sx1 + nx * c, sy1 + ny * c, sx2 + nx * c, sy2 + ny * c, PALETTE.bone, 1);
+        }
+        drawPixelLine(ctx, sx1, sy1, sx2, sy2, '#FFFFFF', 1);
+
+        // Layer 4: Crackling Electric Arcs (Dynamic high-voltage blue and brass lightning)
+        const arcCount = 12;
+        for (let a = 0; a < arcCount; a++) {
+          const t1 = a / arcCount;
+          const t2 = Math.min(1, t1 + 0.11);
+          const j1 = Math.sin(b.seed + a * 5 + progress * 35) * (curW * 0.48);
+          const j2 = Math.cos(b.seed + a * 11 + progress * 35) * (curW * 0.48);
+          const ax1 = sx1 + dx * t1 + nx * j1;
+          const ay1 = sy1 + dy * t1 + ny * j1;
+          const ax2 = sx1 + dx * t2 + nx * j2;
+          const ay2 = sy1 + dy * t2 + ny * j2;
+          drawPixelLine(ctx, ax1, ay1, ax2, ay2, a % 2 === 0 ? '#52C5FF' : PALETTE.brass, 1);
+        }
+
+        ctx.restore();
       }
     }
 

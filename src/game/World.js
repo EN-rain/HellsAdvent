@@ -436,34 +436,34 @@ export class World {
     const w = camera.width;
     const h = camera.height;
 
-    // During Seven Cuts / Nine Cuts opening & slashes, drop world to two tones (slag and bone)
-    // or 1-frame inverted flash on each cut!
-    const isTwoTone =
-      (player.ultimates && player.ultimates.twoToneWorld) ||
+    // Cinematic Ultimate Atmospheric Vignette & Contrast Shader
+    // Darkens outer edges dramatically, focusing high-contrast light on the player and targets (no white wash, zero readback lag)
+    const isUltActive =
+      (player.ultimates && player.ultimates.active) ||
       (player.ultimateActive && !player.ultimateReleased);
 
-    if (isTwoTone) {
-      const imgData = ctx.getImageData(0, 0, w, h);
-      const data = imgData.data;
-      const invert =
-        (player.ultimates && player.ultimates.invertFrames > 0) ||
-        (player.ultimateInvertFrames && player.ultimateInvertFrames > 0);
-      // Slag (#3A3F47 -> 58, 63, 71), Bone (#D9D2C3 -> 217, 210, 195), Soot (#0B0D10 -> 11, 13, 16)
-      for (let i = 0; i < data.length; i += 4) {
-        const lum = data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
-        const isBright = invert ? lum < 85 : lum >= 85;
-        if (isBright) {
-          data[i] = 217;
-          data[i + 1] = 210;
-          data[i + 2] = 195;
-        } else {
-          data[i] = 58;
-          data[i + 1] = 63;
-          data[i + 2] = 71;
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-      return;
+    if (isUltActive) {
+      ctx.save();
+      const px = Math.round(player.x - camera.renderX);
+      const py = Math.round(player.y - camera.renderY);
+      const grad = ctx.createRadialGradient(px, py, 32, px, py, Math.max(w, h) * 0.72);
+      grad.addColorStop(0, 'rgba(11, 13, 16, 0.0)');
+      grad.addColorStop(0.45, 'rgba(11, 13, 16, 0.42)');
+      grad.addColorStop(1, 'rgba(11, 13, 16, 0.82)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Subtle dynamic class energy focus lines at screen borders
+      const accent =
+        player.classId === 'rook'
+          ? 'rgba(229, 168, 35, 0.25)'
+          : player.classId === 'ines'
+          ? 'rgba(46, 230, 168, 0.25)'
+          : 'rgba(224, 64, 48, 0.25)';
+      ctx.fillStyle = accent;
+      ctx.fillRect(0, 0, w, 2);
+      ctx.fillRect(0, h - 2, w, 2);
+      ctx.restore();
     }
 
     const area = this.getAreaAt(player.x, player.y);

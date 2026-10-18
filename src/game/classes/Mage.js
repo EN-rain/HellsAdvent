@@ -192,7 +192,9 @@ export class MageBehavior {
       this.spinUpTickTimer += dt;
       if (this.spinUpTickTimer >= 0.25) {
         this.spinUpTickTimer -= 0.25;
-        const targets = spawner.queryRadius(p.x, p.y, 70 + 24);
+        const targets = spawner && typeof spawner.queryRadius === 'function'
+          ? spawner.queryRadius(p.x, p.y, 70 + 24)
+          : [];
         for (let i = 0; i < targets.length; i++) {
           const e = targets[i];
           if (!e.active || e.hp <= 0) continue;
@@ -292,7 +294,9 @@ export class MageBehavior {
       const ey = p.y + Math.sin(angle) * pulseRange;
       particles.spawnSlash(p.x, p.y, ex, ey, PALETTE.verdigris, 0.12, 'lunge');
 
-      const candidates = spawner.queryRadius(p.x, p.y, pulseRange + 24);
+      const candidates = spawner && typeof spawner.queryRadius === 'function'
+        ? spawner.queryRadius(p.x, p.y, pulseRange + 24)
+        : [];
       for (let i = 0; i < candidates.length; i++) {
         const e = candidates[i];
         if (!e.active || e.hp <= 0) continue;
@@ -352,7 +356,9 @@ export class MageBehavior {
 
     const hasDrag = p.hasNode('drag');
     const hasLift = p.hasNode('lift');
-    const targets = spawner.queryRadius(tx, ty, stats.radius + 30);
+    const targets = spawner && typeof spawner.queryRadius === 'function'
+      ? spawner.queryRadius(tx, ty, stats.radius + 30)
+      : [];
     let hitCount = 0;
 
     for (let i = 0; i < targets.length; i++) {
@@ -515,12 +521,20 @@ export class MageBehavior {
   _explodeLumpZone(z, spawner, particles, camera, onHitStop) {
     const p = this.player;
     sound.playSkillGroundBreak();
-    camera.shake(5, 0.18);
-    particles.spawnGroundBreakEffect(z.x, z.y, z.radius);
-    particles.spawnDebris(z.x, z.y, 'canLid', 3);
+    if (camera && typeof camera.shake === 'function') camera.shake(5, 0.18);
+    if (particles) {
+      if (typeof particles.spawnGroundBreakEffect === 'function') {
+        particles.spawnGroundBreakEffect(z.x, z.y, z.radius);
+      }
+      if (typeof particles.spawnDebris === 'function') {
+        particles.spawnDebris(z.x, z.y, 'canLid', 3);
+      }
+    }
 
     const goodArmBonus = this.getGoodArmBonusPct();
-    const targets = spawner.queryRadius(z.x, z.y, z.radius + 32);
+    const targets = spawner && typeof spawner.queryRadius === 'function'
+      ? spawner.queryRadius(z.x, z.y, z.radius + 32)
+      : [];
     let hitCount = 0;
 
     for (let i = 0; i < targets.length; i++) {
@@ -631,15 +645,25 @@ export class MageBehavior {
   _dropScrapfallWave(z, spawner, particles, camera, onHitStop) {
     const p = this.player;
     sound.playUltimateReleaseCrack();
-    camera.shake(8, 0.28);
+    if (camera && typeof camera.shake === 'function') camera.shake(8, 0.28);
 
-    // Leave crater decal
-    particles.spawnDecal(z.x, z.y, '#121918', Math.min(28, Math.round(z.radius * 0.22)), 20.0);
-    particles.spawnGroundBreakEffect(z.x, z.y, z.radius);
-    particles.spawnDebris(z.x, z.y, 'canLid', 5);
-    particles.spawnDebris(z.x, z.y, 'wire', 5);
+    if (particles) {
+      // Leave crater decal
+      if (typeof particles.spawnDecal === 'function') {
+        particles.spawnDecal(z.x, z.y, '#121918', Math.min(28, Math.round(z.radius * 0.22)), 20.0);
+      }
+      if (typeof particles.spawnGroundBreakEffect === 'function') {
+        particles.spawnGroundBreakEffect(z.x, z.y, z.radius);
+      }
+      if (typeof particles.spawnDebris === 'function') {
+        particles.spawnDebris(z.x, z.y, 'canLid', 5);
+        particles.spawnDebris(z.x, z.y, 'wire', 5);
+      }
+    }
 
-    const targets = spawner.queryRadius(z.x, z.y, z.radius + 36);
+    const targets = spawner && typeof spawner.queryRadius === 'function'
+      ? spawner.queryRadius(z.x, z.y, z.radius + 36)
+      : [];
     for (let i = 0; i < targets.length; i++) {
       const e = targets[i];
       if (!e.active || e.hp <= 0) continue;

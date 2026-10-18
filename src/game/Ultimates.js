@@ -46,6 +46,8 @@ export class UltimateSequencer {
     this.flashFrames = 0;
     this.flashColor = '#FFFFFF';
     this.flashTimestamps = []; // for capping to max 3 flashes/sec when reduceFlashes is on
+    this.impactFrames = 0;
+    this.impactData = null;
 
     // Charge Meter tracking & caps
     this.damageGainThisSecond = 0;
@@ -97,6 +99,8 @@ export class UltimateSequencer {
     this.letterboxTarget = 0;
     this.cutInActive = false;
     this.flashFrames = 0;
+    this.impactFrames = 0;
+    this.impactData = null;
     this.cutAssignments = [];
     this.aimLineActive = false;
     this.levitationZone = null;
@@ -187,10 +191,23 @@ export class UltimateSequencer {
     return this._applyChargeDelta(player, raw, false);
   }
 
+  addDamageTakenCharge(player, hpLossPct, isBlock = false) {
+    if (!player || hpLossPct <= 0) return 0;
+    let raw = hpLossPct * ULTIMATE_CHARGE_CONFIG.damageTakenGainPerPctMaxHp;
+    if (isBlock && player.hasNode('counterweight')) {
+      raw *= ULTIMATE_CHARGE_CONFIG.counterweightBlockMultiplier;
+    }
+    return this._applyChargeDelta(player, raw, false);
+  }
+
   onEnemyKilled(player, enemyTier = 'common') {
     const bonus = ULTIMATE_CHARGE_CONFIG.killBonus[enemyTier] || 0;
     if (bonus <= 0) return 0;
     return this._applyChargeDelta(player, bonus, false);
+  }
+
+  addKillCharge(player, enemyTier = 'common') {
+    return this.onEnemyKilled(player, enemyTier);
   }
 
   // ===========================================================================
@@ -227,7 +244,7 @@ export class UltimateSequencer {
     }
 
     // Not castable in Kettle
-    if (world && world.isInsideKettle(player.x, player.y)) {
+    if (world && typeof world.isInsideKettle === 'function' && world.isInsideKettle(player.x, player.y)) {
       sound.playInvalidBuzz();
       this.invalidShakeTimer = ULTIMATE_CAST_RULES.invalidShakeDuration;
       if (particles) {
@@ -317,7 +334,7 @@ export class UltimateSequencer {
   }
 
   _findSortedTargets(player, spawner, radiusPx) {
-    if (!spawner) return [];
+    if (!spawner || typeof spawner.queryRadius !== 'function') return [];
     const raw = spawner.queryRadius(player.x, player.y, radiusPx + 24);
     const valid = [];
     for (let i = 0; i < raw.length; i++) {
@@ -419,7 +436,20 @@ export class UltimateSequencer {
     });
   }
 
-  _triggerScreenFlash(frames = 1, accessibility = {}) {
+  triggerImpactFrame(data = {}) {
+    this.impactFrames = Math.max(1, data.frames || 2);
+    this.impactData = {
+      x: data.x,
+      y: data.y,
+      angle: data.angle || 0,
+      color: data.color || PALETTE.signal,
+      kind: data.kind || 'slash', // 'slash' | 'rail' | 'crush' | 'burst'
+      camera: data.camera || null,
+      seed: Math.random() * 1000,
+    };
+  }
+
+  _triggerScreenFlash(frames = 1, accessibility = {}, options = {}) {
     const nowSec = performance.now() / 1000;
     this.flashTimestamps = this.flashTimestamps.filter((ts) => nowSec - ts < 1.0);
 
@@ -427,14 +457,19 @@ export class UltimateSequencer {
       if (this.flashTimestamps.length >= ULTIMATE_CAST_RULES.reduceFlashesMaxPerSecond) {
         return;
       }
-      this.flashTimestamps.push(nowSec);
-      this.flashFrames = ULTIMATE_CAST_RULES.reduceFlashesBoneTintFrames; // 3-frame bone tint
-      this.flashColor = PALETTE.bone;
-    } else {
-      this.flashTimestamps.push(nowSec);
-      this.flashFrames = frames;
-      this.flashColor = '#FFFFFF';
     }
+    this.flashTimestamps.push(nowSec);
+
+    // Replace blinding white flash with high-impact comic/anime impact frame!
+    this.triggerImpactFrame({
+      frames: Math.min(2, Math.max(1, frames)),
+      color: options.color || (this.ultDef && this.ultDef.classId === 'rook' ? PALETTE.brass : PALETTE.signal),
+      kind: options.kind || 'slash',
+      x: options.x,
+      y: options.y,
+      angle: options.angle,
+      camera: options.camera,
+    });
   }
 
   // ===========================================================================
@@ -444,14 +479,41 @@ export class UltimateSequencer {
   update(
     dt,
     player,
-    input,
-    spawner,
-    projectiles,
-    particles,
-    camera,
-    world,
-    accessibility = { reduceFlashes: false, shortUltimates: false }
+    arg2,
+    arg3,
+    arg4,
+    arg5,
+    arg6,
+    arg7,
+    arg8 = { reduceFlashes: false, shortUltimates: false }
   ) {
+    let input, spawner, projectiles, particles, camera, world, accessibility;
+
+    // Detect if arg2 is spawner instead of input (e.g. called as update(dt, player, spawner, projectiles, ...))
+    if (
+      arg2 &&
+      (typeof arg2.queryRadius === 'function' ||
+        typeof arg2.getActiveCount === 'function' ||
+        Array.isArray(arg2.enemies) ||
+        (arg3 && typeof arg3.spawn === 'function'))
+    ) {
+      input = player?.lastInput || null;
+      spawner = arg2;
+      projectiles = arg3;
+      particles = arg4;
+      camera = arg5;
+      world = arg6;
+      accessibility = arg7 || { reduceFlashes: false, shortUltimates: false };
+    } else {
+      input = arg2;
+      spawner = arg3;
+      projectiles = arg4;
+      particles = arg5;
+      camera = arg6;
+      world = arg7;
+      accessibility = arg8 || { reduceFlashes: false, shortUltimates: false };
+    }
+
     if (player) {
       this.lastPlayerRef = player;
     }
@@ -501,7 +563,7 @@ export class UltimateSequencer {
     if (this.levitationZone) {
       this.levitationZone.elapsedMs += dt * 1000;
       // Gently pull non-boss enemies inside the zone toward the center while levitating
-      if (spawner) {
+      if (spawner && typeof spawner.queryRadius === 'function') {
         const near = spawner.queryRadius(
           this.levitationZone.x,
           this.levitationZone.y,
@@ -680,7 +742,6 @@ export class UltimateSequencer {
           assign.triggered = true;
           assign.x = t.x;
           assign.y = t.y;
-          t.frozenWhiteByUltimate = true;
           this.lastCutTarget = t;
 
           // Sena blinks to 24px from the target
@@ -711,7 +772,17 @@ export class UltimateSequencer {
         }
 
         sound.playUltimateReleaseCrack();
-        this._triggerScreenFlash(p.whiteFlashFrames || 1, accessibility);
+        // Sakuga anime action impact frame (no white flash!)
+        this.triggerImpactFrame({
+          x: player.x,
+          y: player.y,
+          angle: this.lastCutTarget ? Math.atan2(this.lastCutTarget.y - player.y, this.lastCutTarget.x - player.x) : 0,
+          color: p.applyBleed ? PALETTE.blood : PALETTE.signal,
+          kind: 'slash',
+          frames: 2,
+          camera
+        });
+
         if (camera) {
           camera.shake(p.shakePx || 8, 0.28);
         }
@@ -731,7 +802,7 @@ export class UltimateSequencer {
           entry.lastAngle = c.angle;
           cutsByTarget.set(c.target, entry);
 
-          // Spawn tapered white slash burst along each cut line
+          // Spawn vibrant slash burst along each cut line
           if (particles) {
             const len = 48;
             particles.spawnSlash(
@@ -739,7 +810,7 @@ export class UltimateSequencer {
               c.target.y - Math.sin(c.angle) * len,
               c.target.x + Math.cos(c.angle) * len,
               c.target.y + Math.sin(c.angle) * len,
-              p.applyBleed ? PALETTE.blood : PALETTE.bone,
+              p.applyBleed ? PALETTE.blood : PALETTE.signal,
               0.28,
               'sevenCuts'
             );
@@ -748,7 +819,6 @@ export class UltimateSequencer {
 
         // Resolve damage & Bleed stacks for each target in the same frame
         for (const { target, cutsCount, lastAngle } of cutsByTarget.values()) {
-          target.frozenWhiteByUltimate = false;
           const totalMult = cutsCount * (p.damageMultPerCut || 5.0 / 7);
 
           // Ultimates never crit. ATK buffs, Momentum, and Marked apply.
@@ -886,23 +956,25 @@ export class UltimateSequencer {
         const atkBuffPct = this._getUltimateAtkBuffPct(player);
         const angle = this.aimAngle;
 
-        projectiles.spawn({
-          x: player.x + Math.cos(angle) * 14,
-          y: player.y + Math.sin(angle) * 14,
-          angle,
-          speed: p.speed || 920,
-          maxRange: p.range || 520,
-          radius: 10,
-          damage: player.baseAtkForPipeline * (p.damageMult || 0.60),
-          atkBuffPct,
-          knockback: 75,
-          isPlayer: true,
-          pierce: 999,
-          type: 'rookBolt',
-          color: PALETTE.brass,
-          useRookDistanceBonus: false,
-          isUltimateProjectile: true,
-        });
+        if (projectiles && typeof projectiles.spawn === 'function') {
+          projectiles.spawn({
+            x: player.x + Math.cos(angle) * 14,
+            y: player.y + Math.sin(angle) * 14,
+            angle,
+            speed: p.speed || 920,
+            maxRange: p.range || 520,
+            radius: 10,
+            damage: player.baseAtkForPipeline * (p.damageMult || 0.60),
+            atkBuffPct,
+            knockback: 75,
+            isPlayer: true,
+            pierce: 999,
+            type: 'rookBolt',
+            color: PALETTE.brass,
+            useRookDistanceBonus: false,
+            isUltimateProjectile: true,
+          });
+        }
 
         sound.playSpringgunShot(true);
         if (camera) {
@@ -911,29 +983,64 @@ export class UltimateSequencer {
         break;
       }
 
+      case 'rookReleaseRailSlug':
       case 'rookReleaseLongCount': {
         this.aimLineActive = false;
-        this._triggerScreenFlash(p.whiteFlashFrames || 1, accessibility);
-        sound.playUltimateReleaseCrack();
-        if (camera) {
-          camera.shake(p.shakePx || 8, 0.26);
-        }
-
         const angle = this.aimAngle;
-        const range = p.range || 620;
+        const range = p.range || 1400;
+        const lineWidth = p.lineWidth || 90;
         const x1 = player.x;
         const y1 = player.y;
         const x2 = x1 + Math.cos(angle) * range;
         const y2 = y1 + Math.sin(angle) * range;
 
-        if (particles) {
-          particles.spawnSlash(x1, y1, x2, y2, PALETTE.brass, 0.35, 'sevenCuts');
+        // Sakuga anime action impact frame along the firing vector (zero white flash)
+        this.triggerImpactFrame({
+          x: player.x,
+          y: player.y,
+          angle,
+          color: PALETTE.brass,
+          kind: 'rail',
+          frames: 2,
+          camera,
+        });
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playConcussiveBlast === 'function') {
+          sound.playConcussiveBlast();
         }
 
-        // Hit every enemy along the 620px line: Marks every enemy hit & deals 900% ATK
+        if (camera) {
+          camera.shake(p.shakePx || 14, 0.35);
+        }
+
+        // Spawn colossal 90px multi-tier Rail Beam corridor
+        if (particles) {
+          if (typeof particles.spawnRailBeam === 'function') {
+            particles.spawnRailBeam(x1, y1, x2, y2, lineWidth, 0.5);
+          } else {
+            particles.spawnSlash(x1, y1, x2, y2, PALETTE.brass, 0.45, 'sevenCuts');
+          }
+
+          // Spawn ground trench dust & shockwave cracks along the 1400px corridor
+          const stepCount = Math.min(22, Math.round(range / 60));
+          for (let s = 1; s <= stepCount; s++) {
+            const tx = x1 + Math.cos(angle) * (s * 60);
+            const ty = y1 + Math.sin(angle) * (s * 60);
+            particles.spawnDustPuff(tx, ty, 3);
+            if (s % 3 === 0) particles.spawnGroundBreakEffect(tx, ty);
+          }
+        }
+
+        // Query all enemies along the 1400px x 90px corridor
         const atkBuffPct = this._getUltimateAtkBuffPct(player);
         const segLenSq = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
-        const candidates = spawner ? spawner.queryRadius((x1 + x2) * 0.5, (y1 + y2) * 0.5, range * 0.6) : [];
+        const candidates = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius((x1 + x2) * 0.5, (y1 + y2) * 0.5, range * 0.6)
+          : [];
+
+        const directHits = [];
+        const halfWidth = lineWidth * 0.5;
 
         for (let i = 0; i < candidates.length; i++) {
           const e = candidates[i];
@@ -947,38 +1054,93 @@ export class UltimateSequencer {
           const projY = y1 + t * (y2 - y1);
           const dist = Math.hypot(e.x - projX, e.y - projY);
 
-          if (dist <= (p.lineWidth || 30) + e.radius) {
-            // Apply Marked (+20% damage taken for 5s)
-            e.statuses.apply(
-              'marked',
-              { duration: p.applyMarkedDuration || 5.0, sourceName: 'Long Count' },
-              e,
-              particles
-            );
-
-            const pipe = computeDamagePipeline({
-              baseDamage: player.baseAtkForPipeline * (p.damageMult || 9.0),
-              atkBuffPct,
-              isCrit: false,
-              critMult: 1.0,
-              distanceBonusPct: 0,
-              targetStatuses: e.statuses,
-              targetBaseDef: e.def || 0,
-              sourceName: 'Long Count',
-              targetName: e.name,
-            });
-
-            e.takeDamage(
-              pipe.finalDamage,
-              angle,
-              180,
-              false,
-              player,
-              spawner,
-              particles,
-              camera
-            );
+          if (dist <= halfWidth + e.radius) {
+            directHits.push(e);
           }
+        }
+
+        const aoeRadius = p.aoeRadius || 80;
+        const aoeDamageMult = p.aoeDamageMult || 3.5;
+
+        // Process Direct Hits & Secondary AOE Shockwave Detonations
+        for (let i = 0; i < directHits.length; i++) {
+          const e = directHits[i];
+          if (!e.active || e.hp <= 0) continue;
+
+          // Apply Marked (+20% damage taken for 8s)
+          e.statuses.apply(
+            'marked',
+            { duration: p.applyMarkedDuration || 8.0, sourceName: 'Rail Slug' },
+            e,
+            particles
+          );
+
+          // Direct Hit Damage Pipeline (1200% ATK)
+          const pipe = computeDamagePipeline({
+            baseDamage: player.baseAtkForPipeline * (p.damageMult || 12.0),
+            atkBuffPct,
+            isCrit: true,
+            critMult: player.critMult || 1.8,
+            distanceBonusPct: 0,
+            targetStatuses: e.statuses,
+            targetBaseDef: e.def || 0,
+            sourceName: 'Anti-Materiel Rail Slug',
+            targetName: e.name,
+          });
+
+          e.takeDamage(
+            pipe.finalDamage,
+            angle,
+            240,
+            true,
+            player,
+            spawner,
+            particles,
+            camera
+          );
+
+          // SECONDARY KINETIC AOE SHOCKWAVE DETONATION ON EVERY TARGET HIT
+          if (particles) {
+            particles.spawnRing(e.x, e.y, PALETTE.brass, aoeRadius);
+            particles.spawnSparks(e.x, e.y, 8, PALETTE.brass);
+            particles.spawnDebris(e.x, e.y, 4);
+          }
+          if (typeof sound.playConcussiveBlast === 'function') {
+            sound.playConcussiveBlast();
+          }
+
+          // Detonate concussive shockwave damage to all surrounding enemies within 80px radius
+          const nearby = (spawner && typeof spawner.queryRadius === 'function')
+            ? spawner.queryRadius(e.x, e.y, aoeRadius)
+            : [];
+
+          for (let j = 0; j < nearby.length; j++) {
+            const n = nearby[j];
+            if (!n.active || n.hp <= 0 || n === e) continue;
+            const d = Math.hypot(n.x - e.x, n.y - e.y);
+            if (d <= aoeRadius + n.radius) {
+              const knockAng = Math.atan2(n.y - e.y, n.x - e.x);
+              const aoePipe = computeDamagePipeline({
+                baseDamage: player.baseAtkForPipeline * aoeDamageMult,
+                atkBuffPct,
+                isCrit: false,
+                critMult: 1.0,
+                distanceBonusPct: 0,
+                targetStatuses: n.statuses,
+                targetBaseDef: n.def || 0,
+                sourceName: 'Rail Concussion AOE',
+                targetName: n.name,
+              });
+              n.takeDamage(aoePipe.finalDamage, knockAng, 160, false, player, spawner, particles, camera);
+            }
+          }
+        }
+
+        // Terminal Kinetic Shock Detonation at Beam End
+        if (particles) {
+          particles.spawnRing(x2, y2, PALETTE.brass, 110);
+          particles.spawnSparks(x2, y2, 16, PALETTE.brass);
+          particles.spawnGroundBreakEffect(x2, y2);
         }
         break;
       }
@@ -1071,7 +1233,9 @@ export class UltimateSequencer {
         }
 
         const atkBuffPct = this._getUltimateAtkBuffPct(player);
-        const targets = spawner ? spawner.queryRadius(zx, zy, rad + 32) : [];
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
 
         for (let i = 0; i < targets.length; i++) {
           const e = targets[i];
@@ -1146,12 +1310,6 @@ export class UltimateSequencer {
         player.ultimateActive = false;
         player.statuses.remove('untouchable');
 
-        // Ensure no enemies stay frozen white
-        for (let i = 0; i < this.cutAssignments.length; i++) {
-          if (this.cutAssignments[i].target) {
-            this.cutAssignments[i].target.frozenWhiteByUltimate = false;
-          }
-        }
         this.cutAssignments = [];
 
         if (camera && camera.setZoom) {
@@ -1175,7 +1333,7 @@ export class UltimateSequencer {
   }
 
   _tauntEnemiesInRadius(player, spawner, radius, particles) {
-    if (!spawner) return;
+    if (!spawner || typeof spawner.queryRadius !== 'function') return;
     const nearby = spawner.queryRadius(player.x, player.y, radius);
     for (let i = 0; i < nearby.length; i++) {
       const e = nearby[i];
@@ -1294,7 +1452,7 @@ export class UltimateSequencer {
       );
     }
 
-    // 3. Draw Rook's Ten Count / Long Count charging aim line & countdown ticks
+    // 3. Draw Rook's Ten Count / Long Count charging aim line, corridor bounds, & countdown ticks
     if (this.aimLineActive && p) {
       const sx = Math.round(p.x - camX);
       const sy = Math.round(p.y - camY - 4);
@@ -1302,6 +1460,24 @@ export class UltimateSequencer {
       const ey = Math.round(sy + Math.sin(this.aimAngle) * this.aimLineRange);
 
       drawPixelLine(ctx, sx, sy, ex, ey, this.aimLineColor, 1);
+
+      // If Rail Slug (range >= 1000), draw 90px wide kinetic rail corridor boundaries
+      if (this.aimLineRange >= 1000) {
+        const cosA = Math.cos(this.aimAngle);
+        const sinA = Math.sin(this.aimAngle);
+        const nx = -sinA * 45;
+        const ny = cosA * 45;
+        drawPixelLine(ctx, sx + nx, sy + ny, ex + nx, ey + ny, PALETTE.brass, 1);
+        drawPixelLine(ctx, sx - nx, sy - ny, ex - nx, ey - ny, PALETTE.brass, 1);
+
+        // Cross targeting brackets along the corridor
+        for (let b = 1; b <= 8; b++) {
+          const bdist = b * 130;
+          const bx = sx + cosA * bdist;
+          const by = sy + sinA * bdist;
+          drawPixelLine(ctx, bx - nx * 0.4, by - ny * 0.4, bx + nx * 0.4, by + ny * 0.4, PALETTE.slag, 1);
+        }
+      }
 
       // 10 countdown ticks along the aim line near Rook
       for (let t = 0; t < 10; t++) {
@@ -1348,21 +1524,108 @@ export class UltimateSequencer {
     }
   }
 
-  drawScreenOverlay(ctx, width, height, player) {
-    // 1. Full-screen white flash or 3-frame bone tint (when reduceFlashes is on)
-    if (this.flashFrames > 0) {
-      if (this.flashColor === '#FFFFFF') {
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
-      } else {
-        // 3-frame bone tint dither
-        ctx.fillStyle = PALETTE.bone;
-        for (let y = 0; y < height; y += 2) {
-          for (let x = (y >> 1) % 2; x < width; x += 2) {
-            ctx.fillRect(x, y, 1, 1);
-          }
-        }
+  drawImpactFrame(ctx, width, height, player) {
+    if (!this.impactData) return;
+    const data = this.impactData;
+    const cam = data.camera;
+
+    let sx = Math.round(width * 0.5);
+    let sy = Math.round(height * 0.5);
+    if (data.x !== undefined && data.y !== undefined && cam) {
+      sx = Math.round(data.x - cam.renderX);
+      sy = Math.round(data.y - cam.renderY);
+    }
+
+    ctx.save();
+
+    // 1. Pitch soot backdrop (stark action manga negative frame)
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(0, 0, width, height);
+
+    const accent = data.color || (player.classId === 'rook' ? PALETTE.brass : player.classId === 'ines' ? PALETTE.verdigris : PALETTE.signal);
+
+    if (data.kind === 'rail') {
+      // Archer Rail Slug Impact Frame:
+      // Huge forward kinetic ionization corridor + high-voltage lightning diagonals
+      const angle = data.angle || 0;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      const nx = -sinA;
+      const ny = cosA;
+
+      // Stark geometric beam swath across the screen
+      ctx.fillStyle = accent;
+      for (let w = -45; w <= 45; w += 3) {
+        ctx.fillRect(0, Math.round(sy + ny * w - 1), width, 2);
       }
+
+      // High-contrast diagonal speed rays
+      for (let i = -6; i <= 6; i++) {
+        const offset = i * 22;
+        const x1 = sx + nx * offset;
+        const y1 = sy + ny * offset;
+        const x2 = x1 + cosA * 500;
+        const y2 = y1 + sinA * 500;
+        drawPixelLine(ctx, x1, y1, x2, y2, i % 2 === 0 ? '#52C5FF' : PALETTE.bone, 2);
+      }
+
+      // Muzzle shock ring
+      drawBresenhamCircle(ctx, sx, sy, 32, PALETTE.bone, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 18, accent, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 6, '#FFFFFF', 1.0);
+    } else if (data.kind === 'slash') {
+      // Melee Seven Cuts / Riposte Impact Frame:
+      // Sharp graphic action slash lines radiating from the hit point
+      const angle = data.angle || 0;
+      const rays = 16;
+      for (let r = 0; r < rays; r++) {
+        const a = (r / rays) * Math.PI * 2 + (data.seed % 0.5);
+        const len = 70 + (r % 3) * 80;
+        const ex = Math.round(sx + Math.cos(a) * len);
+        const ey = Math.round(sy + Math.sin(a) * len);
+        const col = r % 3 === 0 ? PALETTE.bone : r % 2 === 0 ? accent : PALETTE.blood;
+        drawPixelLine(ctx, sx, sy, ex, ey, col, (r % 4 === 0) ? 3 : 1);
+      }
+
+      // Sharp diagonal cut through the center
+      const slashLen = Math.max(width, height);
+      const cutAngle = angle + (data.seed % 0.8 - 0.4);
+      const cx1 = sx - Math.cos(cutAngle) * slashLen;
+      const cy1 = sy - Math.sin(cutAngle) * slashLen;
+      const cx2 = sx + Math.cos(cutAngle) * slashLen;
+      const cy2 = sy + Math.sin(cutAngle) * slashLen;
+      drawPixelLine(ctx, cx1, cy1, cx2, cy2, PALETTE.bone, 4);
+      drawPixelLine(ctx, cx1 + 2, cy1, cx2 + 2, cy2, accent, 2);
+      drawPixelLine(ctx, cx1 - 2, cy1, cx2 - 2, cy2, PALETTE.blood, 2);
+
+      // Center impact diamond
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(sx - 4, sy - 4, 8, 8);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(sx - 2, sy - 2, 4, 4);
+    } else {
+      // General Burst / Crush Impact Frame:
+      // Radial explosive shards
+      for (let r = 0; r < 20; r++) {
+        const a = (r / 20) * Math.PI * 2;
+        const len = 60 + ((r * 17) % 100);
+        const ex = Math.round(sx + Math.cos(a) * len);
+        const ey = Math.round(sy + Math.sin(a) * len);
+        const col = r % 2 === 0 ? accent : PALETTE.bone;
+        drawPixelLine(ctx, sx, sy, ex, ey, col, (r % 3 === 0) ? 2 : 1);
+      }
+      drawBresenhamCircle(ctx, sx, sy, 24, accent, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 12, PALETTE.bone, 1.0);
+    }
+
+    ctx.restore();
+  }
+
+  drawScreenOverlay(ctx, width, height, player) {
+    // 1. Sakuga Impact Frames (Stark high-contrast comic action frame, zero white flash)
+    if (this.impactFrames > 0) {
+      this.drawImpactFrame(ctx, width, height, player);
+      this.impactFrames--;
     }
 
     // 2. Letterbox bars (12% of 270px = 32px top & bottom)

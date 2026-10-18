@@ -45,15 +45,18 @@ export default function App() {
     const handleResize = () => engine.handleResize();
     const handleKeyDown = (e: KeyboardEvent) => engine.onKeyDown(e);
     const handleKeyUp = (e: KeyboardEvent) => engine.onKeyUp(e);
+    const handleMouseUp = (e: MouseEvent) => engine.onMouseUp(e);
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('mouseup', handleMouseUp);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('mouseup', handleMouseUp);
       engine.stop();
     };
   }, []);

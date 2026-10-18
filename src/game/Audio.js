@@ -312,6 +312,47 @@ class SoundSystem {
     });
   }
 
+  playShieldBlock() {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+
+    // High metallic deflection clang
+    const freqs = [1120, 2240, 3360];
+    freqs.forEach((f, idx) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = idx === 0 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(f, now);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.94, now + 0.16);
+
+      gain.gain.setValueAtTime((idx === 0 ? 0.42 : 0.28) * this.masterVolume, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.18);
+    });
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this._createNoiseBuffer(0.06);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(2800, now);
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(0.35 * this.masterVolume, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+    noise.connect(filter);
+    filter.connect(nGain);
+    nGain.connect(this.ctx.destination);
+    noise.start(now);
+  }
+
+  playParry() {
+    this.playShieldBlock();
+  }
+
   playUltimateStart() {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
@@ -377,6 +418,39 @@ class SoundSystem {
     oGain.connect(this.ctx.destination);
     osc.start(now);
     osc.stop(now + 0.36);
+  }
+
+  playConcussiveBlast() {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this._createNoiseBuffer(0.24);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(280, now);
+    filter.frequency.exponentialRampToValueAtTime(45, now + 0.22);
+
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(0.55 * this.masterVolume, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+
+    noise.connect(filter);
+    filter.connect(nGain);
+    nGain.connect(this.ctx.destination);
+    noise.start(now);
+
+    const osc = this.ctx.createOscillator();
+    const oGain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(140, now);
+    osc.frequency.exponentialRampToValueAtTime(28, now + 0.24);
+    oGain.gain.setValueAtTime(0.5 * this.masterVolume, now);
+    oGain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+    osc.connect(oGain);
+    oGain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.24);
   }
 
   // --- STATUS EFFECT SYNTHESIZED AUDIO ---

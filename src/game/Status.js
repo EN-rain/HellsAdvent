@@ -829,6 +829,7 @@ export class StatusSystem {
     let mult = 1.0;
     if (this.map.has('haste')) mult *= 1.10;
     if (this.map.has('overspun')) mult *= 1.25;
+    if (this.map.has('rapidFire')) mult *= 2.0;
     if (this.map.has('slow')) mult *= 0.70; // Slow plays animation at 70% speed
     return mult;
   }

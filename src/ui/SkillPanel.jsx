@@ -18,7 +18,7 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/90 p-4 select-none">
-      <div className="w-full max-w-6xl bg-[#0B0D10] border-2 border-[#3A3F47] flex flex-col">
+      <div className="w-full max-w-6xl bg-[#0B0D10] border-2 border-[#3A3F47] flex flex-col max-h-[92vh] overflow-y-auto">
         {/* TOP BAR: Portrait, Name, Title & Stage, Available Skill Points */}
         <div className="flex items-center justify-between border-b-2 border-[#3A3F47] px-4 py-2.5 bg-[#161A20]">
           <div className="flex items-center gap-3">

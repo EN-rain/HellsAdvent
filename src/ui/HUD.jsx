@@ -717,7 +717,7 @@ export function HUD({ snapshot, engine }) {
                 engine.player.useUltimate(
                   engine.keys.worldMouseX,
                   engine.keys.worldMouseY,
-                  engine.spawner.enemies,
+                  engine.spawner,
                   engine.projectiles,
                   engine.particles,
                   engine.camera,

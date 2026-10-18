@@ -42,7 +42,7 @@ export class GameEngine {
     this.offscreenCanvas = document.createElement('canvas');
     this.offscreenCanvas.width = INTERNAL_WIDTH;
     this.offscreenCanvas.height = INTERNAL_HEIGHT;
-    this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d', { willReadFrequently: true });
     this.offscreenCtx.imageSmoothingEnabled = false;
 
     this.displayScale = 2;
@@ -341,11 +341,11 @@ export class GameEngine {
     );
 
     // Check player death
-    if (this.player.dead && this.player.deathAnimTimer <= 0 && this.uiState === 'playing') {
+    if (this.player.dead && this.player.deathAnimTimer >= 1.0 && this.uiState === 'playing') {
       this.lastGoldLost = this.player.applyDeathPenalty();
       this.saveProgress();
-      this.uiState = 'death';
-      this.notifyUi();
+      this.setUiState('death');
+
       return;
     }
 
@@ -443,7 +443,7 @@ export class GameEngine {
     const renderList = [];
     for (let i = 0; i < this.spawner.enemies.length; i++) {
       const e = this.spawner.enemies[i];
-      if (!e.dead && this.camera.isVisible(e.x, e.y, e.radius + 48)) {
+      if (e.active && !e.dead && this.camera.isVisible(e.x, e.y, e.radius + 48)) {
         renderList.push({ y: e.y, type: 'enemy', entity: e });
       }
     }
@@ -698,8 +698,6 @@ export class GameEngine {
         );
         break;
       case 'KeyV':
-      case 'ShiftLeft':
-      case 'ShiftRight':
         if (this.player.classId === 'rook') {
           this.player.tryManualReload(this.particles);
         } else if (this.player.classId === 'sena') {
@@ -754,7 +752,7 @@ export class GameEngine {
     }
   }
 
-  onMouseMove(e) {
+  updateMouseCoords(e) {
     if (!this.canvas) return;
     const rect = this.canvas.getBoundingClientRect();
     const rawX = e.clientX - rect.left - this.letterboxX;
@@ -765,10 +763,27 @@ export class GameEngine {
     this.keys.worldMouseY = this.camera.y + this.mouseScreenY;
   }
 
+  onMouseMove(e) {
+    this.updateMouseCoords(e);
+  }
+
   onMouseDown(e) {
     if (this.uiState !== 'playing') return;
+    this.updateMouseCoords(e);
+
     if (e.button === 0) {
       this.keys.mouseDown = true;
+      if (this.player && this.player.attackTimer <= 0) {
+        this.player.tryBasicAttack(
+          this.keys.worldMouseX,
+          this.keys.worldMouseY,
+          this.spawner,
+          this.projectiles,
+          this.particles,
+          this.camera,
+          (dur) => this.particles.triggerHitStop(dur)
+        );
+      }
     } else if (e.button === 2) {
       this.keys.rightMouseDown = true;
       // Right-click convenience: Rook manual reload or Sena Anvil Guard toggle
@@ -941,9 +956,9 @@ export class GameEngine {
     this.player.respawnAtKettle();
     this.projectiles.clear();
     this.camera.snapTo(this.player.x, this.player.y, this.world.size);
-    this.uiState = 'playing';
+    this.setUiState('playing');
     this.saveProgress();
-    this.notifyUi();
+
   }
 
   // --- SAVE / LOAD SYSTEM (3 Save Slots + Electron IPC or localStorage fallback) ---
@@ -1100,7 +1115,7 @@ export class GameEngine {
         p.classBehavior && typeof p.classBehavior.getHudMechanicState === 'function'
           ? p.classBehavior.getHudMechanicState()
           : (typeof p.getHudMechanicState === 'function' ? p.getHudMechanicState() : null),
-      statuses: p.status.getHudStatusList(),
+      statuses: (p.statuses || p.status)?.getHudStatusList?.() || [],
       areaName: area.name,
       areaSubtitle: area.subtitle,
       stormActive: this.world.stormTimer > 0,
@@ -1120,8 +1135,8 @@ export class GameEngine {
             hp: Math.ceil(boss.hp),
             maxHp: boss.maxHp,
             phase: boss.phase,
-            staggerPct: Math.round(boss.status.stagger),
-            staggered: boss.status.has('staggered'),
+            staggerPct: Math.round((boss.statuses || boss.status)?.stagger || 0),
+            staggered: Boolean((boss.statuses || boss.status)?.has?.('staggered') || ((boss.statuses || boss.status)?.staggeredTimer > 0)),
           }
         : null,
       bossNameCard: this.bossNameCard ? { ...this.bossNameCard } : null,
