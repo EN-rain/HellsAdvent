@@ -374,6 +374,27 @@ export const STATUSES = {
     },
   },
 
+  riposteSurge: {
+    id: 'riposteSurge',
+    name: 'Riposte Surge',
+    kind: 'buff',
+    color: PALETTE.signal,
+    defaultDuration: 3.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {
+      atkBonusPct: 0.30,      // +30% ATK damage
+      attackSpeedPct: 0.40,   // +40% Attack Speed
+      moveSpeedPct: 0.20,     // +20% Move Speed
+    },
+    cleansable: false,
+    icon: 'railParry',
+    tags: ['buff', 'haste', 'offense'],
+    getTooltip() {
+      return '+30% ATK, +40% Attack Speed, and +20% Move Speed for 3s after a successful Parry.';
+    },
+  },
+
   guarding: {
     id: 'guarding',
     name: 'Guarding',
@@ -521,6 +542,27 @@ export const STATUSES = {
     tags: ['invulnerable'],
     getTooltip() {
       return 'Invulnerable to all damage and effects.';
+    },
+  },
+
+  riposteSurge: {
+    id: 'riposteSurge',
+    name: 'Riposte Surge',
+    kind: 'buff',
+    color: PALETTE.signal,
+    defaultDuration: 3.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {
+      attackSpeedPct: 0.35, // +35% attack speed
+      atkBonusPct: 0.30, // +30% attack damage
+      moveSpeedPct: 0.25, // +25% move speed
+    },
+    cleansable: false,
+    icon: 'riposteSurge',
+    tags: ['buff', 'haste', 'offense', 'parry'],
+    getTooltip() {
+      return '+35% Attack Speed, +30% ATK, and +25% Move Speed for 3s after successful Crescent Parry.';
     },
   },
 

@@ -332,6 +332,20 @@ export function StatusIcon({ statusId, size = 24 }) {
         ctx.fillRect(8, 5, 2, 2);
         break;
       }
+      case 'riposteSurge': {
+        // Curved crescent blade with glowing core and speed chevron
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(2, 2, 2, 7);
+        ctx.fillRect(4, 1, 4, 2);
+        ctx.fillRect(7, 2, 2, 3);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(3, 3, 2, 4);
+        ctx.fillRect(5, 2, 2, 2);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(2, 9, 7, 2);
+        ctx.fillRect(6, 7, 3, 1);
+        break;
+      }
       case 'focus': {
         // Diamond eye
         ctx.fillStyle = PALETTE.brass;

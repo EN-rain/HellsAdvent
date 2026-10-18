@@ -47,6 +47,7 @@ export class UltimateSequencer {
     this.flashColor = '#FFFFFF';
     this.flashTimestamps = []; // for capping to max 3 flashes/sec when reduceFlashes is on
     this.impactFrames = 0;
+    this.impactMaxFrames = 0;
     this.impactData = null;
 
     // Charge Meter tracking & caps
@@ -64,6 +65,7 @@ export class UltimateSequencer {
     this.cutAssignments = []; // [{ target, angle, x1, y1, x2, y2, triggered, damageMult, applyBleed }]
     this.lastCutTarget = null;
     this.splitCorpses = []; // [{ canvas, x, y, angle, sep, vx, vy, life, maxLife }]
+    this.afterimages = []; // [{ x, y, fromX, fromY, facingX, life, maxLife, color }]
 
     // Rook Ten Count / Long Count / Dead Ground runtime state
     this.aimOriginX = 0;
@@ -78,10 +80,13 @@ export class UltimateSequencer {
     this.aimChargeDurationMs = 1000;
     this.aimChargeElapsedMs = 0;
     this.deadGroundCenter = { x: 0, y: 0 };
+    this.mineArcs = []; // [{ startX, startY, endX, endY, progress, duration }]
 
     // Ines Scrapfall / Crane Drop / Junkyard Rain runtime state
     this.levitationZone = null; // { x, y, radius, elapsedMs, durationMs, pieces: [...] }
+    this.slamStreaks = []; // [{ x, y, radius, life, maxLife, color }]
     this.lastPlayerRef = null;
+    this.lastSpawnerRef = null;
   }
 
   reset() {
@@ -100,8 +105,12 @@ export class UltimateSequencer {
     this.cutInActive = false;
     this.flashFrames = 0;
     this.impactFrames = 0;
+    this.impactMaxFrames = 0;
     this.impactData = null;
     this.cutAssignments = [];
+    this.afterimages = [];
+    this.mineArcs = [];
+    this.slamStreaks = [];
     this.aimLineActive = false;
     this.levitationZone = null;
   }
@@ -298,15 +307,19 @@ export class UltimateSequencer {
     this.stepIndex = 0;
     this.chargePaused = !!ultDef.pauseChargeWhileActive;
     this.lastPlayerRef = player;
+    this.lastSpawnerRef = spawner;
 
     this.aimOriginX = player.x;
     this.aimOriginY = player.y;
-    this.aimCursorX = player.clampCoord(worldMouseX);
-    this.aimCursorY = player.clampCoord(worldMouseY);
-    this.aimAngle = Math.atan2(worldMouseY - player.y, worldMouseX - player.x);
+    const rawMx = Number.isFinite(worldMouseX) ? worldMouseX : (player.x + (player.facingX || 1) * 100);
+    const rawMy = Number.isFinite(worldMouseY) ? worldMouseY : player.y;
+    this.aimCursorX = player.clampCoord(rawMx);
+    this.aimCursorY = player.clampCoord(rawMy);
+    const computedAngle = Math.atan2(rawMy - player.y, rawMx - player.x);
+    this.aimAngle = Number.isFinite(computedAngle) ? computedAngle : (player.facingX >= 0 ? 0 : Math.PI);
     this.deadGroundCenter = {
-      x: player.clampCoord(worldMouseX),
-      y: player.clampCoord(worldMouseY),
+      x: this.aimCursorX,
+      y: this.aimCursorY,
     };
 
     // Pre-assign round-robin cuts for Seven Cuts / Nine Cuts
@@ -437,13 +450,15 @@ export class UltimateSequencer {
   }
 
   triggerImpactFrame(data = {}) {
-    this.impactFrames = Math.max(1, data.frames || 2);
+    const frames = Math.max(1, data.frames || 2);
+    this.impactFrames = frames;
+    this.impactMaxFrames = frames;
     this.impactData = {
       x: data.x,
       y: data.y,
       angle: data.angle || 0,
       color: data.color || PALETTE.signal,
-      kind: data.kind || 'slash', // 'slash' | 'rail' | 'crush' | 'burst'
+      kind: data.kind || 'slash',
       camera: data.camera || null,
       seed: Math.random() * 1000,
     };
@@ -460,10 +475,14 @@ export class UltimateSequencer {
     }
     this.flashTimestamps.push(nowSec);
 
-    // Replace blinding white flash with high-impact comic/anime impact frame!
+    // Do not clobber a dedicated multi-frame impactFrame already triggered by the current step
+    if (this.impactFrames > 0 && !options.force) {
+      return;
+    }
+
     this.triggerImpactFrame({
-      frames: Math.min(2, Math.max(1, frames)),
-      color: options.color || (this.ultDef && this.ultDef.classId === 'rook' ? PALETTE.brass : PALETTE.signal),
+      frames: Math.min(3, Math.max(1, frames)),
+      color: options.color || (this.ultDef && this.ultDef.classId === 'rook' ? PALETTE.brass : this.ultDef && this.ultDef.classId === 'ines' ? PALETTE.verdigris : PALETTE.signal),
       kind: options.kind || 'slash',
       x: options.x,
       y: options.y,
@@ -517,6 +536,9 @@ export class UltimateSequencer {
     if (player) {
       this.lastPlayerRef = player;
     }
+    if (spawner) {
+      this.lastSpawnerRef = spawner;
+    }
 
     // 1. Update rolling 1-second cap window for damage-dealt ultimate charge
     this.damageGainWindowTimer += dt;
@@ -559,6 +581,33 @@ export class UltimateSequencer {
       }
     }
 
+    // Update Sena phantom blink afterimages
+    for (let i = this.afterimages.length - 1; i >= 0; i--) {
+      const ai = this.afterimages[i];
+      ai.life -= dt;
+      if (ai.life <= 0) {
+        this.afterimages.splice(i, 1);
+      }
+    }
+
+    // Update Rook Dead Ground parabolic mine arcs
+    for (let i = this.mineArcs.length - 1; i >= 0; i--) {
+      const ma = this.mineArcs[i];
+      ma.progress += dt / Math.max(0.05, ma.duration);
+      if (ma.progress >= 1) {
+        this.mineArcs.splice(i, 1);
+      }
+    }
+
+    // Update Ines vertical slam kinetic streaks
+    for (let i = this.slamStreaks.length - 1; i >= 0; i--) {
+      const ss = this.slamStreaks[i];
+      ss.life -= dt;
+      if (ss.life <= 0) {
+        this.slamStreaks.splice(i, 1);
+      }
+    }
+
     // Update Ines levitation zone animation
     if (this.levitationZone) {
       this.levitationZone.elapsedMs += dt * 1000;
@@ -588,19 +637,22 @@ export class UltimateSequencer {
 
     if (!this.active) return;
 
-    // Track live cursor angle during Rook's Ten Count / Long Count charge
+    // Track live cursor angle during Rook's Ten Count / Long Count / Rail Slug charge
     if (this.aimLineActive && input) {
       this.aimOriginX = player.x;
       this.aimOriginY = player.y;
       if (input.worldMouseX !== undefined && input.worldMouseY !== undefined) {
         this.aimCursorX = input.worldMouseX;
         this.aimCursorY = input.worldMouseY;
-        this.aimAngle = Math.atan2(
+        const nextAng = Math.atan2(
           this.aimCursorY - player.y,
           this.aimCursorX - player.x
         );
-        player.facingDir = angleTo4Facing(this.aimAngle);
-        player.facingX = Math.cos(this.aimAngle) >= 0 ? 1 : -1;
+        if (Number.isFinite(nextAng)) {
+          this.aimAngle = nextAng;
+          player.facingDir = angleTo4Facing(this.aimAngle);
+          player.facingX = Math.cos(this.aimAngle) >= 0 ? 1 : -1;
+        }
       }
       this.aimChargeElapsedMs += dt * 1000;
       this.aimChargeProgress = Math.min(
@@ -739,18 +791,15 @@ export class UltimateSequencer {
         const assign = this.cutAssignments[cutIdx];
         sound.playUltimateCut(cutIdx);
 
-        if (accessibility && accessibility.reduceFlashes) {
-          this._triggerScreenFlash(1, accessibility);
-        } else {
-          this.invertFrames = p.invertFrames || 1;
-        }
-
         if (camera) {
           camera.shake(p.shakePx || 4, 0.08);
         }
 
         if (assign && assign.target && assign.target.active) {
           const t = assign.target;
+          const prevX = player.x;
+          const prevY = player.y;
+
           assign.triggered = true;
           assign.x = t.x;
           assign.y = t.y;
@@ -763,6 +812,34 @@ export class UltimateSequencer {
           const faceAng = Math.atan2(t.y - player.y, t.x - player.x);
           player.facingDir = angleTo4Facing(faceAng);
           player.facingX = Math.cos(faceAng) >= 0 ? 1 : -1;
+
+          // Spawn phantom blink afterimage and high-speed lightning dash trail
+          this.afterimages.push({
+            fromX: prevX,
+            fromY: prevY,
+            x: player.x,
+            y: player.y,
+            facingX: player.facingX,
+            life: 0.48,
+            maxLife: 0.48,
+            color: p.applyBleed ? PALETTE.blood : PALETTE.signal,
+          });
+
+          if (particles) {
+            particles.spawnCrossCutFlash(t.x, t.y);
+            particles.spawnDirectionalSparks(t.x, t.y, assign.angle, 0.7, 6, p.applyBleed ? PALETTE.blood : PALETTE.signal);
+          }
+
+          // Center the cut impact frame directly on the struck target at the exact cut angle
+          this.triggerImpactFrame({
+            x: t.x,
+            y: t.y,
+            angle: assign.angle,
+            color: p.applyBleed ? PALETTE.blood : PALETTE.signal,
+            kind: 'slashCut',
+            frames: p.impactFrame?.frames || 2,
+            camera,
+          });
         }
         break;
       }
@@ -784,19 +861,19 @@ export class UltimateSequencer {
         }
 
         sound.playUltimateReleaseCrack();
-        // Sakuga anime action impact frame (no white flash!)
+        // Full-screen Sakuga dimensional slash-shatter impact frame
         this.triggerImpactFrame({
-          x: player.x,
-          y: player.y,
+          x: this.lastCutTarget ? this.lastCutTarget.x : player.x,
+          y: this.lastCutTarget ? this.lastCutTarget.y : player.y,
           angle: this.lastCutTarget ? Math.atan2(this.lastCutTarget.y - player.y, this.lastCutTarget.x - player.x) : 0,
           color: p.applyBleed ? PALETTE.blood : PALETTE.signal,
-          kind: 'slash',
-          frames: 2,
-          camera
+          kind: 'slashShatter',
+          frames: p.impactFrame?.frames || 4,
+          camera,
         });
 
         if (camera) {
-          camera.shake(p.shakePx || 8, 0.28);
+          camera.shake(p.shakePx || 9, 0.30);
         }
 
         // Group cuts by target so all damage lands in the same frame
@@ -816,14 +893,14 @@ export class UltimateSequencer {
 
           // Spawn vibrant slash burst along each cut line
           if (particles) {
-            const len = 48;
+            const len = 54;
             particles.spawnSlash(
               c.target.x - Math.cos(c.angle) * len,
               c.target.y - Math.sin(c.angle) * len,
               c.target.x + Math.cos(c.angle) * len,
               c.target.y + Math.sin(c.angle) * len,
               p.applyBleed ? PALETTE.blood : PALETTE.signal,
-              0.28,
+              0.32,
               'sevenCuts'
             );
           }
@@ -886,7 +963,7 @@ export class UltimateSequencer {
 
         // Ring of bone debris bursts outward around Sena
         if (particles) {
-          particles.spawnShockwave(player.x, player.y, 110, PALETTE.bone, 0.26);
+          particles.spawnShockwave(player.x, player.y, 120, PALETTE.bone, 0.28);
           particles.spawnDebris(player.x, player.y, 'shardBone', 8);
         }
 
@@ -927,11 +1004,19 @@ export class UltimateSequencer {
         }
 
         sound.playSkillGroundBreak();
-        this._triggerScreenFlash(p.whiteFlashFrames || 1, accessibility);
+        this.triggerImpactFrame({
+          x: player.x,
+          y: player.y,
+          color: PALETTE.signal,
+          kind: 'groundSlam',
+          frames: p.impactFrame?.frames || 3,
+          camera,
+        });
         if (camera) {
-          camera.shake(p.shakePx || 6, 0.22);
+          camera.shake(p.shakePx || 7, 0.25);
         }
         if (particles) {
+          particles.spawnGroundBreakEffect(player.x, player.y, 120);
           particles.spawnShockwave(
             player.x,
             player.y,
@@ -948,25 +1033,41 @@ export class UltimateSequencer {
       case 'senaHoldTheLinePulse': {
         this._tauntEnemiesInRadius(player, spawner, p.tauntRadius || 300, null);
         if (particles) {
-          particles.spawnShockwave(player.x, player.y, 120, PALETTE.signal, 0.18);
+          particles.spawnShockwave(player.x, player.y, 120, PALETTE.signal, 0.22);
+          particles.spawnRing(player.x, player.y, PALETTE.bone, 300, 0.28);
         }
         break;
       }
 
       case 'rookChargeTick': {
         sound.playReloadStart();
+        if (particles && player) {
+          const muzzleX = player.x + Math.cos(this.aimAngle) * 16;
+          const muzzleY = player.y + Math.sin(this.aimAngle) * 16;
+          particles.spawnSparks(muzzleX, muzzleY, 3, PALETTE.brass);
+        }
         break;
       }
 
       case 'rookFireTenCountBolt': {
+        const angle = Number.isFinite(this.aimAngle) ? this.aimAngle : (player.facingX >= 0 ? 0 : Math.PI);
         if (p.boltIndex === 0) {
           this.aimLineActive = false;
-          this._triggerScreenFlash(p.whiteFlashFrames || 1, accessibility);
+        }
+        if (p.boltIndex === 0 || p.boltIndex === 9) {
+          this.triggerImpactFrame({
+            x: player.x,
+            y: player.y,
+            angle,
+            color: PALETTE.brass,
+            kind: 'pierceVector',
+            frames: p.boltIndex === 9 ? 3 : 2,
+            camera,
+          });
         }
 
         // Ultimates never crit. ATK buffs and Marked apply. Distance bonus and Clean Mag do not.
         const atkBuffPct = this._getUltimateAtkBuffPct(player);
-        const angle = this.aimAngle;
 
         if (projectiles && typeof projectiles.spawn === 'function') {
           projectiles.spawn({
@@ -988,6 +1089,12 @@ export class UltimateSequencer {
           });
         }
 
+        if (particles) {
+          const mx = player.x + Math.cos(angle) * 16;
+          const my = player.y + Math.sin(angle) * 16;
+          particles.spawnDirectionalSparks(mx, my, angle, 0.35, 4, PALETTE.brass);
+        }
+
         sound.playSpringgunShot(true);
         if (camera) {
           camera.shake(p.shakePx || 3, 0.06);
@@ -998,7 +1105,7 @@ export class UltimateSequencer {
       case 'rookReleaseRailSlug':
       case 'rookReleaseLongCount': {
         this.aimLineActive = false;
-        const angle = this.aimAngle;
+        const angle = Number.isFinite(this.aimAngle) ? this.aimAngle : (player.facingX >= 0 ? 0 : Math.PI);
         const range = p.range || 1400;
         const lineWidth = p.lineWidth || 90;
         const x1 = player.x;
@@ -1006,14 +1113,14 @@ export class UltimateSequencer {
         const x2 = x1 + Math.cos(angle) * range;
         const y2 = y1 + Math.sin(angle) * range;
 
-        // Sakuga anime action impact frame along the firing vector (zero white flash)
+        // Sakuga anime action impact frame along the exact firing vector
         this.triggerImpactFrame({
           x: player.x,
           y: player.y,
           angle,
           color: PALETTE.brass,
           kind: 'rail',
-          frames: 2,
+          frames: p.impactFrame?.frames || 4,
           camera,
         });
 
@@ -1026,21 +1133,28 @@ export class UltimateSequencer {
           camera.shake(p.shakePx || 14, 0.35);
         }
 
-        // Spawn colossal 90px multi-tier Rail Beam corridor
+        // Spawn colossal multi-tier Rail Beam corridor & bounded ground shockwaves
         if (particles) {
           if (typeof particles.spawnRailBeam === 'function') {
-            particles.spawnRailBeam(x1, y1, x2, y2, lineWidth, 0.5);
+            particles.spawnRailBeam(x1, y1, x2, y2, lineWidth, 0.52);
           } else {
             particles.spawnSlash(x1, y1, x2, y2, PALETTE.brass, 0.45, 'sevenCuts');
           }
 
-          // Spawn ground trench dust & shockwave cracks along the 1400px corridor
-          const stepCount = Math.min(22, Math.round(range / 60));
+          // Muzzle blast ring & shell casing ejection
+          particles.spawnShockwave(x1, y1, 64, PALETTE.brass, 0.22);
+          particles.spawnDebris(x1, y1, 'canLid', 2);
+
+          // Spawn dust & ground cracks along the near visible corridor (avoids spawning 8 off-screen ground breaks)
+          const visibleRange = Math.min(540, range);
+          const stepCount = Math.min(9, Math.round(visibleRange / 65));
           for (let s = 1; s <= stepCount; s++) {
-            const tx = x1 + Math.cos(angle) * (s * 60);
-            const ty = y1 + Math.sin(angle) * (s * 60);
-            particles.spawnDustPuff(tx, ty, 3);
-            if (s % 3 === 0) particles.spawnGroundBreakEffect(tx, ty);
+            const tx = x1 + Math.cos(angle) * (s * 65);
+            const ty = y1 + Math.sin(angle) * (s * 65);
+            particles.spawnDustPuff(tx, ty, 2);
+            if (s === 2 || s === 5 || s === 8) {
+              particles.spawnGroundBreakEffect(tx, ty, 48);
+            }
           }
         }
 
@@ -1113,12 +1227,13 @@ export class UltimateSequencer {
 
           // SECONDARY KINETIC AOE SHOCKWAVE DETONATION ON EVERY TARGET HIT
           if (particles) {
-            particles.spawnRing(e.x, e.y, PALETTE.brass, aoeRadius);
-            particles.spawnSparks(e.x, e.y, 8, PALETTE.brass);
-            particles.spawnDebris(e.x, e.y, 4);
-          }
-          if (typeof sound.playConcussiveBlast === 'function') {
-            sound.playConcussiveBlast();
+            if (typeof particles.spawnRing === 'function') {
+              particles.spawnRing(e.x, e.y, PALETTE.brass, aoeRadius);
+            } else if (typeof particles.spawnShockwave === 'function') {
+              particles.spawnShockwave(e.x, e.y, aoeRadius, PALETTE.brass);
+            }
+            if (typeof particles.spawnSparks === 'function') particles.spawnSparks(e.x, e.y, 6, PALETTE.brass);
+            if (typeof particles.spawnDebris === 'function') particles.spawnDebris(e.x, e.y, 'shardRust', 3);
           }
 
           // Detonate concussive shockwave damage to all surrounding enemies within 80px radius
@@ -1147,13 +1262,6 @@ export class UltimateSequencer {
             }
           }
         }
-
-        // Terminal Kinetic Shock Detonation at Beam End
-        if (particles) {
-          particles.spawnRing(x2, y2, PALETTE.brass, 110);
-          particles.spawnSparks(x2, y2, 16, PALETTE.brass);
-          particles.spawnGroundBreakEffect(x2, y2);
-        }
         break;
       }
 
@@ -1171,11 +1279,22 @@ export class UltimateSequencer {
           this.deadGroundCenter.y + Math.sin(theta) * rad * ringRatio * 0.85
         );
 
+        // Animate parabolic lob arc from Rook to the mine landing spot
+        this.mineArcs.push({
+          startX: player.x,
+          startY: player.y,
+          endX: mx,
+          endY: my,
+          progress: 0,
+          duration: 0.16,
+        });
+
         if (player.classId === 'rook' && player.classBehavior) {
           player.classBehavior.traps.push({
             kind: 'mine',
             x: mx,
             y: my,
+            radius: 20,
             triggerRadius: 34,
             blastRadius: p.blastRadius || 80,
             damageMult: p.damageMult || 2.20,
@@ -1189,14 +1308,31 @@ export class UltimateSequencer {
         sound.playReloadStart();
         if (particles) {
           particles.spawnDustPuff(mx, my, 2, 0, 0);
+          particles.spawnRing(mx, my, PALETTE.brass, 26, 0.16);
         }
         break;
       }
 
       case 'rookReleaseDeadGround': {
-        this._triggerScreenFlash(p.whiteFlashFrames || 1, accessibility);
+        this.triggerImpactFrame({
+          x: this.deadGroundCenter.x,
+          y: this.deadGroundCenter.y,
+          color: PALETTE.brass,
+          kind: 'mineBlast',
+          frames: p.impactFrame?.frames || 3,
+          camera,
+        });
         if (camera) {
-          camera.shake(p.shakePx || 5, 0.18);
+          camera.shake(p.shakePx || 6, 0.20);
+        }
+        if (particles) {
+          particles.spawnShockwave(
+            this.deadGroundCenter.x,
+            this.deadGroundCenter.y,
+            220,
+            PALETTE.brass,
+            0.28
+          );
         }
         break;
       }
@@ -1230,13 +1366,32 @@ export class UltimateSequencer {
         const rad = p.radius || 160;
 
         sound.playSkillGroundBreak();
-        this._triggerScreenFlash(p.whiteFlashFrames || 1, accessibility);
+        // Trigger Sakuga magnetic-crush impact frame centered on the slam zone (zx, zy)
+        this.triggerImpactFrame({
+          x: zx,
+          y: zy,
+          color: PALETTE.verdigris,
+          kind: 'crush',
+          frames: p.impactFrame?.frames || 4,
+          camera,
+        });
         if (camera) {
-          camera.shake(p.shakePx || 7, 0.24);
+          camera.shake(p.shakePx || 8, 0.26);
         }
+
+        // Spawn vertical kinetic slam streaks hammering into the crater
+        this.slamStreaks.push({
+          x: zx,
+          y: zy,
+          radius: rad,
+          life: 0.26,
+          maxLife: 0.26,
+          color: PALETTE.verdigris,
+        });
 
         if (particles) {
           particles.spawnGroundBreakEffect(zx, zy, rad);
+          particles.spawnShockwave(zx, zy, rad, PALETTE.verdigris, 0.28);
           particles.spawnDebris(zx, zy, 'canLid', 5);
           particles.spawnDebris(zx, zy, 'shardRust', 5);
           if (p.spawnCrater && particles.spawnCraterDecal) {
@@ -1393,6 +1548,28 @@ export class UltimateSequencer {
     const camX = camera.renderX;
     const camY = camera.renderY;
 
+    // 0. Sena's Hold the Line — Bastion Anvil Aegis Perimeter on Ground
+    if (p && p.classId === 'sena' && p.statuses && p.statuses.has('dugIn')) {
+      const sx = Math.round(p.x - camX);
+      const sy = Math.round(p.y - camY);
+      const spin = (performance.now() * 0.0025) % (Math.PI * 2);
+
+      // 120px counter-burst zone & 300px taunt perimeter
+      drawBresenhamCircle(ctx, sx, sy, 120, PALETTE.signal, 0.85);
+      drawBresenhamCircle(ctx, sx, sy, 116, PALETTE.bone, 0.45);
+      drawBresenhamCircle(ctx, sx, sy, 300, PALETTE.rust, 0.45);
+
+      // 8 rotating iron bastion chevrons at the 120px counter-burst ring
+      for (let i = 0; i < 8; i++) {
+        const a = spin + (i / 8) * Math.PI * 2;
+        const bx = Math.round(sx + Math.cos(a) * 120);
+        const by = Math.round(sy + Math.sin(a) * 120);
+        const ix = Math.round(sx + Math.cos(a) * 106);
+        const iy = Math.round(sy + Math.sin(a) * 106);
+        drawPixelLine(ctx, ix, iy, bx, by, i % 2 === 0 ? PALETTE.bone : PALETTE.signal, 2);
+      }
+    }
+
     // 1. Draw Split Corpse Halves sliding apart along cut lines
     for (let i = 0; i < this.splitCorpses.length; i++) {
       const sc = this.splitCorpses[i];
@@ -1429,65 +1606,133 @@ export class UltimateSequencer {
       // Bright cut seam line between the two halves
       drawPixelLine(
         ctx,
-        sx - 14,
+        sx - 16,
         sy,
-        sx + 14,
+        sx + 16,
         sy,
         PALETTE.bone,
         1
       );
     }
 
-    // 2. Draw frozen white slash lines over targets during Seven Cuts / Nine Cuts
-    for (let i = 0; i < this.cutAssignments.length; i++) {
-      const c = this.cutAssignments[i];
-      if (!c.triggered || c.released || !c.target) continue;
-      const tx = Math.round(c.target.x - camX);
-      const ty = Math.round(c.target.y - camY);
-      const len = 36;
-      const x1 = Math.round(tx - Math.cos(c.angle) * len);
-      const y1 = Math.round(ty - Math.sin(c.angle) * len);
-      const x2 = Math.round(tx + Math.cos(c.angle) * len);
-      const y2 = Math.round(ty + Math.sin(c.angle) * len);
+    // 1.5. Draw Sena's high-speed phantom afterimages & blink-lightning vectors
+    for (let i = 0; i < this.afterimages.length; i++) {
+      const ai = this.afterimages[i];
+      const ratio = ai.life / ai.maxLife;
+      const sx0 = Math.round(ai.fromX - camX);
+      const sy0 = Math.round(ai.fromY - camY);
+      const sx1 = Math.round(ai.x - camX);
+      const sy1 = Math.round(ai.y - camY);
 
-      // Tapered white slash line (2px center, 1px tips)
-      drawPixelLine(ctx, x1, y1, x2, y2, '#FFFFFF', 1);
-      const midLen = 18;
-      drawPixelLine(
-        ctx,
-        Math.round(tx - Math.cos(c.angle) * midLen),
-        Math.round(ty - Math.sin(c.angle) * midLen),
-        Math.round(tx + Math.cos(c.angle) * midLen),
-        Math.round(ty + Math.sin(c.angle) * midLen),
-        this.ultDef?.id === 'nineCuts' ? PALETTE.blood : PALETTE.signal,
-        2
-      );
+      // Dash-lightning vector connecting blink origin to destination
+      drawPixelLine(ctx, sx0, sy0, sx1, sy1, ratio > 0.55 ? PALETTE.bone : ai.color, ratio > 0.65 ? 2 : 1);
+
+      // Phantom silhouette of Sena at blink origin
+      ctx.fillStyle = ratio > 0.5 ? ai.color : PALETTE.slag;
+      ctx.fillRect(sx0 - 4, sy0 - 11, 8, 16);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(sx0 - 2, sy0 - 9, 4, 4);
     }
 
-    // 3. Draw Rook's Ten Count / Long Count charging aim line, corridor bounds, & countdown ticks
+    // 2. Draw frozen white slash lines & target lock-on reticles during Seven Cuts / Nine Cuts
+    for (let i = 0; i < this.cutAssignments.length; i++) {
+      const c = this.cutAssignments[i];
+      if (!c.target || c.released) continue;
+      const tx = Math.round(c.target.x - camX);
+      const ty = Math.round(c.target.y - camY);
+
+      if (!c.triggered) {
+        // Queued target lock-on diamond reticle
+        const r = 12;
+        drawPixelLine(ctx, tx, ty - r, tx + r, ty, PALETTE.signal, 1);
+        drawPixelLine(ctx, tx + r, ty, tx, ty + r, PALETTE.signal, 1);
+        drawPixelLine(ctx, tx, ty + r, tx - r, ty, PALETTE.signal, 1);
+        drawPixelLine(ctx, tx - r, ty, tx, ty - r, PALETTE.signal, 1);
+        continue;
+      }
+
+      // Triggered cut: vibrating multi-layer slash seam + center cross-glint
+      const jitter = Math.sin(this.elapsedMs * 0.08 + i * 1.7) * 1.2;
+      const len = 42;
+      const x1 = Math.round(tx - Math.cos(c.angle) * len + jitter);
+      const y1 = Math.round(ty - Math.sin(c.angle) * len - jitter);
+      const x2 = Math.round(tx + Math.cos(c.angle) * len + jitter);
+      const y2 = Math.round(ty + Math.sin(c.angle) * len - jitter);
+
+      const accentCol = this.ultDef?.id === 'nineCuts' ? PALETTE.blood : PALETTE.signal;
+      drawPixelLine(ctx, x1, y1, x2, y2, accentCol, 3);
+      drawPixelLine(ctx, x1, y1, x2, y2, '#FFFFFF', 1);
+
+      // Center cross-star glint at the cut intersection
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(tx - 5, ty - 1, 11, 2);
+      ctx.fillRect(tx - 1, ty - 5, 2, 11);
+    }
+
+    // 3. Draw Rook's Ten Count / Long Count / Rail Slug charging aim line, corridor bounds, & lock-on reticles
     if (this.aimLineActive && p) {
       const sx = Math.round(p.x - camX);
       const sy = Math.round(p.y - camY - 4);
-      const ex = Math.round(sx + Math.cos(this.aimAngle) * this.aimLineRange);
-      const ey = Math.round(sy + Math.sin(this.aimAngle) * this.aimLineRange);
+      const cosA = Math.cos(this.aimAngle);
+      const sinA = Math.sin(this.aimAngle);
+      const ex = Math.round(sx + cosA * this.aimLineRange);
+      const ey = Math.round(sy + sinA * this.aimLineRange);
+      const nx = -sinA;
+      const ny = cosA;
 
-      drawPixelLine(ctx, sx, sy, ex, ey, this.aimLineColor, 1);
+      // Converging rail-capacitor energy rings vacuuming into Rook's muzzle
+      const muzzleX = Math.round(sx + cosA * 14);
+      const muzzleY = Math.round(sy + sinA * 14);
+      const gatherRad = Math.max(3, Math.round((1 - (this.aimChargeElapsedMs % 250) / 250) * 26));
+      drawBresenhamCircle(ctx, muzzleX, muzzleY, gatherRad, PALETTE.brass, 0.9);
+      drawBresenhamCircle(ctx, muzzleX, muzzleY, Math.max(2, Math.round(gatherRad * 0.5)), PALETTE.bone, 1.0);
 
-      // If Rail Slug (range >= 1000), draw 90px wide kinetic rail corridor boundaries
-      if (this.aimLineRange >= 1000) {
-        const cosA = Math.cos(this.aimAngle);
-        const sinA = Math.sin(this.aimAngle);
-        const nx = -sinA * 45;
-        const ny = cosA * 45;
-        drawPixelLine(ctx, sx + nx, sy + ny, ex + nx, ey + ny, PALETTE.brass, 1);
-        drawPixelLine(ctx, sx - nx, sy - ny, ex - nx, ey - ny, PALETTE.brass, 1);
+      // Center laser sight line
+      drawPixelLine(ctx, sx, sy, ex, ey, this.aimChargeProgress > 0.75 ? PALETTE.bone : this.aimLineColor, 1);
 
-        // Cross targeting brackets along the corridor
-        for (let b = 1; b <= 8; b++) {
-          const bdist = b * 130;
+      // If Rail Slug or Long Count, draw corridor bounds, scrolling chevrons, and target lock-on diamonds
+      const halfCorridor = this.aimLineRange >= 1000 ? 45 : this.aimLineRange >= 600 ? 15 : 0;
+      if (halfCorridor > 0) {
+        const bxOff = nx * halfCorridor;
+        const byOff = ny * halfCorridor;
+        drawPixelLine(ctx, sx + bxOff, sy + byOff, ex + bxOff, ey + byOff, PALETTE.brass, 1);
+        drawPixelLine(ctx, sx - bxOff, sy - byOff, ex - bxOff, ey - byOff, PALETTE.brass, 1);
+
+        // Scrolling rangefinder chevrons racing down the corridor
+        const scrollOffset = (this.aimChargeElapsedMs * 0.28) % 90;
+        for (let b = 0; b < 7; b++) {
+          const bdist = 35 + b * 90 + scrollOffset;
           const bx = sx + cosA * bdist;
           const by = sy + sinA * bdist;
-          drawPixelLine(ctx, bx - nx * 0.4, by - ny * 0.4, bx + nx * 0.4, by + ny * 0.4, PALETTE.slag, 1);
+          const tipX = bx + cosA * 12;
+          const tipY = by + sinA * 12;
+          const wing = halfCorridor * 0.55;
+          drawPixelLine(ctx, bx - nx * wing, by - ny * wing, tipX, tipY, PALETTE.brass, 1);
+          drawPixelLine(ctx, bx + nx * wing, by + ny * wing, tipX, tipY, PALETTE.brass, 1);
+        }
+
+        // Lock-on diamond reticles on all enemies caught inside the corridor
+        if (this.lastSpawnerRef && Array.isArray(this.lastSpawnerRef.enemies)) {
+          const enemies = this.lastSpawnerRef.enemies;
+          for (let i = 0; i < enemies.length; i++) {
+            const e = enemies[i];
+            if (!e || !e.active || e.hp <= 0) continue;
+            const dx = e.x - p.x;
+            const dy = e.y - p.y;
+            const along = dx * cosA + dy * sinA;
+            const perp = Math.abs(dx * nx + dy * ny);
+            if (along > 0 && along <= this.aimLineRange && perp <= halfCorridor + (e.radius || 12)) {
+              const esx = Math.round(e.x - camX);
+              const esy = Math.round(e.y - camY);
+              const lr = 13;
+              drawPixelLine(ctx, esx, esy - lr, esx + lr, esy, PALETTE.brass, 1);
+              drawPixelLine(ctx, esx + lr, esy, esx, esy + lr, PALETTE.brass, 1);
+              drawPixelLine(ctx, esx, esy + lr, esx - lr, esy, PALETTE.brass, 1);
+              drawPixelLine(ctx, esx - lr, esy, esx, esy - lr, PALETTE.brass, 1);
+              ctx.fillStyle = PALETTE.bone;
+              ctx.fillRect(esx - 1, esy - 1, 3, 3);
+            }
+          }
         }
       }
 
@@ -1495,30 +1740,77 @@ export class UltimateSequencer {
       for (let t = 0; t < 10; t++) {
         const lit = t / 10 <= this.aimChargeProgress;
         const dist = 20 + t * 8;
-        const tx = Math.round(sx + Math.cos(this.aimAngle) * dist);
-        const ty = Math.round(sy + Math.sin(this.aimAngle) * dist);
-        ctx.fillStyle = lit ? PALETTE.brass : PALETTE.slag;
-        ctx.fillRect(tx - 1, ty - 1, 2, 2);
+        const tx = Math.round(sx + cosA * dist);
+        const ty = Math.round(sy + sinA * dist);
+        ctx.fillStyle = lit ? PALETTE.bone : PALETTE.slag;
+        ctx.fillRect(tx - 1, ty - 1, 3, 3);
+        if (lit) {
+          ctx.fillStyle = PALETTE.brass;
+          ctx.fillRect(tx, ty, 1, 1);
+        }
       }
     }
 
-    // 4. Draw Ines's Levitating Wreck Parts & Magnetic Target Zone
+    // 3.5. Draw Rook's Dead Ground parabolic mine arcs & tactical field perimeter
+    if (this.active && this.ultDef?.id === 'deadGround') {
+      const cx = Math.round(this.deadGroundCenter.x - camX);
+      const cy = Math.round(this.deadGroundCenter.y - camY);
+      drawBresenhamCircle(ctx, cx, cy, 220, PALETTE.brass, 0.65);
+    }
+    for (let i = 0; i < this.mineArcs.length; i++) {
+      const ma = this.mineArcs[i];
+      const t = Math.min(1, ma.progress);
+      const curX = ma.startX + (ma.endX - ma.startX) * t;
+      const curY = ma.startY + (ma.endY - ma.startY) * t;
+      const arcLift = Math.sin(t * Math.PI) * 38;
+      const sx = Math.round(curX - camX);
+      const sy = Math.round(curY - camY - arcLift);
+      ctx.fillStyle = PALETTE.brass;
+      ctx.fillRect(sx - 2, sy - 2, 5, 5);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(sx - 1, sy - 1, 2, 2);
+    }
+
+    // 4. Draw Ines's Levitating Wreck Parts, Magnetic Tether Lightning, & Slam Drop Streaks
     if (this.levitationZone) {
       const zx = Math.round(this.levitationZone.x - camX);
       const zy = Math.round(this.levitationZone.y - camY);
       const rad = this.levitationZone.radius;
       const liftRatio = Math.min(1, this.levitationZone.elapsedMs / 850);
 
-      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.verdigris, 0.7);
-      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * (1 - liftRatio * 0.5)), PALETTE.bone, 0.4);
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.verdigris, 0.85);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * (1 - liftRatio * 0.45)), PALETTE.bone, 0.55);
+
+      // Crackling verdigris magnetic tether lightning from Ines to the vortex center
+      if (p) {
+        const px = Math.round(p.x - camX);
+        const py = Math.round(p.y - camY - 8);
+        const segs = 6;
+        let prevX = px;
+        let prevY = py;
+        for (let s = 1; s <= segs; s++) {
+          const st = s / segs;
+          const jitter = s < segs ? Math.sin(this.levitationZone.elapsedMs * 0.04 + s * 2.3) * 10 : 0;
+          const nx = Math.round(px + (zx - px) * st + jitter);
+          const ny = Math.round(py + (zy - 28 - py) * st - jitter * 0.6);
+          drawPixelLine(ctx, prevX, prevY, nx, ny, s % 2 === 0 ? PALETTE.bone : PALETTE.verdigris, 1);
+          prevX = nx;
+          prevY = ny;
+        }
+      }
 
       for (let i = 0; i < this.levitationZone.pieces.length; i++) {
         const pc = this.levitationZone.pieces[i];
-        const a = pc.angle + this.levitationZone.elapsedMs * 0.004;
+        const a = pc.angle + this.levitationZone.elapsedMs * 0.005;
         const r = rad * pc.distRatio * (1 - liftRatio * 0.35);
         const px = Math.round(zx + Math.cos(a) * r);
         const pyGround = Math.round(zy + Math.sin(a) * r);
-        const liftY = Math.round(liftRatio * 34);
+        const liftY = Math.round(liftRatio * 38);
+
+        // Vertical magnetic flux line from ground shadow up to levitating piece
+        if (i % 2 === 0) {
+          drawPixelLine(ctx, px, pyGround, px, pyGround - liftY, PALETTE.verdigris, 1);
+        }
 
         // Ground shadow under rising wreck piece
         ctx.fillStyle = PALETTE.soot;
@@ -1534,9 +1826,25 @@ export class UltimateSequencer {
         }
       }
     }
+
+    // 4.5. Draw Ines's vertical kinetic slam streaks hammering into the crater
+    for (let i = 0; i < this.slamStreaks.length; i++) {
+      const ss = this.slamStreaks[i];
+      const ratio = ss.life / ss.maxLife;
+      const zx = Math.round(ss.x - camX);
+      const zy = Math.round(ss.y - camY);
+      const count = 14;
+      for (let k = 0; k < count; k++) {
+        const offset = ((k / (count - 1)) - 0.5) * ss.radius * 1.5;
+        const x = Math.round(zx + offset);
+        const yBot = Math.round(zy + Math.sin(k * 1.9) * (ss.radius * 0.35));
+        const yTop = Math.round(yBot - 110 * ratio);
+        drawPixelLine(ctx, x, yTop, x, yBot, k % 2 === 0 ? PALETTE.bone : ss.color, k % 3 === 0 ? 2 : 1);
+      }
+    }
   }
 
-  drawImpactFrame(ctx, width, height, player) {
+  drawImpactFrame(ctx, width, height, player, accessibility = {}) {
     if (!this.impactData) return;
     const data = this.impactData;
     const cam = data.camera;
@@ -1550,114 +1858,238 @@ export class UltimateSequencer {
 
     ctx.save();
 
-    // 1. Pitch soot backdrop (stark action manga negative frame)
-    ctx.fillStyle = PALETTE.soot;
+    const accent =
+      data.color ||
+      (player.classId === 'rook'
+        ? PALETTE.brass
+        : player.classId === 'ines'
+        ? PALETTE.verdigris
+        : PALETTE.signal);
+
+    // Multi-frame Sakuga polarity inversion:
+    // Frame 1 (when reduceFlashes is off and total frames >= 2): Inverted Bone/Accent flash with Soot lines
+    // Remaining frames: Stark Pitch Soot backdrop with blazing Bone & Accent speed lines + silhouettes
+    const isInvertedPolarity =
+      !accessibility?.reduceFlashes &&
+      this.impactMaxFrames >= 2 &&
+      this.impactFrames === this.impactMaxFrames;
+
+    const bgCol = isInvertedPolarity ? PALETTE.bone : PALETTE.soot;
+    const primaryLineCol = isInvertedPolarity ? PALETTE.soot : PALETTE.bone;
+    const secondaryLineCol = accent;
+
+    // 1. Stark Sakuga Backdrop
+    ctx.fillStyle = bgCol;
     ctx.fillRect(0, 0, width, height);
 
-    const accent = data.color || (player.classId === 'rook' ? PALETTE.brass : player.classId === 'ines' ? PALETTE.verdigris : PALETTE.signal);
-
     if (data.kind === 'rail') {
-      // Archer Rail Slug Impact Frame:
-      // Huge forward kinetic ionization corridor + high-voltage lightning diagonals
+      // Archer Rail Slug / Long Count Impact Frame:
+      // Properly angled 90px kinetic ionization corridor along Rook's exact aim vector + Mach cones
       const angle = data.angle || 0;
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
       const nx = -sinA;
       const ny = cosA;
 
-      // Stark geometric beam swath across the screen
-      ctx.fillStyle = accent;
-      for (let w = -45; w <= 45; w += 3) {
-        ctx.fillRect(0, Math.round(sy + ny * w - 1), width, 2);
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(angle);
+
+      // Angled 90px wide kinetic rail swath across the entire screen
+      ctx.fillStyle = secondaryLineCol;
+      ctx.fillRect(-40, -44, 620, 88);
+      ctx.fillStyle = primaryLineCol;
+      ctx.fillRect(-20, -22, 620, 44);
+      ctx.fillStyle = isInvertedPolarity ? secondaryLineCol : '#FFFFFF';
+      ctx.fillRect(-10, -7, 620, 14);
+      ctx.restore();
+
+      // High-contrast diagonal speed & lightning shear rays along firing vector
+      for (let i = -7; i <= 7; i++) {
+        const offset = i * 18;
+        const x1 = sx + nx * offset - cosA * 120;
+        const y1 = sy + ny * offset - sinA * 120;
+        const x2 = sx + nx * offset + cosA * 520;
+        const y2 = sy + ny * offset + sinA * 520;
+        drawPixelLine(
+          ctx,
+          x1,
+          y1,
+          x2,
+          y2,
+          i % 2 === 0 ? primaryLineCol : secondaryLineCol,
+          Math.abs(i) <= 2 ? 2 : 1
+        );
       }
 
-      // High-contrast diagonal speed rays
-      for (let i = -6; i <= 6; i++) {
-        const offset = i * 22;
-        const x1 = sx + nx * offset;
-        const y1 = sy + ny * offset;
-        const x2 = x1 + cosA * 500;
-        const y2 = y1 + sinA * 500;
-        drawPixelLine(ctx, x1, y1, x2, y2, i % 2 === 0 ? '#52C5FF' : PALETTE.bone, 2);
-      }
-
-      // Muzzle shock ring
-      drawBresenhamCircle(ctx, sx, sy, 32, PALETTE.bone, 1.0);
-      drawBresenhamCircle(ctx, sx, sy, 18, accent, 1.0);
-      drawBresenhamCircle(ctx, sx, sy, 6, '#FFFFFF', 1.0);
-    } else if (data.kind === 'slash' || data.kind === 'slashCut' || data.kind === 'slashShatter') {
-      // Melee Seven Cuts / Riposte Impact Frame:
-      // Sharp graphic action slash lines radiating from the hit point
+      // Concentric Mach shock cones at muzzle and downrange
+      drawBresenhamCircle(ctx, sx, sy, 38, primaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 22, secondaryLineCol, 1.0);
+      drawBresenhamCircle(
+        ctx,
+        Math.round(sx + cosA * 140),
+        Math.round(sy + sinA * 140),
+        52,
+        primaryLineCol,
+        1.0
+      );
+    } else if (data.kind === 'slashCut') {
+      // Focused per-cut Sakuga cross-slash centered directly on the struck enemy
       const angle = data.angle || 0;
-      const rays = data.kind === 'slashShatter' ? 24 : 16;
+      const rays = 14;
       for (let r = 0; r < rays; r++) {
         const a = (r / rays) * Math.PI * 2 + (data.seed % 0.5);
-        const len = 70 + (r % 3) * 80;
+        const len = 55 + (r % 3) * 65;
         const ex = Math.round(sx + Math.cos(a) * len);
         const ey = Math.round(sy + Math.sin(a) * len);
-        const col = r % 3 === 0 ? PALETTE.bone : r % 2 === 0 ? accent : PALETTE.blood;
-        drawPixelLine(ctx, sx, sy, ex, ey, col, (r % 4 === 0) ? 3 : 1);
+        drawPixelLine(ctx, sx, sy, ex, ey, r % 2 === 0 ? primaryLineCol : secondaryLineCol, r % 3 === 0 ? 2 : 1);
       }
 
-      // Sharp diagonal cut through the center
       const slashLen = Math.max(width, height);
-      const cutAngle = angle + (data.seed % 0.8 - 0.4);
-      const cx1 = sx - Math.cos(cutAngle) * slashLen;
-      const cy1 = sy - Math.sin(cutAngle) * slashLen;
-      const cx2 = sx + Math.cos(cutAngle) * slashLen;
-      const cy2 = sy + Math.sin(cutAngle) * slashLen;
-      drawPixelLine(ctx, cx1, cy1, cx2, cy2, PALETTE.bone, 4);
-      drawPixelLine(ctx, cx1 + 2, cy1, cx2 + 2, cy2, accent, 2);
-      drawPixelLine(ctx, cx1 - 2, cy1, cx2 - 2, cy2, PALETTE.blood, 2);
+      const cx1 = sx - Math.cos(angle) * slashLen;
+      const cy1 = sy - Math.sin(angle) * slashLen;
+      const cx2 = sx + Math.cos(angle) * slashLen;
+      const cy2 = sy + Math.sin(angle) * slashLen;
+      drawPixelLine(ctx, cx1, cy1, cx2, cy2, secondaryLineCol, 5);
+      drawPixelLine(ctx, cx1, cy1, cx2, cy2, primaryLineCol, 2);
+      drawBresenhamCircle(ctx, sx, sy, 20, primaryLineCol, 1.0);
+    } else if (data.kind === 'slashShatter' || data.kind === 'slash') {
+      // Full-screen Seven Cuts / Nine Cuts Finale Shatter:
+      // All accumulated cut lines blaze simultaneously across the viewport + horizon cleave
+      for (let i = 0; i < this.cutAssignments.length; i++) {
+        const c = this.cutAssignments[i];
+        if (!c.target || !cam) continue;
+        const tx = Math.round(c.target.x - cam.renderX);
+        const ty = Math.round(c.target.y - cam.renderY);
+        const len = 280;
+        const x1 = tx - Math.cos(c.angle) * len;
+        const y1 = ty - Math.sin(c.angle) * len;
+        const x2 = tx + Math.cos(c.angle) * len;
+        const y2 = ty + Math.sin(c.angle) * len;
+        drawPixelLine(ctx, x1, y1, x2, y2, secondaryLineCol, 4);
+        drawPixelLine(ctx, x1, y1, x2, y2, primaryLineCol, 2);
+      }
 
-      // Center impact diamond
-      ctx.fillStyle = PALETTE.bone;
-      ctx.fillRect(sx - 4, sy - 4, 8, 8);
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(sx - 2, sy - 2, 4, 4);
+      // 24 radial shatter rays from Sena
+      for (let r = 0; r < 24; r++) {
+        const a = (r / 24) * Math.PI * 2 + (data.seed % 0.4);
+        const len = 90 + (r % 4) * 90;
+        drawPixelLine(
+          ctx,
+          sx,
+          sy,
+          sx + Math.cos(a) * len,
+          sy + Math.sin(a) * len,
+          r % 2 === 0 ? primaryLineCol : secondaryLineCol,
+          r % 4 === 0 ? 3 : 1
+        );
+      }
+
+      // Horizon cleave through center
+      const cutAngle = data.angle || -0.25;
+      const slashLen = Math.max(width, height);
+      drawPixelLine(
+        ctx,
+        sx - Math.cos(cutAngle) * slashLen,
+        sy - Math.sin(cutAngle) * slashLen,
+        sx + Math.cos(cutAngle) * slashLen,
+        sy + Math.sin(cutAngle) * slashLen,
+        primaryLineCol,
+        5
+      );
+      drawBresenhamCircle(ctx, sx, sy, 34, secondaryLineCol, 1.0);
     } else if (data.kind === 'pierceVector') {
       const angle = data.angle || 0;
       const cosA = Math.cos(angle);
       const sinA = Math.sin(angle);
       const nx = -sinA;
       const ny = cosA;
-      for (let i = -4; i <= 4; i++) {
-        const off = i * 16;
-        drawPixelLine(ctx, sx + nx * off, sy + ny * off, sx + nx * off + cosA * 450, sy + ny * off + sinA * 450, i % 2 === 0 ? PALETTE.brass : PALETTE.bone, 2);
+      for (let i = -5; i <= 5; i++) {
+        const off = i * 14;
+        drawPixelLine(
+          ctx,
+          sx + nx * off - cosA * 40,
+          sy + ny * off - sinA * 40,
+          sx + nx * off + cosA * 480,
+          sy + ny * off + sinA * 480,
+          i % 2 === 0 ? secondaryLineCol : primaryLineCol,
+          i === 0 ? 3 : 2
+        );
       }
-      drawBresenhamCircle(ctx, sx, sy, 20, PALETTE.bone, 1.0);
-    } else if (data.kind === 'groundSlam' || data.kind === 'mineBlast') {
+      drawBresenhamCircle(ctx, sx, sy, 24, primaryLineCol, 1.0);
+    } else if (data.kind === 'groundSlam') {
+      // Sena Hold the Line Bastion Slam: vertical iron pillars + radial tectonic rings
+      for (let pIdx = -4; pIdx <= 4; pIdx++) {
+        const px = sx + pIdx * 36;
+        drawPixelLine(ctx, px, 0, px, height, pIdx % 2 === 0 ? secondaryLineCol : primaryLineCol, Math.abs(pIdx) <= 1 ? 3 : 1);
+      }
       for (let r = 0; r < 24; r++) {
         const a = (r / 24) * Math.PI * 2;
-        const len = 50 + (r % 4) * 35;
-        const ex = Math.round(sx + Math.cos(a) * len);
-        const ey = Math.round(sy + Math.sin(a) * len);
-        drawPixelLine(ctx, sx, sy, ex, ey, r % 2 === 0 ? accent : PALETTE.bone, (r % 3 === 0) ? 2 : 1);
+        const len = 70 + (r % 3) * 55;
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len, r % 2 === 0 ? primaryLineCol : secondaryLineCol, 2);
       }
-      drawBresenhamCircle(ctx, sx, sy, 36, accent, 1.0);
-      drawBresenhamCircle(ctx, sx, sy, 18, PALETTE.bone, 1.0);
-    } else {
-      // General Burst / Crush Impact Frame:
-      // Radial explosive shards
+      drawBresenhamCircle(ctx, sx, sy, 64, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 32, primaryLineCol, 1.0);
+    } else if (data.kind === 'mineBlast') {
+      // Rook Dead Ground Minefield Grid Impact Frame
+      drawBresenhamCircle(ctx, sx, sy, 90, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 48, primaryLineCol, 1.0);
       for (let r = 0; r < 20; r++) {
         const a = (r / 20) * Math.PI * 2;
-        const len = 60 + ((r * 17) % 100);
-        const ex = Math.round(sx + Math.cos(a) * len);
-        const ey = Math.round(sy + Math.sin(a) * len);
-        const col = r % 2 === 0 ? accent : PALETTE.bone;
-        drawPixelLine(ctx, sx, sy, ex, ey, col, (r % 3 === 0) ? 2 : 1);
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * 180, sy + Math.sin(a) * 180, r % 2 === 0 ? primaryLineCol : secondaryLineCol, 2);
       }
-      drawBresenhamCircle(ctx, sx, sy, 24, accent, 1.0);
-      drawBresenhamCircle(ctx, sx, sy, 12, PALETTE.bone, 1.0);
+    } else {
+      // Ines Scrapfall / Crane Drop / Junkyard Rain Magnetic Crush Impact Frame:
+      // Heavy vertical gravity streaks slamming into (sx, sy) + radial crater shockwave
+      for (let k = -6; k <= 6; k++) {
+        const vx = sx + k * 22;
+        drawPixelLine(ctx, vx, 0, sx + k * 8, sy, k % 2 === 0 ? primaryLineCol : secondaryLineCol, Math.abs(k) <= 2 ? 3 : 1);
+      }
+      for (let r = 0; r < 22; r++) {
+        const a = (r / 22) * Math.PI * 2;
+        const len = 80 + ((r * 19) % 110);
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len, r % 2 === 0 ? secondaryLineCol : primaryLineCol, (r % 3 === 0) ? 2 : 1);
+      }
+      drawBresenhamCircle(ctx, sx, sy, 48, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 22, primaryLineCol, 1.0);
+    }
+
+    // 2. High-Contrast Sakuga Entity Silhouettes (Player + Nearby Enemies remain visibly posed inside the impact frame!)
+    if (cam && player) {
+      const px = Math.round(player.x - cam.renderX);
+      const py = Math.round(player.y - cam.renderY);
+
+      // Enemy silhouettes in high-contrast outline + solid fill
+      if (this.lastSpawnerRef && Array.isArray(this.lastSpawnerRef.enemies)) {
+        const enemies = this.lastSpawnerRef.enemies;
+        for (let i = 0; i < enemies.length; i++) {
+          const e = enemies[i];
+          if (!e || !e.active || e.hp <= 0) continue;
+          const ex = Math.round(e.x - cam.renderX);
+          const ey = Math.round(e.y - cam.renderY);
+          if (ex < -32 || ex > width + 32 || ey < -32 || ey > height + 32) continue;
+          const er = Math.max(6, Math.round(e.radius || 10));
+          ctx.fillStyle = secondaryLineCol;
+          ctx.fillRect(ex - er - 1, ey - er - 1, er * 2 + 2, er * 2 + 2);
+          ctx.fillStyle = isInvertedPolarity ? PALETTE.soot : PALETTE.bone;
+          ctx.fillRect(ex - er + 1, ey - er + 1, er * 2 - 2, er * 2 - 2);
+        }
+      }
+
+      // Player dramatic hero silhouette + glowing eye/weapon accent
+      ctx.fillStyle = isInvertedPolarity ? PALETTE.soot : PALETTE.bone;
+      ctx.fillRect(px - 6, py - 14, 12, 20);
+      ctx.fillStyle = secondaryLineCol;
+      ctx.fillRect(px - 4, py - 11, 8, 3);
     }
 
     ctx.restore();
   }
 
-  drawScreenOverlay(ctx, width, height, player) {
-    // 1. Sakuga Impact Frames (Stark high-contrast comic action frame, zero white flash)
+  drawScreenOverlay(ctx, width, height, player, settings = {}) {
+    // 1. Sakuga Impact Frames (Stark high-contrast comic action frame with entity silhouettes)
     if (this.impactFrames > 0) {
-      this.drawImpactFrame(ctx, width, height, player);
+      this.drawImpactFrame(ctx, width, height, player, settings);
       this.impactFrames--;
     }
 
@@ -1699,12 +2131,12 @@ export class UltimateSequencer {
       ctx.fillRect(0, bannerY - 3, width, 2);
       ctx.fillRect(0, bannerY + bannerH + 1, width, 2);
 
-      // 8-direction speed lines across the cut-in strip
-      ctx.fillStyle = PALETTE.slag;
-      for (let i = 0; i < 14; i++) {
+      // High-energy diagonal & horizontal speed lines across the cut-in strip
+      for (let i = 0; i < 18; i++) {
         const ly = bannerY + ((i * 7) % bannerH);
-        const lx = ((i * 53 - Math.round(this.elapsedMs * 0.9)) % width + width) % width;
-        ctx.fillRect(lx, ly, 28 + (i % 3) * 14, 1);
+        const lx = ((i * 53 - Math.round(this.elapsedMs * 1.3)) % width + width) % width;
+        ctx.fillStyle = i % 3 === 0 ? accent : i % 2 === 0 ? PALETTE.bone : PALETTE.slag;
+        ctx.fillRect(lx, ly, 32 + (i % 4) * 18, i % 4 === 0 ? 2 : 1);
       }
 
       // 64x16 eye cut-in scaled 3x -> 192x48 slamming in from the right

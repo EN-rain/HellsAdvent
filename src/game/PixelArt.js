@@ -263,10 +263,59 @@ export class PixelGrid {
  * Integer Bresenham Circle & Line helpers for direct canvas rendering (shockwaves, fake dithered glow rings)
  */
 export function drawPixelLine(ctx, x0, y0, x1, y1, color, thickness = 1) {
-  let ix0 = Math.round(x0);
-  let iy0 = Math.round(y0);
-  const ix1 = Math.round(x1);
-  const iy1 = Math.round(y1);
+  if (
+    !Number.isFinite(x0) ||
+    !Number.isFinite(y0) ||
+    !Number.isFinite(x1) ||
+    !Number.isFinite(y1)
+  ) {
+    return;
+  }
+
+  // Clamp long rays (like 1400px rail beams) to near the 480x270 viewport so we never walk thousands of off-screen pixels
+  const minX = -64;
+  const maxX = 544;
+  const minY = -64;
+  const maxY = 334;
+  if (
+    (x0 < minX && x1 < minX) ||
+    (x0 > maxX && x1 > maxX) ||
+    (y0 < minY && y1 < minY) ||
+    (y0 > maxY && y1 > maxY)
+  ) {
+    return;
+  }
+
+  // Liang-Barsky clip segment to [minX, maxX] x [minY, maxY]
+  let t0 = 0;
+  let t1 = 1;
+  const vx = x1 - x0;
+  const vy = y1 - y0;
+  const clipEdge = (p, q) => {
+    if (p === 0) return q >= 0;
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return false;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return false;
+      if (r < t1) t1 = r;
+    }
+    return true;
+  };
+  if (
+    !clipEdge(-vx, x0 - minX) ||
+    !clipEdge(vx, maxX - x0) ||
+    !clipEdge(-vy, y0 - minY) ||
+    !clipEdge(vy, maxY - y0)
+  ) {
+    return;
+  }
+
+  let ix0 = Math.round(x0 + t0 * vx);
+  let iy0 = Math.round(y0 + t0 * vy);
+  const ix1 = Math.round(x0 + t1 * vx);
+  const iy1 = Math.round(y0 + t1 * vy);
   const dx = Math.abs(ix1 - ix0);
   const dy = -Math.abs(iy1 - iy0);
   const sx = ix0 < ix1 ? 1 : -1;
@@ -275,8 +324,10 @@ export function drawPixelLine(ctx, x0, y0, x1, y1, color, thickness = 1) {
 
   ctx.fillStyle = color;
   const half = thickness >> 1;
+  const maxSteps = Math.min(1200, Math.max(1, (dx + Math.abs(dy)) * 2 + 10));
+  let steps = 0;
 
-  while (true) {
+  while (steps++ < maxSteps) {
     ctx.fillRect(ix0 - half, iy0 - half, thickness, thickness);
     if (ix0 === ix1 && iy0 === iy1) break;
     const e2 = 2 * err;
@@ -292,10 +343,19 @@ export function drawPixelLine(ctx, x0, y0, x1, y1, color, thickness = 1) {
 }
 
 export function drawBresenhamCircle(ctx, cx, cy, radius, color, ditherDensity = 1.0) {
+  if (
+    !Number.isFinite(cx) ||
+    !Number.isFinite(cy) ||
+    !Number.isFinite(radius)
+  ) {
+    return;
+  }
+
   const ix = Math.round(cx);
   const iy = Math.round(cy);
-  let r = Math.round(radius);
+  let r = Math.min(600, Math.round(radius));
   if (r <= 0) return;
+  if (ix + r < -32 || ix - r > 512 || iy + r < -32 || iy - r > 302) return;
 
   let x = 0;
   let y = r;
@@ -321,7 +381,8 @@ export function drawBresenhamCircle(ctx, cx, cy, radius, color, ditherDensity = 
     }
   };
 
-  while (y >= x) {
+  let steps = 0;
+  while (y >= x && steps++ < 2500) {
     plot8(x, y);
     x++;
     if (d > 0) {

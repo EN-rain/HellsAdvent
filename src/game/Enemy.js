@@ -165,9 +165,16 @@ export class Enemy {
     this.squashTimer = 2 / 12;
 
     if (knockback > 0) {
-      const kbPixels = this.tier === 'boss' ? 1 : this.tier === 'elite' ? 2 : 3;
-      this.x = Math.round(this.x + Math.cos(hitAngle) * kbPixels);
-      this.y = Math.round(this.y + Math.sin(hitAngle) * kbPixels);
+      const baseDist = Math.min(knockback * 0.35, 75);
+      const kbDist =
+        this.tier === 'boss'
+          ? Math.max(1, Math.round(baseDist * 0.15))
+          : this.tier === 'elite'
+          ? Math.max(2, Math.round(baseDist * 0.45))
+          : Math.max(3, Math.round(baseDist));
+      this.x = Math.round(this.x + Math.cos(hitAngle) * kbDist);
+      this.y = Math.round(this.y + Math.sin(hitAngle) * kbDist);
+      this._keepOutOfKettleAndBounds();
     }
 
     // Interrupt non-boss telegraph if hard CC'd

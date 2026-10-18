@@ -100,6 +100,9 @@ export class ParticlePool {
 
     // Heavy Anti-Materiel Rail Gun Beams
     this.railBeams = [];
+
+    // Crescent Slashes (sweeping circular blade arcs with glowing core & sparks)
+    this.crescentSlashes = [];
   }
 
   clear() {
@@ -111,6 +114,7 @@ export class ParticlePool {
     this.decals = [];
     this.pickups = [];
     this.railBeams = [];
+    this.crescentSlashes = [];
     this.hitStopTimer = 0;
   }
 
@@ -294,7 +298,8 @@ export class ParticlePool {
    * - Lifted rocks that rise and fall with their own ground shades
    * - Three sizes of dust puffs rolling outward
    */
-  spawnGroundBreakEffect(x, y, radius) {
+  spawnGroundBreakEffect(x, y, radius = 60) {
+    const rVal = Math.max(10, Math.round(Number.isFinite(radius) ? radius : 60));
     // 1-frame full white ring on impact frame
     this.spawnParticle({
       kind: 'ring',
@@ -302,7 +307,7 @@ export class ParticlePool {
       y,
       color: PALETTE.bone,
       color2: PALETTE.bone,
-      ringMaxRadius: Math.round(radius * 0.45),
+      ringMaxRadius: Math.round(rVal * 0.45),
       life: 1 / 24,
     });
 
@@ -313,7 +318,7 @@ export class ParticlePool {
       y,
       color: PALETTE.signal,
       color2: PALETTE.bone,
-      ringMaxRadius: Math.round(radius),
+      ringMaxRadius: Math.round(rVal),
       life: 0.22,
     });
 
@@ -331,7 +336,7 @@ export class ParticlePool {
           const baseAng = (a / 8) * Math.PI * 2 + (Math.random() * 0.2 - 0.1);
           const pts = [{ x: gc.cx, y: gc.cy }];
           for (let s = 1; s <= 4; s++) {
-            const r = (s / 4) * (radius * 0.85);
+            const r = (s / 4) * (rVal * 0.85);
             const jitter = (s % 2 === 0 ? 1 : -1) * 0.16;
             pts.push({
               x: Math.round(gc.cx + Math.cos(baseAng + jitter) * r),
@@ -378,7 +383,7 @@ export class ParticlePool {
     }
   }
 
-  spawnShockwave(x, y, maxRadius, color = PALETTE.signal, duration = 0.22) {
+  spawnRing(x, y, color = PALETTE.bone, maxRadius = 40, duration = 0.22) {
     this.spawnParticle({
       kind: 'ring',
       x,
@@ -388,6 +393,10 @@ export class ParticlePool {
       ringMaxRadius: Math.round(maxRadius),
       life: duration,
     });
+  }
+
+  spawnShockwave(x, y, maxRadius, color = PALETTE.signal, duration = 0.22) {
+    this.spawnRing(x, y, color, maxRadius, duration);
   }
 
   spawnBurst(
@@ -550,6 +559,30 @@ export class ParticlePool {
     this.spawnSlashLine(x1, y1, x2, y2, color, 'sevenCuts', 0.14);
   }
 
+  // Sweeping crescent blade slash with glowing core and flechette spark burst
+  spawnCrescentSlash(x, y, angle, radius = 64, arc = 2.4, color = PALETTE.signal, duration = 0.28) {
+    this.crescentSlashes.push({
+      x: Math.round(x),
+      y: Math.round(y),
+      angle,
+      radius,
+      arc,
+      color,
+      life: duration,
+      maxLife: duration,
+    });
+    if (this.crescentSlashes.length > 8) this.crescentSlashes.shift();
+
+    // Burst directional sparks along the crescent arc
+    const sparkCount = 9;
+    for (let i = 0; i < sparkCount; i++) {
+      const a = angle - arc * 0.5 + (i / (sparkCount - 1)) * arc;
+      const sx = x + Math.cos(a) * (radius * 0.82);
+      const sy = y + Math.sin(a) * (radius * 0.82);
+      this.spawnDirectionalSparks(sx, sy, a, 0.45, 3, color);
+    }
+  }
+
   update(dt, player = null) {
     // Update pickups & magnetic collection
     for (let i = this.pickups.length - 1; i >= 0; i--) {
@@ -676,6 +709,15 @@ export class ParticlePool {
       }
     }
 
+    // Update crescent slashes
+    for (let i = this.crescentSlashes.length - 1; i >= 0; i--) {
+      const cs = this.crescentSlashes[i];
+      cs.life -= dt;
+      if (cs.life <= 0) {
+        this.crescentSlashes.splice(i, 1);
+      }
+    }
+
     // Update floating damage numbers
     for (let i = 0; i < this.numbers.length; i++) {
       const n = this.numbers[i];
@@ -721,6 +763,9 @@ export class ParticlePool {
         for (let s = 0; s < arm.length - 1; s++) {
           const p0 = arm[s];
           const p1 = arm[s + 1];
+          if (!p0 || !p1 || !Number.isFinite(p0.x) || !Number.isFinite(p0.y) || !Number.isFinite(p1.x) || !Number.isFinite(p1.y)) {
+            continue;
+          }
           // Soot outer crack
           drawPixelLine(ctx, p0.x - camX, p0.y - camY, p1.x - camX, p1.y - camY, PALETTE.soot, 3);
           // Signal glowing inside the cracks for first 400ms, then bone/slag
@@ -807,6 +852,7 @@ export class ParticlePool {
         ctx.fillStyle = p.color2; // top-left highlight pixel
         ctx.fillRect(sx - 1, ry - 1, 1, 1);
       } else if (p.kind === 'dust') {
+        if (sx < -16 || sx > camera.width + 16 || sy < -16 || sy > camera.height + 16) continue;
         // 3 sizes of integer pixel dust puffs (color shifts bone -> slag, dithered at end)
         const r = Math.max(1, p.size * 2 - Math.floor(stepProgress * p.size));
         const col = stepProgress < 0.45 ? PALETTE.bone : PALETTE.slag;
@@ -887,7 +933,58 @@ export class ParticlePool {
       }
     }
 
-    // 3.5. Colossal Anti-Materiel Rail Gun Beam Corridor (Multi-layered 90px kinetic beam)
+    // 3.2. Crescent Slashes (Sweeping high-velocity circular blade arcs)
+    if (this.crescentSlashes && this.crescentSlashes.length > 0) {
+      for (let i = 0; i < this.crescentSlashes.length; i++) {
+        const cs = this.crescentSlashes[i];
+        if (cs.life <= 0) continue;
+        const progress = 1 - Math.max(0, cs.life / cs.maxLife);
+        const sx = Math.round(cs.x - camX);
+        const sy = Math.round(cs.y - camY);
+        const rCur = cs.radius * (0.85 + progress * 0.25);
+        const halfArc = cs.arc * 0.5;
+        const segs = 16;
+
+        let prevX = null;
+        let prevY = null;
+        let prevCoreX = null;
+        let prevCoreY = null;
+
+        for (let s = 0; s <= segs; s++) {
+          const t = s / segs;
+          const a = cs.angle - halfArc + t * cs.arc;
+          const taper = Math.sin(t * Math.PI);
+          const rOuter = rCur + taper * 4;
+          const rCore = rCur;
+
+          const px = Math.round(sx + Math.cos(a) * rOuter);
+          const py = Math.round(sy + Math.sin(a) * rOuter);
+          const cx = Math.round(sx + Math.cos(a) * rCore);
+          const cy = Math.round(sy + Math.sin(a) * rCore);
+
+          if (prevX !== null) {
+            const thick = taper > 0.6 ? 3 : taper > 0.2 ? 2 : 1;
+            drawPixelLine(ctx, prevX, prevY, px, py, cs.color, thick);
+            drawPixelLine(ctx, prevCoreX, prevCoreY, cx, cy, PALETTE.bone, 1);
+          }
+
+          prevX = px;
+          prevY = py;
+          prevCoreX = cx;
+          prevCoreY = cy;
+        }
+
+        // Star gleam at crescent apex
+        const midA = cs.angle;
+        const apexX = Math.round(sx + Math.cos(midA) * rCur);
+        const apexY = Math.round(sy + Math.sin(midA) * rCur);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(apexX - 3, apexY - 1, 7, 3);
+        ctx.fillRect(apexX - 1, apexY - 3, 3, 7);
+      }
+    }
+
+    // 3.5. Colossal Anti-Materiel Rail Gun Beam Corridor (Multi-layered kinetic beam with Mach cones)
     if (this.railBeams && this.railBeams.length > 0) {
       for (let i = 0; i < this.railBeams.length; i++) {
         const b = this.railBeams[i];
@@ -903,52 +1000,81 @@ export class ParticlePool {
         const dy = sy2 - sy1;
         const len = Math.hypot(dx, dy);
         if (len < 1) continue;
+        const ang = Math.atan2(dy, dx);
         const nx = -dy / len;
         const ny = dx / len;
 
         const maxW = b.width || 90;
-        // Peak width rapidly in first 15% of life, then taper
-        const curW = Math.max(10, Math.round(maxW * (progress < 0.15 ? (progress / 0.15) : (1 - (progress - 0.15) * 0.4))));
+        // Peak width rapidly in first 12% of life, then taper down cleanly
+        const curW = Math.max(
+          4,
+          Math.round(
+            maxW *
+              (progress < 0.12
+                ? progress / 0.12
+                : Math.max(0, 1 - (progress - 0.12) * 1.1))
+          )
+        );
 
+        // Fast rotated rectangle bands for solid inner energy core (avoids 60+ 1400px Bresenham loops)
         ctx.save();
+        ctx.translate(sx1, sy1);
+        ctx.rotate(ang);
 
-        // Layer 1: Outer Ionization Plasma Envelope (90px wide amber/brass dithered edges)
-        const outerSteps = 7;
-        for (let s = 1; s <= outerSteps; s++) {
-          const off = Math.round((curW * 0.5) * (s / outerSteps));
-          const col = s % 2 === 0 ? PALETTE.brass : PALETTE.rust;
-          drawPixelLine(ctx, sx1 + nx * off, sy1 + ny * off, sx2 + nx * off, sy2 + ny * off, col, 1);
-          drawPixelLine(ctx, sx1 - nx * off, sy1 - ny * off, sx2 - nx * off, sy2 - ny * off, col, 1);
+        const drawLen = Math.min(len, 620);
+        const midW = Math.max(4, Math.round(curW * 0.46));
+        const coreW = Math.max(2, Math.round(curW * 0.22));
+
+        // Outer soot contrast trench border
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, -Math.round(curW * 0.52), drawLen, Math.round(curW * 1.04));
+
+        // Rust plasma envelope
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(0, -Math.round(curW * 0.42), drawLen, Math.round(curW * 0.84));
+
+        // High-voltage Brass energy core
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(0, -Math.round(midW * 0.5), drawLen, midW);
+
+        // Blazing Tungsten Bone core
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(0, -Math.round(coreW * 0.5), drawLen, coreW);
+
+        // Pure White center needle
+        if (progress < 0.65) {
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, -1, drawLen, 2);
         }
-
-        // Layer 2: High-Voltage Mid Energy Core (Solid vibrant brass beam)
-        const midW = Math.max(6, Math.round(curW * 0.45));
-        for (let m = -midW / 2; m <= midW / 2; m += 2) {
-          drawPixelLine(ctx, sx1 + nx * m, sy1 + ny * m, sx2 + nx * m, sy2 + ny * m, PALETTE.brass, 2);
-        }
-
-        // Layer 3: Blazing Tungsten Kinetic Core (Bone-gold and center pure white needle)
-        const coreW = Math.max(2, Math.round(curW * 0.18));
-        for (let c = -coreW / 2; c <= coreW / 2; c += 1) {
-          drawPixelLine(ctx, sx1 + nx * c, sy1 + ny * c, sx2 + nx * c, sy2 + ny * c, PALETTE.bone, 1);
-        }
-        drawPixelLine(ctx, sx1, sy1, sx2, sy2, '#FFFFFF', 1);
-
-        // Layer 4: Crackling Electric Arcs (Dynamic high-voltage blue and brass lightning)
-        const arcCount = 12;
-        for (let a = 0; a < arcCount; a++) {
-          const t1 = a / arcCount;
-          const t2 = Math.min(1, t1 + 0.11);
-          const j1 = Math.sin(b.seed + a * 5 + progress * 35) * (curW * 0.48);
-          const j2 = Math.cos(b.seed + a * 11 + progress * 35) * (curW * 0.48);
-          const ax1 = sx1 + dx * t1 + nx * j1;
-          const ay1 = sy1 + dy * t1 + ny * j1;
-          const ax2 = sx1 + dx * t2 + nx * j2;
-          const ay2 = sy1 + dy * t2 + ny * j2;
-          drawPixelLine(ctx, ax1, ay1, ax2, ay2, a % 2 === 0 ? '#52C5FF' : PALETTE.brass, 1);
-        }
-
         ctx.restore();
+
+        // Outer rail boundary lines & Mach shockwave cones (clipped to viewport via drawPixelLine)
+        const outerOff = Math.round(curW * 0.5);
+        drawPixelLine(ctx, sx1 + nx * outerOff, sy1 + ny * outerOff, sx2 + nx * outerOff, sy2 + ny * outerOff, PALETTE.brass, 1);
+        drawPixelLine(ctx, sx1 - nx * outerOff, sy1 - ny * outerOff, sx2 - nx * outerOff, sy2 - ny * outerOff, PALETTE.brass, 1);
+
+        // Mach shock rings along the rail wake
+        for (let m = 1; m <= 6; m++) {
+          const distM = m * 85 + progress * 40;
+          const mx = sx1 + (dx / len) * distM;
+          const my = sy1 + (dy / len) * distM;
+          const machR = Math.max(4, Math.round(curW * 0.38));
+          drawBresenhamCircle(ctx, mx, my, machR, m % 2 === 0 ? PALETTE.bone : PALETTE.brass, 0.75);
+        }
+
+        // Crackling high-voltage electric arcs along the visible corridor
+        const arcCount = 8;
+        for (let a = 0; a < arcCount; a++) {
+          const d1 = a * 65;
+          const d2 = (a + 1) * 65;
+          const j1 = Math.sin(b.seed + a * 5 + progress * 35) * (curW * 0.52);
+          const j2 = Math.cos(b.seed + a * 11 + progress * 35) * (curW * 0.52);
+          const ax1 = sx1 + (dx / len) * d1 + nx * j1;
+          const ay1 = sy1 + (dy / len) * d1 + ny * j1;
+          const ax2 = sx1 + (dx / len) * d2 + nx * j2;
+          const ay2 = sy1 + (dy / len) * d2 + ny * j2;
+          drawPixelLine(ctx, ax1, ay1, ax2, ay2, a % 2 === 0 ? '#52C5FF' : PALETTE.bone, 1);
+        }
       }
     }
 

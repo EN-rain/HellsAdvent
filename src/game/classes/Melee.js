@@ -36,22 +36,24 @@ export class MeleeBehavior {
       : this.cfg.mechanic.maxStacksBase;
   }
 
-  onLandHit(enemy, isKill, particles) {
+  addMomentum(count = 1, particles = null) {
     const p = this.player;
     const maxStacks = this.getMaxMomentum();
     const branchMode = p.branch === 'cutter' ? 'cutter' : p.branch === 'anvil' ? 'anvil' : 'base';
 
-    p.statuses.apply(
-      'momentum',
-      {
-        duration: this.cfg.mechanic.dropDelay,
-        maxStacks,
-        branchMode,
-        sourceName: 'Momentum',
-      },
-      p,
-      particles
-    );
+    for (let i = 0; i < count; i++) {
+      p.statuses.apply(
+        'momentum',
+        {
+          duration: this.cfg.mechanic.dropDelay,
+          maxStacks,
+          branchMode,
+          sourceName: 'Momentum',
+        },
+        p,
+        particles
+      );
+    }
     this.momentumStacks = p.statuses.getStacks('momentum');
     this.momentumTimer = this.cfg.mechanic.dropDelay;
 
@@ -59,9 +61,13 @@ export class MeleeBehavior {
     if (p.hasNode('redline') && this.momentumStacks >= maxStacks) {
       p.statuses.apply('redline', { duration: 3.0, sourceName: 'Redline' }, p, particles);
     }
+  }
+
+  onLandHit(enemy, isKill, particles) {
+    this.addMomentum(1, particles);
 
     // Strip node: every 4th hit on one enemy applies Exposed (-20% DEF for 6s)
-    if (p.hasNode('strip') && enemy && enemy.active) {
+    if (this.player.hasNode('strip') && enemy && enemy.active) {
       const count = (this.enemyHitCounter.get(enemy.uid) || 0) + 1;
       this.enemyHitCounter.set(enemy.uid, count);
       if (count % 4 === 0) {
@@ -570,8 +576,13 @@ export class MeleeBehavior {
     p.facingDir = angleTo4Facing(ang);
     p.facingX = Math.cos(ang) >= 0 ? 1 : -1;
 
-    // Visual: Sharp crimson/signal counter-slash
-    const len = 48;
+    // Visual: Sweeping high-velocity Crescent Blade Slash with glowing core & spark burst
+    if (particles && typeof particles.spawnCrescentSlash === 'function') {
+      particles.spawnCrescentSlash(p.x, p.y, ang, 86, Math.PI * 0.95, PALETTE.signal, 0.36);
+      particles.spawnCrescentSlash(p.x, p.y, ang, 58, Math.PI * 0.75, PALETTE.bone, 0.24);
+    }
+
+    const len = 52;
     const perp = ang + Math.PI * 0.5;
     const sx1 = p.x - Math.cos(perp) * len;
     const sy1 = p.y - Math.sin(perp) * len;
@@ -582,9 +593,17 @@ export class MeleeBehavior {
       particles.spawnSlash(sx1, sy1, sx2, sy2, PALETTE.signal, 0.28, 'heavySlash');
     }
 
-    // 4. Hit targets in frontal 130px arc for 350% ATK (guaranteed Crit)
+    // 4. Apply 3-second Speed & ATK Buff (Riposte Surge: +35% ATK Spd, +30% ATK, +25% Move Spd)
+    p.statuses.apply(
+      'riposteSurge',
+      { duration: 3.0, sourceName: 'Crescent Parry' },
+      p,
+      particles
+    );
+
+    // 5. Hit targets in frontal 140px crescent arc for 350% ATK (guaranteed Crit)
     const targets = (spawner && typeof spawner.queryRadius === 'function')
-      ? spawner.queryRadius(p.x, p.y, 130)
+      ? spawner.queryRadius(p.x, p.y, 140)
       : (sourceEntity ? [sourceEntity] : []);
 
     for (let i = 0; i < targets.length; i++) {
@@ -594,7 +613,7 @@ export class MeleeBehavior {
       let diff = targetAng - ang;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      if (Math.abs(diff) <= Math.PI * 0.65 || e === sourceEntity) {
+      if (Math.abs(diff) <= Math.PI * 0.72 || e === sourceEntity) {
         const pipe = computeDamagePipeline({
           baseDamage: p.baseAtkForPipeline * stats.damageMult,
           atkBuffPct: p.statuses.getAtkBonusPct(),
@@ -602,10 +621,21 @@ export class MeleeBehavior {
           critMult: p.critMult || 1.5,
           targetStatuses: e.statuses,
           targetBaseDef: e.def || 0,
-          sourceName: 'Riposte',
+          sourceName: 'Crescent Riposte',
           targetName: e.name,
         });
-        e.takeDamage(pipe.finalDamage, targetAng, 160, true, p, spawner, particles, camera);
+        e.takeDamage(pipe.finalDamage, targetAng, 240, true, p, spawner, particles, camera);
+
+        // Directional kinetic dust kickback from the crescent shockwave
+        if (particles && typeof particles.spawnDustPuff === 'function') {
+          particles.spawnDustPuff(
+            e.x,
+            e.y + 4,
+            2,
+            Math.cos(targetAng) * 24,
+            Math.sin(targetAng) * 24
+          );
+        }
 
         if (stats.hasCounterShockwave && e.active) {
           e.statuses.apply('pinned', { duration: 1.5, sourceName: 'Rebar Riposte' }, e, particles);
@@ -614,7 +644,7 @@ export class MeleeBehavior {
     }
 
     if (particles && typeof particles.spawnFloatingText === 'function') {
-      particles.spawnFloatingText(p.x, p.y - 24, 'RIPOSTE! 350%', PALETTE.signal);
+      particles.spawnFloatingText(p.x, p.y - 28, 'CRESCENT SLASH! +SPD +ATK (3s)', PALETTE.signal);
     }
     sound.playSlash(true);
   }

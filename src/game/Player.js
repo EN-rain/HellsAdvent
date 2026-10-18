@@ -565,6 +565,12 @@ export class Player {
     this.ultimateCharge = Math.min(100, this.ultimateCharge + amount);
   }
 
+  addMomentum(count = 1, particles = null) {
+    if (this.classBehavior && typeof this.classBehavior.addMomentum === 'function') {
+      return this.classBehavior.addMomentum(count, particles);
+    }
+  }
+
   gainXpAndGold(xpAmount, goldAmount, particles) {
     const bountyMult = this.statuses.getXpAndGoldMultiplier();
     const finalXp = Math.round(xpAmount * bountyMult);

@@ -798,6 +798,7 @@ export class StatusSystem {
     }
     if (this.map.has('cleanMag')) bonus += 0.25;
     if (this.map.has('settled')) bonus += 0.80;
+    if (this.map.has('riposteSurge')) bonus += 0.30; // +30% ATK on Riposte Surge
     return bonus;
   }
 
@@ -817,6 +818,9 @@ export class StatusSystem {
     if (this.map.has('redline')) {
       mult *= 1.10; // +10%
     }
+    if (this.map.has('riposteSurge')) {
+      mult *= 1.25; // +25% Move Speed on Riposte Surge
+    }
     return mult;
   }
 
@@ -830,6 +834,7 @@ export class StatusSystem {
     if (this.map.has('haste')) mult *= 1.10;
     if (this.map.has('overspun')) mult *= 1.25;
     if (this.map.has('rapidFire')) mult *= 2.0;
+    if (this.map.has('riposteSurge')) mult *= 1.35; // +35% Attack Speed on Riposte Surge
     if (this.map.has('slow')) mult *= 0.70; // Slow plays animation at 70% speed
     return mult;
   }
@@ -1110,6 +1115,16 @@ export class StatusSystem {
       const wipeY = Math.round(iy + 10 - progress * (radius * 2 + 12));
       ctx.fillStyle = PALETTE.bone;
       ctx.fillRect(ix - radius, wipeY, radius * 2, 4);
+    }
+
+    // 12. Riposte Surge: flickering high-speed razor sparks and afterglow at feet
+    if (this.map.has('riposteSurge')) {
+      const f = (frame24 % 4);
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillRect(ix - radius - 2, iy + 6, 2, 2);
+      ctx.fillRect(ix + radius, iy + 6, 2, 2);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(ix - 5 + f * 3, iy + 7, 3, 1);
     }
   }
 }

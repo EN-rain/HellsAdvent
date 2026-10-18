@@ -373,13 +373,14 @@ export class RangedBehavior {
           }
         }
       } else if (trap.kind === 'mine') {
+        const trigRad = trap.triggerRadius || trap.radius || 24;
         const enemies = spawner && typeof spawner.queryRadius === 'function'
-          ? spawner.queryRadius(trap.x, trap.y, trap.radius + 26)
+          ? spawner.queryRadius(trap.x, trap.y, trigRad + 26)
           : [];
         let triggered = false;
         for (let j = 0; j < enemies.length; j++) {
           const e = enemies[j];
-          if (e.active && e.hp > 0 && Math.hypot(e.x - trap.x, e.y - trap.y) <= trap.radius + e.radius) {
+          if (e.active && e.hp > 0 && Math.hypot(e.x - trap.x, e.y - trap.y) <= trigRad + (e.radius || 12)) {
             triggered = true;
             break;
           }
@@ -389,16 +390,17 @@ export class RangedBehavior {
           this.traps.splice(i, 1);
         }
       } else if (trap.kind === 'caltrops') {
+        const caltRad = trap.radius || 30;
         trap.tickTimer += dt;
         if (trap.tickTimer >= 0.5) {
           trap.tickTimer = 0;
           const enemies = spawner && typeof spawner.queryRadius === 'function'
-            ? spawner.queryRadius(trap.x, trap.y, trap.radius + 20)
+            ? spawner.queryRadius(trap.x, trap.y, caltRad + 20)
             : [];
           for (let j = 0; j < enemies.length; j++) {
             const e = enemies[j];
             if (!e.active || e.hp <= 0) continue;
-            if (Math.hypot(e.x - trap.x, e.y - trap.y) <= trap.radius + e.radius) {
+            if (Math.hypot(e.x - trap.x, e.y - trap.y) <= caltRad + (e.radius || 12)) {
               e.statuses.apply(
                 'slow',
                 { duration: 1.2, value: 0.40, sourceName: 'Caltrop Pocket' },
@@ -420,22 +422,23 @@ export class RangedBehavior {
 
   _detonateMine(mine, spawner, particles, camera, onHitStop) {
     const p = this.player;
+    const bRad = mine.blastRadius || 80;
     sound.playSkillGroundBreak();
     if (camera && typeof camera.shake === 'function') camera.shake(4, 0.14);
     if (particles && typeof particles.spawnGroundBreakEffect === 'function') {
-      particles.spawnGroundBreakEffect(mine.x, mine.y, mine.blastRadius);
+      particles.spawnGroundBreakEffect(mine.x, mine.y, bRad);
     }
 
     const targets = spawner && typeof spawner.queryRadius === 'function'
-      ? spawner.queryRadius(mine.x, mine.y, mine.blastRadius + 28)
+      ? spawner.queryRadius(mine.x, mine.y, bRad + 28)
       : [];
     for (let i = 0; i < targets.length; i++) {
       const e = targets[i];
       if (!e.active || e.hp <= 0) continue;
-      if (Math.hypot(e.x - mine.x, e.y - mine.y) <= mine.blastRadius + e.radius) {
+      if (Math.hypot(e.x - mine.x, e.y - mine.y) <= bRad + (e.radius || 12)) {
         const isCrit = Math.random() < p.critChance;
         const pipe = computeDamagePipeline({
-          baseDamage: p.baseAtkForPipeline * mine.damageMult,
+          baseDamage: p.baseAtkForPipeline * (mine.damageMult || 2.2),
           atkBuffPct: p.statuses.getAtkBonusPct(),
           isCrit,
           critMult: p.critMult,
@@ -768,10 +771,11 @@ export class RangedBehavior {
       } else if (trap.kind === 'caltrops') {
         const sx = Math.round(trap.x - camX);
         const sy = Math.round(trap.y - camY);
-        drawBresenhamCircle(ctx, sx, sy, trap.radius, PALETTE.boneDark, 0.45);
+        const cRad = trap.radius || 30;
+        drawBresenhamCircle(ctx, sx, sy, cRad, PALETTE.boneDark, 0.45);
         for (let c = 0; c < 7; c++) {
-          const cx = sx + Math.round(Math.cos(c * 1.9) * (trap.radius * 0.6));
-          const cy = sy + Math.round(Math.sin(c * 2.3) * (trap.radius * 0.6));
+          const cx = sx + Math.round(Math.cos(c * 1.9) * (cRad * 0.6));
+          const cy = sy + Math.round(Math.sin(c * 2.3) * (cRad * 0.6));
           ctx.fillStyle = PALETTE.bone;
           ctx.fillRect(cx - 1, cy - 1, 2, 2);
         }

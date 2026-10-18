@@ -168,7 +168,7 @@ export const CLASSES = {
         baseCooldown: 8.0,
         cooldownPerLevel: 0.5,
         staminaCost: 16,
-        desc: 'Assume a primed parry stance for 0.6s. Negates 100% of the next hit and triggers an instant counter Riposte for 350% ATK (guaranteed Crit) and +2 Momentum.',
+        desc: 'Assume a primed parry stance for 0.6s. Negates 100% of the next hit, unleashing a devastating Crescent Slash with heavy area knockback (350% ATK guaranteed Crit) and granting +35% ATK Speed, +30% ATK, and +25% Move Speed for 3s.',
         getStats(lvl = 1, ownedNodes = []) {
           const l = Math.max(1, Math.min(5, lvl));
           const hasRebar = ownedNodes.includes('rebar');
