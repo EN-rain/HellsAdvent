@@ -1,440 +1,518 @@
 /**
  * GRAVEL SKY — Open 6000x6000 World in 16px Tiles, Streamed in Chunks
- * - Paints terrain from deterministic noise using the 3 seamless 16x16 ground tile variants
- *   per area from manifest.json (tile_kettle, tile_slab_town, tile_route_9, tile_lye_marsh,
- *   tile_copper_flats) plus edge transition tiles (tile_transitions).
- * - Scatters all 40 area props (8 per area, each with baked shadow ellipse) and animates
- *   Kettle's 3-frame campfire (prop_kettle_campfire) and Ume (ume, 2 frames).
- * - Exposes visible props for Y-sorting alongside characters and enemies.
+ * - Rendered onto the 480x270 integer pixel buffer.
+ * - Zero gradients, zero shadowBlur, zero alpha blending.
+ * - Uses Bayer dithered rings for the dark vignette around Sena and fake dithered glow rings
+ *   around the Kettle boiler fire and Ume's lantern.
  */
 
+import { PALETTE, WORLD_CONFIG, ENEMIES_CONFIG } from '../data/config.js';
 import {
-  PALETTE,
-  WORLD_CONFIG,
-  AREAS_CONFIG,
-  ENEMIES_CONFIG,
-} from '../data/config.js';
-import { BAYER_4X4 } from './PixelArt.js';
-import { assets } from './AssetLoader.js';
-
-const AREA_TILE_ASSETS = {
-  kettle: 'tile_kettle',
-  slabTown: 'tile_slab_town',
-  route9: 'tile_route_9',
-  lyeMarsh: 'tile_lye_marsh',
-  copperFlats: 'tile_copper_flats',
-};
-
-const AREA_PROP_LISTS = {
-  kettle: [
-    'prop_kettle_boiler_tower',
-    'prop_kettle_shack',
-    'prop_kettle_campfire',
-    'prop_kettle_signs',
-    'prop_kettle_crates',
-    'prop_kettle_barrels',
-    'prop_kettle_tent',
-    'prop_kettle_bench',
-  ],
-  slabTown: [
-    'prop_slab_collapsed_wall',
-    'prop_slab_rebar_pile',
-    'prop_slab_dead_mall_sign',
-    'prop_slab_rubble_heap',
-    'prop_slab_bent_streetlight',
-    'prop_slab_shopping_cart',
-    'prop_slab_vending_machine',
-    'prop_slab_broken_stairs',
-  ],
-  route9: [
-    'prop_route9_burnt_car',
-    'prop_route9_overturned_truck',
-    'prop_route9_guardrail',
-    'prop_route9_road_sign',
-    'prop_route9_tire_stack',
-    'prop_route9_oil_drum',
-    'prop_route9_dead_tree',
-    'prop_route9_billboard_frame',
-  ],
-  lyeMarsh: [
-    'prop_marsh_rusted_drum_cluster',
-    'prop_marsh_dead_reed_clump',
-    'prop_marsh_bone_pile',
-    'prop_marsh_sunken_car_roof',
-    'prop_marsh_glowing_spore_pods',
-    'prop_marsh_pipe_outflow',
-    'prop_marsh_tarp_shack',
-    'prop_marsh_fog_patch',
-  ],
-  copperFlats: [
-    'prop_flats_wrecked_harvester',
-    'prop_flats_sand_dune_crest',
-    'prop_flats_machine_rib_cage',
-    'prop_flats_cactus_husk',
-    'prop_flats_buried_antenna',
-    'prop_flats_tire_half_sunk',
-    'prop_flats_bone_arch',
-    'prop_flats_rusted_silo',
-  ],
-};
-
-function hash2D(x, y) {
-  let h = x * 374761393 + y * 668265263;
-  h = (h ^ (h >> 13)) * 1274126177;
-  return ((h ^ (h >> 16)) >>> 0) / 4294967296;
-}
+  drawBresenhamCircle,
+  drawDitheredGlowRings,
+  passDither,
+  MATERIAL_RAMPS,
+} from './PixelArt.js';
 
 export class World {
   constructor() {
-    this.width = WORLD_CONFIG.width;
-    this.height = WORLD_CONFIG.height;
-    this.tileSize = WORLD_CONFIG.tileSize; // 16px
-    this.chunkTiles = WORLD_CONFIG.chunkTiles; // 32x32 tiles = 512x512px
-    this.chunkPixelSize = this.tileSize * this.chunkTiles;
-
+    this.size = WORLD_CONFIG.size;
+    this.tileSize = WORLD_CONFIG.tileSize;
+    this.chunkTiles = WORLD_CONFIG.chunkTiles;
+    this.chunkPixelSize = this.tileSize * this.chunkTiles; // 256px
     this.chunkCache = new Map();
-    this.chunkOrder = [];
-    this.maxCachedChunks = 24;
-    this.manifestBuiltWith = false;
+    this.maxCachedChunks = 120;
 
-    // Fixed Kettle Hub props (8 distinct props + Ume)
-    const kc = WORLD_CONFIG.kettleCenter;
-    this.kettleProps = [
-      { id: 'prop_kettle_boiler_tower', x: kc.x, y: kc.y - 68, scale: 0.85 },
-      { id: 'prop_kettle_shack', x: kc.x - 76, y: kc.y - 26, scale: 0.8 },
-      { id: 'prop_kettle_campfire', x: kc.x, y: kc.y, scale: 0.9 },
-      { id: 'prop_kettle_signs', x: kc.x + 56, y: kc.y + 42, scale: 0.85 },
-      { id: 'prop_kettle_crates', x: kc.x - 46, y: kc.y + 34, scale: 0.85 },
-      { id: 'prop_kettle_barrels', x: kc.x + 42, y: kc.y - 38, scale: 0.85 },
-      { id: 'prop_kettle_tent', x: kc.x + 82, y: kc.y - 8, scale: 0.85 },
-      { id: 'prop_kettle_bench', x: kc.x - 28, y: kc.y + 12, scale: 0.85 },
-    ];
-
-    this.cycleTimer = 0;
+    this.cycleTime = 0;
     this.stormFactor = 0;
-    this.animTime = 0;
+    this.timeOfDayFactor = 0;
+    this.windPhase = 0;
 
-    this.motes = Array.from({ length: 42 }, (_, i) => ({
-      x: (i * 73) % 480,
-      y: (i * 41) % 270,
-      vx: -8 - (i % 4) * 4,
-      vy: 4 + (i % 3) * 3,
+    // Ambient floating ash/sparks/spores/sand in 480x270 space
+    this.ambientMotes = Array.from({ length: 42 }, (_, i) => ({
+      x: (i * 89) % 480,
+      y: (i * 53) % 270,
+      speedX: 10 + (i % 5) * 4,
+      speedY: 5 + (i % 4) * 3,
+      size: i % 4 === 0 ? 2 : 1,
     }));
   }
 
+  _hash(tx, ty) {
+    let n = tx * 374761393 + ty * 668265263;
+    n = (n ^ (n >> 13)) * 1274126177;
+    return (n ^ (n >> 16)) >>> 0;
+  }
+
   getAreaAt(wx, wy) {
-    const kc = WORLD_CONFIG.kettleCenter;
-    const distToKettle = Math.hypot(wx - kc.x, wy - kc.y);
-    if (distToKettle <= WORLD_CONFIG.kettleSafeRadius) {
-      return AREAS_CONFIG.kettle;
+    const cx = WORLD_CONFIG.kettleCenter.x;
+    const cy = WORLD_CONFIG.kettleCenter.y;
+    const dx = wx - cx;
+    const dy = wy - cy;
+    const distSq = dx * dx + dy * dy;
+
+    if (distSq <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius) {
+      return WORLD_CONFIG.areas.kettle;
     }
-    if (wx < 3000 && wy < 3000) return AREAS_CONFIG.slabTown;
-    if (wx >= 3000 && wy < 3000) return AREAS_CONFIG.route9;
-    if (wx < 3000 && wy >= 3000) return AREAS_CONFIG.lyeMarsh;
-    return AREAS_CONFIG.copperFlats;
+
+    if (Math.abs(dy) >= Math.abs(dx)) {
+      return dy < 0 ? WORLD_CONFIG.areas.slabTown : WORLD_CONFIG.areas.copperFlats;
+    } else {
+      return dx < 0 ? WORLD_CONFIG.areas.route9 : WORLD_CONFIG.areas.lyeMarsh;
+    }
+  }
+
+  getZoneAt(wx, wy) {
+    return this.getAreaAt(wx, wy);
+  }
+
+  get stormTimer() {
+    return this.stormFactor > 0.3 ? 1.0 : 0.0;
+  }
+
+  draw(ctx, camera, spawner) {
+    this.drawGround(ctx, camera, spawner);
   }
 
   isInsideKettle(wx, wy) {
-    const kc = WORLD_CONFIG.kettleCenter;
-    return Math.hypot(wx - kc.x, wy - kc.y) <= WORLD_CONFIG.kettleSafeRadius;
+    const dx = wx - WORLD_CONFIG.kettleCenter.x;
+    const dy = wy - WORLD_CONFIG.kettleCenter.y;
+    return dx * dx + dy * dy <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius;
   }
 
-  _buildChunk(cx, cy) {
-    const key = `${cx},${cy}`;
-    if (this.chunkCache.has(key)) {
-      return this.chunkCache.get(key);
-    }
-
+  _buildChunkCanvas(cx, cy) {
     const canvas = document.createElement('canvas');
     canvas.width = this.chunkPixelSize;
     canvas.height = this.chunkPixelSize;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
 
-    const worldStartX = cx * this.chunkPixelSize;
-    const worldStartY = cy * this.chunkPixelSize;
+    const baseTx = cx * this.chunkTiles;
+    const baseTy = cy * this.chunkTiles;
 
-    // 1. Paint 16x16 tiles from manifest strips + edge transition tiles where areas meet
     for (let ty = 0; ty < this.chunkTiles; ty++) {
       for (let tx = 0; tx < this.chunkTiles; tx++) {
-        const wx = worldStartX + tx * this.tileSize;
-        const wy = worldStartY + ty * this.tileSize;
-        const area = this.getAreaAt(wx + 8, wy + 8);
-        const neighborRight = this.getAreaAt(wx + 24, wy + 8);
-        const neighborDown = this.getAreaAt(wx + 8, wy + 24);
-        const h = hash2D(cx * 32 + tx, cy * 32 + ty);
-
+        const worldTx = baseTx + tx;
+        const worldTy = baseTy + ty;
+        const wx = worldTx * this.tileSize + 8;
+        const wy = worldTy * this.tileSize + 8;
         const px = tx * this.tileSize;
         const py = ty * this.tileSize;
-
-        const isEdgeTransition =
-          neighborRight.id !== area.id || neighborDown.id !== area.id;
-
-        if (isEdgeTransition && assets.loaded) {
-          const transFrame = Math.floor(h * 6) % 6;
-          const tCanvas = assets.getFrameCanvas('tile_transitions', transFrame, false);
-          if (tCanvas) {
-            ctx.drawImage(tCanvas, px, py);
-            continue;
-          }
-        }
-
-        const tileAssetId = AREA_TILE_ASSETS[area.id] || 'tile_slab_town';
-        const variant = Math.floor(h * 3) % 3;
-        const tileCanvas = assets.loaded
-          ? assets.getFrameCanvas(tileAssetId, variant, false)
-          : null;
-
-        if (tileCanvas) {
-          ctx.drawImage(tileCanvas, px, py);
-        } else {
-          ctx.fillStyle = area.groundBase || PALETTE.soot;
-          ctx.fillRect(px, py, 16, 16);
-        }
-      }
-    }
-
-    // 2. Deterministic scatter of area props (8 prop types per area) for Y-sorting
-    const props = [];
-    for (let pyCell = 0; pyCell < 4; pyCell++) {
-      for (let pxCell = 0; pxCell < 4; pxCell++) {
-        const seedX = cx * 4 + pxCell;
-        const seedY = cy * 4 + pyCell;
-        const r = hash2D(seedX * 13, seedY * 29);
-        if (r > 0.55) continue;
-
-        const wx = Math.round(
-          worldStartX + pxCell * 128 + 24 + hash2D(seedX + 3, seedY + 7) * 80
-        );
-        const wy = Math.round(
-          worldStartY + pyCell * 128 + 24 + hash2D(seedX + 11, seedY + 19) * 80
-        );
-
-        // Keep Kettle center clear for the hand-placed Kettle camp layout
-        if (Math.hypot(wx - WORLD_CONFIG.kettleCenter.x, wy - WORLD_CONFIG.kettleCenter.y) < 210) {
-          continue;
-        }
-
+        const h = this._hash(worldTx, worldTy);
         const area = this.getAreaAt(wx, wy);
-        const propPool = AREA_PROP_LISTS[area.id] || AREA_PROP_LISTS.slabTown;
-        const propId = propPool[Math.floor(hash2D(seedX + 5, seedY + 17) * propPool.length)];
-        props.push({
-          id: propId,
-          x: wx,
-          y: wy,
-          scale: 0.72,
-        });
+
+        this._drawTile(ctx, px, py, worldTx, worldTy, wx, wy, h, area);
       }
     }
 
-    const chunkRecord = { canvas, props };
-    this.chunkCache.set(key, chunkRecord);
-    this.chunkOrder.push(key);
-    if (this.chunkOrder.length > this.maxCachedChunks) {
-      const oldest = this.chunkOrder.shift();
-      this.chunkCache.delete(oldest);
-    }
-
-    return chunkRecord;
+    return canvas;
   }
 
-  update(dt) {
-    this.animTime += dt;
-    this.cycleTimer = (this.cycleTimer + dt) % WORLD_CONFIG.dayCycleDuration;
+  _drawTile(ctx, px, py, tx, ty, wx, wy, h, area) {
+    const s = this.tileSize;
 
-    // Clear pre-asset chunk cache once manifest assets finish loading
-    if (assets.loaded && !this.manifestBuiltWith) {
-      this.manifestBuiltWith = true;
-      this.chunkCache.clear();
-      this.chunkOrder = [];
-    }
+    if (area.id === 'kettle') {
+      ctx.fillStyle = (tx + ty) % 2 === 0 ? MATERIAL_RAMPS.coat[1] : MATERIAL_RAMPS.steel[0];
+      ctx.fillRect(px, py, s, s);
 
-    const phase = this.cycleTimer / WORLD_CONFIG.dayCycleDuration;
-    if (phase > 0.6 && phase < 0.92) {
-      this.stormFactor = Math.min(1, this.stormFactor + dt * 0.5);
-    } else {
-      this.stormFactor = Math.max(0, this.stormFactor - dt * 0.5);
-    }
-
-    const windMult = 1 + this.stormFactor * 1.8;
-    for (let i = 0; i < this.motes.length; i++) {
-      const m = this.motes[i];
-      m.x += m.vx * windMult * dt;
-      m.y += m.vy * windMult * dt;
-      if (m.x < 0) m.x += 480;
-      if (m.x >= 480) m.x -= 480;
-      if (m.y < 0) m.y += 270;
-      if (m.y >= 270) m.y -= 270;
-    }
-  }
-
-  drawGround(ctx, camera) {
-    const startCx = Math.max(0, Math.floor(camera.x / this.chunkPixelSize));
-    const endCx = Math.min(
-      Math.floor((this.width - 1) / this.chunkPixelSize),
-      Math.floor((camera.x + camera.width) / this.chunkPixelSize)
-    );
-    const startCy = Math.max(0, Math.floor(camera.y / this.chunkPixelSize));
-    const endCy = Math.min(
-      Math.floor((this.height - 1) / this.chunkPixelSize),
-      Math.floor((camera.y + camera.height) / this.chunkPixelSize)
-    );
-
-    ctx.fillStyle = PALETTE.soot;
-    ctx.fillRect(0, 0, camera.width, camera.height);
-
-    for (let cy = startCy; cy <= endCy; cy++) {
-      for (let cx = startCx; cx <= endCx; cx++) {
-        const chunk = this._buildChunk(cx, cy);
-        const screenPos = camera.worldToScreen(
-          cx * this.chunkPixelSize,
-          cy * this.chunkPixelSize
-        );
-        ctx.drawImage(chunk.canvas, Math.round(screenPos.x), Math.round(screenPos.y));
-      }
-    }
-
-    // Boss Arena perimeter markers
-    for (const bossCfg of Object.values(ENEMIES_CONFIG.bosses)) {
-      const bx = bossCfg.arenaCenter.x;
-      const by = bossCfg.arenaCenter.y;
-      const br = Math.round(bossCfg.arenaRadius * 0.55);
-      if (camera.isVisible(bx, by, br + 40)) {
-        const pos = camera.worldToScreen(bx, by);
-        ctx.strokeStyle = PALETTE.rust;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(
-          Math.round(pos.x - br),
-          Math.round(pos.y - br * 0.7),
-          br * 2,
-          Math.round(br * 1.4)
-        );
-      }
-    }
-  }
-
-  /**
-   * Collects all visible props (including Kettle camp props and Ume) for Y-sorted rendering.
-   */
-  collectVisibleRenderables(camera, list) {
-    const startCx = Math.max(0, Math.floor(camera.x / this.chunkPixelSize));
-    const endCx = Math.min(
-      Math.floor((this.width - 1) / this.chunkPixelSize),
-      Math.floor((camera.x + camera.width) / this.chunkPixelSize)
-    );
-    const startCy = Math.max(0, Math.floor(camera.y / this.chunkPixelSize));
-    const endCy = Math.min(
-      Math.floor((this.height - 1) / this.chunkPixelSize),
-      Math.floor((camera.y + camera.height) / this.chunkPixelSize)
-    );
-
-    for (let cy = startCy; cy <= endCy; cy++) {
-      for (let cx = startCx; cx <= endCx; cx++) {
-        const chunk = this._buildChunk(cx, cy);
-        for (let i = 0; i < chunk.props.length; i++) {
-          const p = chunk.props[i];
-          if (!camera.isVisible(p.x, p.y, 72)) continue;
-          list.push({
-            y: p.y,
-            draw: (ctx) => {
-              const pos = camera.worldToScreen(p.x, p.y);
-              const frame =
-                p.id === 'prop_kettle_campfire'
-                  ? Math.floor(this.animTime * 8) % 3
-                  : 0;
-              assets.drawSprite(ctx, p.id, frame, pos.x, pos.y, {
-                scaleX: p.scale,
-                scaleY: p.scale,
-              });
-            },
-          });
-        }
-      }
-    }
-
-    // Kettle Hub Props
-    for (let i = 0; i < this.kettleProps.length; i++) {
-      const p = this.kettleProps[i];
-      if (!camera.isVisible(p.x, p.y, 80)) continue;
-      list.push({
-        y: p.y,
-        draw: (ctx) => {
-          const pos = camera.worldToScreen(p.x, p.y);
-          const frame =
-            p.id === 'prop_kettle_campfire'
-              ? Math.floor(this.animTime * 8) % 3
-              : 0;
-          assets.drawSprite(ctx, p.id, frame, pos.x, pos.y, {
-            scaleX: p.scale,
-            scaleY: p.scale,
-          });
-        },
-      });
-    }
-
-    // Ume (Shop NPC, 64x64, idle 2 frames)
-    const umePos = WORLD_CONFIG.umePosition;
-    if (camera.isVisible(umePos.x, umePos.y, 64)) {
-      list.push({
-        y: umePos.y,
-        draw: (ctx) => {
-          const pos = camera.worldToScreen(umePos.x, umePos.y);
-          const frame = Math.floor(this.animTime * 2) % 2;
-          assets.drawSprite(ctx, 'ume', frame, pos.x, pos.y, {
-            scaleX: 0.78,
-            scaleY: 0.78,
-          });
-          ctx.fillStyle = PALETTE.brass;
-          ctx.font = 'bold 7px ui-monospace, SFMono-Regular, Menlo, monospace';
-          ctx.textAlign = 'center';
-          ctx.fillText('UME', Math.round(pos.x), Math.round(pos.y - 44));
-        },
-      });
-    }
-  }
-
-  drawAtmosphereAndVignette(ctx, camera, player) {
-    // 1. Seven Cuts Ultimate whole-screen palette drop to slag/bone
-    if (player.ultimateActive) {
-      ctx.fillStyle = PALETTE.soot;
-      for (let y = 0; y < camera.height; y += 2) {
-        ctx.fillRect(0, y, camera.width, 1);
+      const distX = Math.abs(wx - 3000);
+      const distY = Math.abs(wy - 3000);
+      if (distX < 28 || distY < 28) {
+        ctx.fillStyle = MATERIAL_RAMPS.steel[1];
+        ctx.fillRect(px + 1, py + 1, s - 2, s - 2);
+        ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+        ctx.fillRect(px + 1, py + 1, s - 3, 1); // Top-left highlight
+      } else if (h % 11 === 0) {
+        ctx.fillStyle = MATERIAL_RAMPS.rust[1];
+        ctx.fillRect(px + (h % 9), py + ((h >> 4) % 9), 3, 2);
       }
       return;
     }
 
-    // 2. Crisp 1x1 pixel atmospheric motes
-    const area = this.getAreaAt(player.x, player.y);
-    ctx.fillStyle =
-      area.id === 'lyeMarsh'
-        ? PALETTE.bog
-        : area.id === 'copperFlats'
-        ? PALETTE.rust
-        : PALETTE.bone;
-    for (let i = 0; i < this.motes.length; i++) {
-      const m = this.motes[i];
-      ctx.fillRect(Math.round(m.x), Math.round(m.y), 1, 1);
+    if (area.id === 'slabTown') {
+      const isMallZone = Math.abs(wx - 3000) < 620 && wy < 2250;
+      ctx.fillStyle =
+        isMallZone && (tx + ty) % 2 === 0 ? MATERIAL_RAMPS.steel[1] : MATERIAL_RAMPS.coat[1];
+      ctx.fillRect(px, py, s, s);
+
+      // Top-left lit slab edge & soot seam
+      ctx.fillStyle = PALETTE.soot;
+      if (tx % 2 === 0) ctx.fillRect(px + s - 1, py, 1, s);
+      if (ty % 2 === 0) ctx.fillRect(px, py + s - 1, s, 1);
+
+      if (h % 19 === 0) {
+        ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+        ctx.fillRect(px + 2, py + 3, 9, 7);
+        ctx.fillStyle = MATERIAL_RAMPS.bone[2];
+        ctx.fillRect(px + 2, py + 3, 9, 1);
+      } else if (h % 31 === 0) {
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(px + 4, py + 2, 2, 10);
+      }
+      return;
     }
 
-    // 3. Ordered Bayer-dithered dark edge vignette
+    if (area.id === 'route9') {
+      const onHighwayBand = Math.abs(wy - 3000) < 160;
+      ctx.fillStyle = onHighwayBand ? PALETTE.soot : MATERIAL_RAMPS.coat[1];
+      ctx.fillRect(px, py, s, s);
+
+      if (Math.abs(wy - 3000) < 10 && tx % 4 < 2) {
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(px, py + 6, s, 3);
+      } else if (Math.abs(Math.abs(wy - 3000) - 130) < 10) {
+        ctx.fillStyle = MATERIAL_RAMPS.bone[1];
+        ctx.fillRect(px, py + 6, s, 2);
+      }
+
+      if (h % 15 === 0) {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(px + 2, py + 7, 9, 1);
+      } else if (h % 37 === 0 && !onHighwayBand) {
+        ctx.fillStyle = MATERIAL_RAMPS.rust[1];
+        ctx.fillRect(px + 1, py + 2, 13, 10);
+        ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+        ctx.fillRect(px + 3, py + 4, 9, 5);
+      }
+      return;
+    }
+
+    if (area.id === 'lyeMarsh') {
+      const isPool = ((h >> 3) % 7) < 2;
+      ctx.fillStyle = isPool ? MATERIAL_RAMPS.bog[2] : MATERIAL_RAMPS.bog[1];
+      ctx.fillRect(px, py, s, s);
+
+      if (isPool && h % 7 === 0) {
+        ctx.fillStyle = MATERIAL_RAMPS.bog[3];
+        ctx.fillRect(px + 4, py + 4, 5, 2);
+      } else if (Math.abs(wy - 3000) < 24) {
+        ctx.fillStyle = MATERIAL_RAMPS.rust[1];
+        ctx.fillRect(px + 1, py + 2, s - 2, s - 4);
+        ctx.fillStyle = MATERIAL_RAMPS.rust[3];
+        ctx.fillRect(px + 1, py + 2, s - 2, 1);
+      }
+      return;
+    }
+
+    // Copper Flats
+    ctx.fillStyle = h % 2 === 0 ? MATERIAL_RAMPS.rust[1] : MATERIAL_RAMPS.rust[2];
+    ctx.fillRect(px, py, s, s);
+
+    if ((tx + ty) % 3 === 0) {
+      ctx.fillStyle = MATERIAL_RAMPS.rust[3];
+      ctx.fillRect(px + 2, py + 6, 11, 1);
+    }
+    if (h % 29 === 0) {
+      ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+      ctx.fillRect(px + 2, py + 2, 10, 10);
+      ctx.fillStyle = PALETTE.brass;
+      ctx.fillRect(px + 5, py + 5, 4, 4);
+    }
+  }
+
+  getChunk(cx, cy) {
+    const key = `${cx},${cy}`;
+    if (this.chunkCache.has(key)) {
+      return this.chunkCache.get(key);
+    }
+    const canvas = this._buildChunkCanvas(cx, cy);
+    if (this.chunkCache.size >= this.maxCachedChunks) {
+      const oldestKey = this.chunkCache.keys().next().value;
+      this.chunkCache.delete(oldestKey);
+    }
+    this.chunkCache.set(key, canvas);
+    return canvas;
+  }
+
+  update(dt) {
+    this.cycleTime = (this.cycleTime + dt) % WORLD_CONFIG.dayCycleDuration;
+    this.windPhase += dt * 2.4;
+
+    const norm = this.cycleTime / WORLD_CONFIG.dayCycleDuration;
+    this.timeOfDayFactor = 0.5 - 0.5 * Math.cos(norm * Math.PI * 2);
+    const stormCenter = Math.abs(norm - 0.65);
+    this.stormFactor = stormCenter < 0.18 ? 1 - stormCenter / 0.18 : 0;
+
+    const windMult = 1 + this.stormFactor * 2.2;
+    for (let i = 0; i < this.ambientMotes.length; i++) {
+      const m = this.ambientMotes[i];
+      m.x = (m.x + m.speedX * windMult * dt + 480) % 480;
+      m.y = (m.y + m.speedY * (1 + this.stormFactor * 0.6) * dt + 270) % 270;
+    }
+  }
+
+  drawGround(ctx, camera, spawner) {
+    const startCx = Math.max(0, Math.floor(camera.x / this.chunkPixelSize));
+    const endCx = Math.min(
+      Math.floor((this.size - 1) / this.chunkPixelSize),
+      Math.floor((camera.x + camera.width) / this.chunkPixelSize)
+    );
+    const startCy = Math.max(0, Math.floor(camera.y / this.chunkPixelSize));
+    const endCy = Math.min(
+      Math.floor((this.size - 1) / this.chunkPixelSize),
+      Math.floor((camera.y + camera.height) / this.chunkPixelSize)
+    );
+
+    const camX = camera.renderX;
+    const camY = camera.renderY;
+
+    for (let cy = startCy; cy <= endCy; cy++) {
+      for (let cx = startCx; cx <= endCx; cx++) {
+        const chunkCanvas = this.getChunk(cx, cy);
+        const sx = Math.round(cx * this.chunkPixelSize - camX);
+        const sy = Math.round(cy * this.chunkPixelSize - camY);
+        ctx.drawImage(chunkCanvas, sx, sy);
+      }
+    }
+
+    this._drawKettleCamp(ctx, camera);
+    this._drawBossArenas(ctx, camera, spawner);
+  }
+
+  _drawKettleCamp(ctx, camera) {
+    const cx = WORLD_CONFIG.kettleCenter.x;
+    const cy = WORLD_CONFIG.kettleCenter.y;
+    if (!camera.isVisible(cx, cy, WORLD_CONFIG.kettleRadius + 60)) return;
+
+    const camX = camera.renderX;
+    const camY = camera.renderY;
+
+    // Safe-zone boundary dithered ring
+    drawBresenhamCircle(
+      ctx,
+      cx - camX,
+      cy - camY,
+      WORLD_CONFIG.kettleRadius,
+      MATERIAL_RAMPS.steel[2],
+      0.5
+    );
+
+    // Central Old Boiler monument at (3000, 2955) with top-left light highlight
+    const bx = Math.round(3000 - camX);
+    const by = Math.round(2955 - camY);
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(bx - 24, by - 22, 48, 38);
+    ctx.fillStyle = MATERIAL_RAMPS.rust[1];
+    ctx.fillRect(bx - 22, by - 20, 44, 34);
+    ctx.fillStyle = MATERIAL_RAMPS.rust[2];
+    ctx.fillRect(bx - 22, by - 20, 42, 16);
+    ctx.fillStyle = MATERIAL_RAMPS.rust[3]; // Top-left lit edge
+    ctx.fillRect(bx - 22, by - 20, 42, 1);
+    ctx.fillRect(bx - 22, by - 20, 1, 34);
+    // Smokestack
+    ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+    ctx.fillRect(bx - 7, by - 32, 14, 14);
+    ctx.fillStyle = MATERIAL_RAMPS.steel[3];
+    ctx.fillRect(bx - 7, by - 32, 14, 1);
+
+    // Glowing boiler firebox grate + 2 stacked 1px dithered glow rings
+    const flicker = Math.sin(this.windPhase * 3) > 0 ? PALETTE.brass : MATERIAL_RAMPS.rust[3];
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(bx - 9, by + 1, 18, 9);
+    ctx.fillStyle = flicker;
+    ctx.fillRect(bx - 7, by + 3, 14, 5);
+    drawDitheredGlowRings(ctx, bx, by + 5, 11, PALETTE.brass);
+
+    // Campfire at (3000, 3024) + fake dithered glow rings
+    const fx = Math.round(3000 - camX);
+    const fy = Math.round(3024 - camY);
+    ctx.fillStyle = MATERIAL_RAMPS.steel[1];
+    ctx.fillRect(fx - 8, fy - 5, 16, 10);
+    ctx.fillStyle = PALETTE.rust;
+    ctx.fillRect(fx - 5, fy - 4, 10, 7);
+    ctx.fillStyle = PALETTE.brass;
+    const fH = 5 + (Math.floor(this.windPhase * 4) % 2);
+    ctx.fillRect(fx - 3, fy - fH, 6, fH);
+    ctx.fillStyle = PALETTE.bone;
+    ctx.fillRect(fx - 1, fy - 2, 2, 2);
+    drawDitheredGlowRings(ctx, fx, fy - 2, 12, PALETTE.brass);
+
+    // Ume's Pawn Counter & Ume NPC at (2940, 2925)
+    const ux = Math.round(WORLD_CONFIG.umePosition.x - camX);
+    const uy = Math.round(WORLD_CONFIG.umePosition.y - camY);
+    // Bog tarp awning with top-left highlight
+    ctx.fillStyle = MATERIAL_RAMPS.bog[1];
+    ctx.fillRect(ux - 18, uy - 18, 36, 12);
+    ctx.fillStyle = MATERIAL_RAMPS.bog[2];
+    ctx.fillRect(ux - 17, uy - 17, 34, 8);
+    ctx.fillStyle = MATERIAL_RAMPS.bog[3];
+    ctx.fillRect(ux - 17, uy - 17, 34, 1);
+
+    // Ume NPC sprite
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(ux - 5, uy - 9, 10, 12);
+    ctx.fillStyle = PALETTE.bone; // Headscarf
+    ctx.fillRect(ux - 4, uy - 8, 8, 4);
+    ctx.fillStyle = MATERIAL_RAMPS.skin[2];
+    ctx.fillRect(ux - 3, uy - 4, 6, 3);
+    ctx.fillStyle = PALETTE.rust;
+    ctx.fillRect(ux - 4, uy - 1, 8, 5);
+
+    // Counter bench + Brass lantern with dithered glow ring
+    ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+    ctx.fillRect(ux - 17, uy + 4, 34, 8);
+    ctx.fillStyle = MATERIAL_RAMPS.steel[3];
+    ctx.fillRect(ux - 17, uy + 4, 34, 1);
+    ctx.fillStyle = PALETTE.brass;
+    ctx.fillRect(ux + 8, uy + 1, 4, 4);
+    drawDitheredGlowRings(ctx, ux + 10, uy + 3, 5, PALETTE.brass);
+
+    // Harlow's Trade Register Desk & Harlow NPC at (3062, 2925)
+    const hx = Math.round(WORLD_CONFIG.harlowPosition.x - camX);
+    const hy = Math.round(WORLD_CONFIG.harlowPosition.y - camY);
+    // Rust sheet-metal roof canopy
+    ctx.fillStyle = MATERIAL_RAMPS.rust[1];
+    ctx.fillRect(hx - 18, hy - 18, 36, 11);
+    ctx.fillStyle = MATERIAL_RAMPS.rust[2];
+    ctx.fillRect(hx - 17, hy - 17, 34, 7);
+    ctx.fillStyle = MATERIAL_RAMPS.rust[3];
+    ctx.fillRect(hx - 17, hy - 17, 34, 1);
+    // Harlow NPC (clerk with bone hair, brass visor, bog coat)
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(hx - 5, hy - 9, 10, 12);
+    ctx.fillStyle = PALETTE.bone;
+    ctx.fillRect(hx - 4, hy - 8, 8, 3);
+    ctx.fillStyle = PALETTE.brass; // Clerk visor
+    ctx.fillRect(hx - 4, hy - 5, 8, 1);
+    ctx.fillStyle = MATERIAL_RAMPS.skin[2];
+    ctx.fillRect(hx - 3, hy - 4, 6, 3);
+    ctx.fillStyle = MATERIAL_RAMPS.bog[2];
+    ctx.fillRect(hx - 4, hy - 1, 8, 5);
+    // Steel ledger desk + open bone trade book + iron stamp
+    ctx.fillStyle = MATERIAL_RAMPS.steel[1];
+    ctx.fillRect(hx - 16, hy + 4, 32, 8);
+    ctx.fillStyle = MATERIAL_RAMPS.steel[3];
+    ctx.fillRect(hx - 16, hy + 4, 32, 1);
+    ctx.fillStyle = PALETTE.bone; // Ledger pages
+    ctx.fillRect(hx - 6, hy + 2, 9, 4);
+    ctx.fillStyle = PALETTE.rust; // Spine
+    ctx.fillRect(hx - 2, hy + 2, 1, 4);
+    ctx.fillStyle = PALETTE.brass; // Heavy iron stamp
+    ctx.fillRect(hx + 6, hy + 1, 4, 5);
+
+    // Hand-painted directional signs around Kettle
+    const signs = [
+      { x: 3000, y: 2790 },
+      { x: 2790, y: 3000 },
+      { x: 3210, y: 3000 },
+      { x: 3000, y: 3210 },
+    ];
+    for (let i = 0; i < signs.length; i++) {
+      const sg = signs[i];
+      if (!camera.isVisible(sg.x, sg.y, 40)) continue;
+      const sx = Math.round(sg.x - camX);
+      const sy = Math.round(sg.y - camY);
+      ctx.fillStyle = MATERIAL_RAMPS.rust[1];
+      ctx.fillRect(sx - 1, sy - 4, 3, 10);
+      ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+      ctx.fillRect(sx - 7, sy - 8, 14, 5);
+      ctx.fillStyle = MATERIAL_RAMPS.bone[2];
+      ctx.fillRect(sx - 7, sy - 8, 14, 1);
+    }
+  }
+
+  _drawBossArenas(ctx, camera) {
+    const camX = camera.renderX;
+    const camY = camera.renderY;
+    const bossConfigs = Object.values(ENEMIES_CONFIG.bosses);
+
+    for (let i = 0; i < bossConfigs.length; i++) {
+      const b = bossConfigs[i];
+      const ac = b.arenaCenter;
+      if (!camera.isVisible(ac.x, ac.y, b.arenaRadius + 40)) continue;
+
+      const sx = Math.round(ac.x - camX);
+      const sy = Math.round(ac.y - camY);
+      drawBresenhamCircle(ctx, sx, sy, b.arenaRadius, PALETTE.rust, 0.55);
+    }
+  }
+
+  /**
+   * Renders atmospheric motes & Bayer-dithered dark vignette around Sena on the 480x270 canvas.
+   * Zero gradients, zero alpha blending.
+   * Also supports 2-tone (slag & bone) world drop during the opening of Seven Cuts.
+   */
+  drawAtmosphereAndVignette(ctx, camera, player) {
+    const w = camera.width;
+    const h = camera.height;
+
+    // During Seven Cuts / Nine Cuts opening & slashes, drop world to two tones (slag and bone)
+    // or 1-frame inverted flash on each cut!
+    const isTwoTone =
+      (player.ultimates && player.ultimates.twoToneWorld) ||
+      (player.ultimateActive && !player.ultimateReleased);
+
+    if (isTwoTone) {
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+      const invert =
+        (player.ultimates && player.ultimates.invertFrames > 0) ||
+        (player.ultimateInvertFrames && player.ultimateInvertFrames > 0);
+      // Slag (#3A3F47 -> 58, 63, 71), Bone (#D9D2C3 -> 217, 210, 195), Soot (#0B0D10 -> 11, 13, 16)
+      for (let i = 0; i < data.length; i += 4) {
+        const lum = data[i] * 0.3 + data[i + 1] * 0.59 + data[i + 2] * 0.11;
+        const isBright = invert ? lum < 85 : lum >= 85;
+        if (isBright) {
+          data[i] = 217;
+          data[i + 1] = 210;
+          data[i + 2] = 195;
+        } else {
+          data[i] = 58;
+          data[i + 1] = 63;
+          data[i + 2] = 71;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+      return;
+    }
+
+    const area = this.getAreaAt(player.x, player.y);
+
+    // 1. Area-specific drifting ash / sparks / spores / sand (solid integer pixels)
+    for (let i = 0; i < this.ambientMotes.length; i++) {
+      const m = this.ambientMotes[i];
+      const sx = Math.round((m.x - camera.renderX * 0.5 + 4800) % w);
+      const sy = Math.round((m.y - camera.renderY * 0.5 + 2700) % h);
+
+      if (area.particleType === 'sparks') {
+        ctx.fillStyle = i % 2 === 0 ? PALETTE.brass : PALETTE.rust;
+      } else if (area.particleType === 'spores') {
+        ctx.fillStyle = i % 2 === 0 ? PALETTE.bone : MATERIAL_RAMPS.bog[3];
+      } else if (area.particleType === 'sand') {
+        ctx.fillStyle = i % 2 === 0 ? MATERIAL_RAMPS.rust[3] : PALETTE.bone;
+      } else {
+        ctx.fillStyle = MATERIAL_RAMPS.bone[1];
+      }
+
+      const stretchX = area.particleType === 'sand' || this.stormFactor > 0.3 ? m.size * 2 : m.size;
+      ctx.fillRect(sx, sy, stretchX, m.size);
+    }
+
+    // 2. Bayer-Dithered Dark Vignette centered on Sena (no radial gradient, no alpha)
     const pScreen = camera.worldToScreen(player.x, player.y);
     const px = Math.round(pScreen.x);
     const py = Math.round(pScreen.y);
+    const rInnerSq = 105 * 105;
+    const rMidSq = 155 * 155;
+    const rOuterSq = 205 * 205;
 
     ctx.fillStyle = PALETTE.soot;
-    const step = 2;
-    for (let y = 0; y < camera.height; y += step) {
-      for (let x = 0; x < camera.width; x += step) {
+    // Step in 2x2 pixel blocks at perimeter for fast 60fps dithered vignette
+    for (let y = 0; y < h; y += 2) {
+      const dy = y - py;
+      const dySq = dy * dy;
+      for (let x = 0; x < w; x += 2) {
         const dx = x - px;
-        const dy = (y - py) * 1.35;
-        const dist = Math.hypot(dx, dy);
-        if (dist < 135) continue;
-        const bayerVal = BAYER_4X4[(y >> 1) & 3][(x >> 1) & 3] / 16;
-        const darkness = Math.min(1, (dist - 135) / 145);
-        if (darkness > bayerVal) {
-          ctx.fillRect(x, y, step, step);
+        const dSq = dx * dx + dySq;
+        if (dSq <= rInnerSq) continue;
+
+        const density = dSq >= rOuterSq ? 0.85 : dSq >= rMidSq ? 0.45 : 0.2;
+        if (passDither(x >> 1, y >> 1, density)) {
+          ctx.fillRect(x, y, 2, 2);
         }
       }
     }
   }
 }
+
+export default World;

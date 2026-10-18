@@ -13,6 +13,9 @@ export const PALETTE = {
   signal: '#00F0FF',
   blood: '#FF3B3B',
   brass: '#FFC83D',
+  verdigris: '#4FD6A0', // Ines Calloway class accent
+  lye: '#C9D26B', // Corrode status yellow-green
+  dustBrown: '#8B5A3C', // Choked status brown
   // Extended shading tones derived strictly from the core palette
   sootLight: '#161A20',
   slagDark: '#23272D',
@@ -54,20 +57,20 @@ export const PLAYER_CONFIG = {
   weaponName: 'Railcut',
   weaponDesc: 'A sawn-off length of train rail ground to a cyan edge.',
   baseStats: {
-    hp: 100,
-    stamina: 60,
+    hp: 120,
+    stamina: 50,
     atk: 12,
-    def: 4,
+    def: 6,
     speed: 130,
     critChance: 0.08,
-    critMult: 1.65,
+    critMult: 1.5,
     damageTakenMult: 1.0,
     dodgeCooldownReduction: 0,
   },
   levelCap: 30,
   perLevel: {
-    hp: 12,
-    stamina: 4,
+    hp: 14,
+    stamina: 3,
     atk: 2,
     def: 1,
     skillPoints: 1,
@@ -82,9 +85,9 @@ export const PLAYER_CONFIG = {
     staminaCost: 8,
   },
   combo: [
-    { step: 1, mult: 1.0, duration: 0.24, range: 54, arc: 1.65, knockback: 90, stepForward: 45 },
-    { step: 2, mult: 1.15, duration: 0.24, range: 58, arc: 1.85, knockback: 115, stepForward: 55 },
-    { step: 3, mult: 1.45, duration: 0.32, range: 68, arc: 2.35, knockback: 185, stepForward: 75 },
+    { step: 1, mult: 1.0, duration: 0.24, range: 40, arc: 1.65, knockback: 90, stepForward: 38 },
+    { step: 2, mult: 1.1, duration: 0.24, range: 40, arc: 1.85, knockback: 115, stepForward: 44 },
+    { step: 3, mult: 1.5, duration: 0.32, range: 44, arc: 2.35, knockback: 185, stepForward: 56 },
   ],
   comboResetTime: 0.7,
   hitStopDuration: 0.05, // 50ms hit-stop
@@ -97,10 +100,10 @@ export const SKILLS_CONFIG = {
     hotkey: '1',
     name: 'Lunge',
     maxLevel: 5,
-    baseDamageMult: 1.6, // 160% ATK
-    damagePerLevel: 0.2, // +20% per level
-    baseCooldown: 5.0, // 5s
-    cooldownPerLevel: -0.4, // -0.4s per level
+    baseDamageMult: 1.6,
+    damagePerLevel: 0.2,
+    baseCooldown: 5.0,
+    cooldownPerLevel: -0.4,
     staminaCost: 10,
     dashDistance: 160,
     width: 38,
@@ -120,13 +123,13 @@ export const SKILLS_CONFIG = {
     hotkey: '2',
     name: 'Ground Break',
     maxLevel: 5,
-    baseDamageMult: 1.4, // 140% ATK
-    damagePerLevel: 0.15, // +15% per level
-    baseRadius: 110, // 110px
-    radiusPerLevel: 12, // +12px per level
-    cooldown: 9.0, // 9s
+    baseDamageMult: 1.4,
+    damagePerLevel: 0.15,
+    baseRadius: 110,
+    radiusPerLevel: 12,
+    cooldown: 9.0,
     staminaCost: 20,
-    stunDuration: 1.0, // stuns 1s
+    stunDuration: 1.0,
     desc: 'Slam the blade down. Shockwave stuns nearby enemies for 1s.',
     getStats(level) {
       const lvl = Math.max(1, level);
@@ -144,13 +147,13 @@ export const SKILLS_CONFIG = {
     hotkey: '3',
     name: 'Rail Spike',
     maxLevel: 5,
-    baseDamageMult: 1.8, // 180% ATK
-    damagePerLevel: 0.2, // +20% per level
-    basePierce: 2, // Piercing
-    piercePerLevel: 1, // +1 pierce per level
-    range: 420, // 420px
+    baseDamageMult: 1.8,
+    damagePerLevel: 0.2,
+    basePierce: 2,
+    piercePerLevel: 1,
+    range: 420,
     speed: 620,
-    cooldown: 6.0, // 6s
+    cooldown: 6.0,
     staminaCost: 15,
     desc: 'Throw a sharpened piece of rail that pierces targets in a line.',
     getStats(level) {
@@ -168,15 +171,37 @@ export const SKILLS_CONFIG = {
     id: 'sevenCuts',
     hotkey: 'R',
     name: 'Seven Cuts',
-    totalDamageMult: 5.0, // 500% ATK total shared across hits
+    totalDamageMult: 5.0,
     cuts: 7,
-    radius: 300, // 300px
-    duration: 1.05, // Time stops while 7 cuts play out
+    radius: 300,
+    duration: 1.05,
     chargeMax: 100,
     chargePerHitDealt: 4.2,
     chargePerDamageTaken: 0.65,
     desc: 'Time stops. Sena cuts seven times across every enemy within 300px for 500% total ATK.',
   },
+};
+
+export const PROMOTION_RULES = {
+  journeyman: {
+    stage: 2,
+    stageName: 'Journeyman',
+    reqLevel: 10,
+    reqBossId: 'bigAxle',
+    reqBossName: 'Big Axle',
+    goldCost: 300,
+    bonusPoints: 3,
+  },
+  master: {
+    stage: 3,
+    stageName: 'Master',
+    reqLevel: 20,
+    reqBossId: 'motherSump',
+    reqBossName: 'Mother Sump',
+    goldCost: 1500,
+    bonusPoints: 3,
+  },
+  respecBaseCost: 100, // 100 gold x current stage number (Hand 1, Journeyman 2, Master 3)
 };
 
 export const WORLD_CONFIG = {
@@ -186,6 +211,8 @@ export const WORLD_CONFIG = {
   kettleCenter: { x: 3000, y: 3000 },
   kettleRadius: 430, // Safe zone radius
   umePosition: { x: 2940, y: 2925 },
+  harlowPosition: { x: 3065, y: 2925 }, // Trade Register shed in Kettle run by Harlow
+  campfirePosition: { x: 3000, y: 3024 },
   boilerPosition: { x: 3000, y: 2990 },
   dayCycleDuration: 180, // 3-minute cycle with dust storms
   areas: {
@@ -261,11 +288,11 @@ export const SPAWNER_CONFIG = {
   minSpawnDist: 520, // 520-700px from player
   maxSpawnDist: 700,
   despawnDist: 1200, // Despawn beyond 1200px
-  commonWeight: 0.85, // 85% common, 14% elite (bosses are arena-spawned)
+  commonWeight: 0.85,
   eliteWeight: 0.15,
   packSizeMin: 2,
   packSizeMax: 4,
-  levelScalePerPlayerLevel: 0.06, // +6% HP and damage per player level inside area's level band
+  levelScalePerPlayerLevel: 0.06,
   bossRespawnTime: 300, // 5 minutes (300s)
 };
 
@@ -277,6 +304,7 @@ export const ENEMIES_CONFIG = {
       tier: 'common',
       hp: 24,
       damage: 5,
+      def: 2,
       speed: 82,
       radius: 12,
       xp: 8,
@@ -290,6 +318,7 @@ export const ENEMIES_CONFIG = {
       tier: 'common',
       hp: 24,
       damage: 5,
+      def: 2,
       speed: 86,
       radius: 13,
       xp: 8,
@@ -303,6 +332,7 @@ export const ENEMIES_CONFIG = {
       tier: 'common',
       hp: 24,
       damage: 5,
+      def: 1,
       speed: 84,
       radius: 13,
       xp: 8,
@@ -317,6 +347,7 @@ export const ENEMIES_CONFIG = {
       tier: 'common',
       hp: 24,
       damage: 5,
+      def: 3,
       speed: 76,
       radius: 13,
       xp: 8,
@@ -330,6 +361,7 @@ export const ENEMIES_CONFIG = {
       tier: 'common',
       hp: 24,
       damage: 5,
+      def: 1,
       speed: 88,
       radius: 12,
       xp: 8,
@@ -346,13 +378,14 @@ export const ENEMIES_CONFIG = {
       tier: 'elite',
       hp: 160,
       damage: 14,
+      def: 8,
       speed: 95,
       radius: 20,
       xp: 60,
       goldMin: 40,
       goldMax: 60,
       gauzeDropChance: 0.2,
-      specialType: 'charge', // Red line warning 0.8s ahead
+      specialType: 'charge',
       specialCooldown: 5.2,
       telegraphTime: 0.8,
     },
@@ -362,13 +395,14 @@ export const ENEMIES_CONFIG = {
       tier: 'elite',
       hp: 160,
       damage: 14,
+      def: 8,
       speed: 95,
       radius: 19,
       xp: 60,
       goldMin: 40,
       goldMax: 60,
       gauzeDropChance: 0.2,
-      specialType: 'acidSpit', // Red circle warning 0.8s ahead
+      specialType: 'acidSpit',
       specialCooldown: 4.8,
       telegraphTime: 0.8,
     },
@@ -378,13 +412,14 @@ export const ENEMIES_CONFIG = {
       tier: 'elite',
       hp: 160,
       damage: 14,
+      def: 10,
       speed: 95,
       radius: 21,
       xp: 60,
       goldMin: 40,
       goldMax: 60,
       gauzeDropChance: 0.2,
-      specialType: 'spinCut', // Red ring warning 0.8s ahead
+      specialType: 'spinCut',
       specialCooldown: 5.0,
       telegraphTime: 0.8,
     },
@@ -399,6 +434,7 @@ export const ENEMIES_CONFIG = {
       arenaRadius: 380,
       hp: 1400,
       damage: 25,
+      def: 16,
       speed: 74,
       radius: 34,
       xp: 600,
@@ -414,6 +450,7 @@ export const ENEMIES_CONFIG = {
       arenaRadius: 380,
       hp: 1400,
       damage: 25,
+      def: 18,
       speed: 88,
       radius: 34,
       xp: 600,
@@ -429,6 +466,7 @@ export const ENEMIES_CONFIG = {
       arenaRadius: 380,
       hp: 1400,
       damage: 25,
+      def: 20,
       speed: 68,
       radius: 36,
       xp: 600,
@@ -444,6 +482,7 @@ export const ENEMIES_CONFIG = {
       arenaRadius: 400,
       hp: 1400,
       damage: 25,
+      def: 22,
       speed: 92,
       radius: 38,
       xp: 600,
@@ -556,34 +595,86 @@ export const SHOP_ITEMS = {
     name: 'Gauze Roll',
     slot: 'supplies',
     grade: 'Scrap',
+    unlockLevel: 1,
     price: 25,
     consumable: true,
     healHp: 50,
+    cleanses: ['bleed'],
+    clearsStatuses: ['bleed'],
     hotkey: 'Q',
-    desc: 'Boiled cloth and pine pitch. Restores 50 HP.',
+    desc: 'Boiled cloth and pine pitch. Restores 50 HP and removes Bleed.',
   },
   sugarTin: {
     id: 'sugarTin',
     name: 'Sugar Tin',
     slot: 'supplies',
     grade: 'Scrap',
+    unlockLevel: 1,
     price: 30,
     consumable: true,
     restoreStamina: 40,
     hotkey: 'F',
     desc: 'Hard brown sugar cubes in a dented tin. Restores 40 Stamina.',
   },
+  lyeWash: {
+    id: 'lyeWash',
+    name: 'Lye Wash',
+    slot: 'supplies',
+    grade: 'Scrap',
+    unlockLevel: 1,
+    price: 35,
+    consumable: true,
+    cleanses: ['corrode', 'burn', 'choke'],
+    clearsStatuses: ['corrode', 'burn', 'choke'],
+    hotkey: 'Z',
+    desc: 'Diluted neutralizer bottle. Removes Corrode, Burn, and Choke.',
+  },
+  hotStew: {
+    id: 'hotStew',
+    name: 'Hot Stew',
+    slot: 'supplies',
+    grade: 'Scrap',
+    unlockLevel: 1,
+    price: 60,
+    consumable: true,
+    grantsStatus: 'wellFed',
+    grantsBuffs: [{ id: 'wellFed', duration: 180 }],
+    hotkey: 'X',
+    desc: 'Root mash and salt pork in a tin mug. Grants Well Fed (+15% Max HP and +2 HP/s out of combat for 180s).',
+  },
+  stimStick: {
+    id: 'stimStick',
+    name: 'Stim Stick',
+    slot: 'supplies',
+    grade: 'Scrap',
+    unlockLevel: 5,
+    price: 90,
+    consumable: true,
+    grantsStatus: 'haste',
+    grantsBuffs: [
+      { id: 'haste', duration: 8 },
+      { id: 'focus', duration: 8 },
+    ],
+    hotkey: 'C',
+    desc: 'Glass ampoule wrapped in tape. Grants Haste (+25% move speed, +20% attack speed) and Focus (+20% crit) for 8s.',
+  },
 };
 
 export const SHOP_SELL_RATIO = 0.4; // Sell back at 40%
 
+// Precomputed XP Curve table (levels 0..30)
+export const XP_CURVE = Array.from({ length: 32 }, (_, lv) =>
+  lv <= 1 ? 0 : Math.floor(40 * Math.pow(lv, 1.5))
+);
+
+export const NPC = {
+  ume: WORLD_CONFIG.umePosition,
+  harlowRegister: WORLD_CONFIG.harlowPosition,
+};
+
 export const DIALOGUE = {
-  titleTagline: 'Rust, ash, dead water, and the occasional working light.',
-  deathHeader: 'HAULED BACK TO KETTLE',
-  deathSub:
-    'The runners dragged you back to the Kettle boiler. Ume took ten percent for the haul.',
   umeGreetings: [
-    "Boiler's still holding pressure. What did you drag back, Sena?",
+    "Boiler's still holding pressure. What did you drag back?",
     "Pay in clean coin or scrap. Don't bleed on the counter.",
     "Foreman's rig has been banging steel up in Slab Town all morning.",
     "Lye fog's rolling thick out east. Check your filters before you go.",
@@ -591,78 +682,21 @@ export const DIALOGUE = {
   ],
   umeLevelGated: (grade, reqLevel) =>
     `I keep the ${grade} stock locked until you hit Level ${reqLevel}. Come back when you've lasted longer.`,
+  harlowGreetings: [
+    "Name and trade. Keep your hands off the ink pad.",
+    "Paperwork's all that keeps Kettle from turning into Slab Town.",
+    "Promotion costs coin and proof. Don't waste my stamp.",
+  ],
+  harlowJourneyman:
+    "Level eight. Pick a trade, kid. Once I stamp the book, that's what you are.",
+  harlowMaster:
+    "Sixteen. Not many make it here. Hold still while I find the good ink.",
+  harlowLockedJourneyman:
+    "Come back to the desk when you reach Level 8. I don't stamp green hands.",
+  harlowLockedMaster:
+    "Master ink's reserved for Level 16. Keep working your trade out in the ash.",
+  harlowDone:
+    "Your trade's stamped in the Master ledger. Nothing higher left in Kettle.",
   deathMessage:
     'The runners dragged you back to the Kettle boiler. Ume took ten percent for the haul.',
 };
-
-// Compatibility aliases so all modules resolve cleanly
-WORLD_CONFIG.width = WORLD_CONFIG.size;
-WORLD_CONFIG.height = WORLD_CONFIG.size;
-WORLD_CONFIG.kettleSafeRadius = WORLD_CONFIG.kettleRadius;
-
-PLAYER_CONFIG.radius = 12;
-PLAYER_CONFIG.baseHp = PLAYER_CONFIG.baseStats.hp;
-PLAYER_CONFIG.baseStamina = PLAYER_CONFIG.baseStats.stamina;
-PLAYER_CONFIG.baseAtk = PLAYER_CONFIG.baseStats.atk;
-PLAYER_CONFIG.baseDef = PLAYER_CONFIG.baseStats.def;
-PLAYER_CONFIG.baseSpeed = PLAYER_CONFIG.baseStats.speed;
-PLAYER_CONFIG.baseCritChance = PLAYER_CONFIG.baseStats.critChance;
-PLAYER_CONFIG.critMultiplier = PLAYER_CONFIG.baseStats.critMult;
-PLAYER_CONFIG.perLevel.healFraction = PLAYER_CONFIG.perLevel.healRatio;
-PLAYER_CONFIG.dodgeDuration = PLAYER_CONFIG.dodge.duration;
-PLAYER_CONFIG.dodgeCooldown = PLAYER_CONFIG.dodge.cooldown;
-PLAYER_CONFIG.dodgeSpeed = PLAYER_CONFIG.dodge.speed;
-PLAYER_CONFIG.dodgeStaminaCost = PLAYER_CONFIG.dodge.staminaCost;
-
-SKILLS_CONFIG.lunge.cooldownBase = SKILLS_CONFIG.lunge.baseCooldown;
-SKILLS_CONFIG.lunge.cooldownReductionPerLevel = Math.abs(SKILLS_CONFIG.lunge.cooldownPerLevel);
-SKILLS_CONFIG.lunge.damageMultBase = SKILLS_CONFIG.lunge.baseDamageMult;
-SKILLS_CONFIG.lunge.damageMultPerLevel = SKILLS_CONFIG.lunge.damagePerLevel;
-
-SKILLS_CONFIG.groundBreak.cooldownBase = SKILLS_CONFIG.groundBreak.cooldown;
-SKILLS_CONFIG.groundBreak.cooldownReductionPerLevel = 0.4;
-SKILLS_CONFIG.groundBreak.damageMultBase = SKILLS_CONFIG.groundBreak.baseDamageMult;
-SKILLS_CONFIG.groundBreak.damageMultPerLevel = SKILLS_CONFIG.groundBreak.damagePerLevel;
-SKILLS_CONFIG.groundBreak.radiusBase = SKILLS_CONFIG.groundBreak.baseRadius;
-
-SKILLS_CONFIG.railSpike.cooldownBase = SKILLS_CONFIG.railSpike.cooldown;
-SKILLS_CONFIG.railSpike.cooldownReductionPerLevel = 0.35;
-SKILLS_CONFIG.railSpike.damageMultBase = SKILLS_CONFIG.railSpike.baseDamageMult;
-SKILLS_CONFIG.railSpike.damageMultPerLevel = SKILLS_CONFIG.railSpike.damagePerLevel;
-
-SKILLS_CONFIG.sevenCuts.freezeDuration = SKILLS_CONFIG.sevenCuts.duration;
-SKILLS_CONFIG.sevenCuts.chargePerHit = SKILLS_CONFIG.sevenCuts.chargePerHitDealt;
-
-const SNAKE_ITEM_ALIASES = {
-  welding_goggles: SHOP_ITEMS.weldingGoggles,
-  surplus_respirator: SHOP_ITEMS.surplusRespirator,
-  riders_helmet: SHOP_ITEMS.ridersHelmet,
-  patched_vest: SHOP_ITEMS.patchedVest,
-  riot_jacket: SHOP_ITEMS.riotJacket,
-  plate_coat: SHOP_ITEMS.plateCoat,
-  work_boots: SHOP_ITEMS.workBoots,
-  courier_leggings: SHOP_ITEMS.courierLeggings,
-  hydraulic_shins: SHOP_ITEMS.hydraulicShins,
-};
-for (const [k, v] of Object.entries(SNAKE_ITEM_ALIASES)) {
-  Object.defineProperty(SHOP_ITEMS, k, {
-    value: v,
-    enumerable: false,
-    configurable: true,
-  });
-}
-SHOP_ITEMS.gauzeRoll.healFraction = 0.45;
-SHOP_ITEMS.sugarTin.staminaRestore = SHOP_ITEMS.sugarTin.restoreStamina;
-SHOP_ITEMS.sugarTin.buffDuration = 6.0;
-SHOP_ITEMS.sugarTin.staminaRegenMultiplier = 1.65;
-
-export const AREAS_CONFIG = WORLD_CONFIG.areas;
-export const xpForNextLevel = PLAYER_CONFIG.xpForNextLevel;
-export const ELITE_MODIFIERS = {
-  hpMultiplier: 1.0,
-  atkMultiplier: 1.0,
-  xpMultiplier: 1.0,
-  goldMultiplier: 1.0,
-  warningDuration: 0.8,
-};
-

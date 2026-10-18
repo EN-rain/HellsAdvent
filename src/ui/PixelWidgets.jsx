@@ -1,189 +1,716 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { PALETTE, GRADES } from '../data/config.js';
+import { drawCharacterPortrait } from '../game/Sprites.js';
 
 /**
- * 96x96 Pixel-Art Anime Portrait Component for Sena Ibuki
- * Loads directly from /assets/sena_neutral.png, /assets/sena_hurt.png,
- * /assets/sena_determined.png, and /assets/sena_ultimate.png.
+ * 64x64 Pixel-Art Anime Portrait Component for Sena, Rook, or Ines
+ * Reflects classId, expression, equipped headgear/coat, stage, and branch.
  */
-export function SenaPortrait({
-  expression = 'neutral',
+export function CharacterPortrait({
+  classId = 'sena',
+  expression = 'normal',
   equipped = {},
+  stage = 1,
+  branch = null,
   size = 64,
   className = '',
 }) {
-  const validExp = ['neutral', 'hurt', 'determined', 'ultimate'].includes(expression)
-    ? expression
-    : expression === 'normal'
-    ? 'neutral'
-    : 'neutral';
-  const src = `/assets/sena_${validExp}.png`;
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (canvasRef.current) {
+      drawCharacterPortrait(
+        canvasRef.current,
+        classId,
+        expression,
+        equipped,
+        stage,
+        branch
+      );
+    }
+  }, [classId, expression, equipped?.head, equipped?.body, equipped?.legs, stage, branch]);
 
   return (
-    <div
+    <canvas
+      ref={canvasRef}
+      width={64}
+      height={64}
       style={{ width: size, height: size }}
-      className={`relative overflow-hidden bg-[#0B0D10] border-2 ${
-        validExp === 'ultimate'
-          ? 'border-[#00F0FF]'
-          : validExp === 'hurt'
-          ? 'border-[#FF3B3B]'
-          : 'border-[#3A3F47]'
-      } ${className}`}
-      data-equipped={JSON.stringify(equipped)}
-    >
-      <img
-        src={src}
-        alt={`Sena Ibuki (${validExp})`}
-        width={size}
-        height={size}
-        className="pixelated block w-full h-full object-cover"
-      />
-    </div>
+      className={`pixelated block border border-[#3A3F47] bg-[#0B0D10] ${className}`}
+    />
   );
 }
 
-const ICON_ASSET_MAP = {
-  // Skills
-  lunge: '/assets/icon_skill_lunge.png',
-  skill_lunge: '/assets/icon_skill_lunge.png',
-  groundBreak: '/assets/icon_skill_ground_break.png',
-  skill_groundBreak: '/assets/icon_skill_ground_break.png',
-  railSpike: '/assets/icon_skill_rail_spike.png',
-  skill_railSpike: '/assets/icon_skill_rail_spike.png',
-  sevenCuts: '/assets/icon_skill_seven_cuts.png',
-  skill_sevenCuts: '/assets/icon_skill_seven_cuts.png',
-  locked: '/assets/icon_skill_locked.png',
-
-  // Items (both camelCase and snake_case)
-  weldingGoggles: '/assets/icon_item_welding_goggles.png',
-  welding_goggles: '/assets/icon_item_welding_goggles.png',
-  surplusRespirator: '/assets/icon_item_surplus_respirator.png',
-  surplus_respirator: '/assets/icon_item_surplus_respirator.png',
-  ridersHelmet: '/assets/icon_item_riders_helmet.png',
-  riders_helmet: '/assets/icon_item_riders_helmet.png',
-  patchedVest: '/assets/icon_item_patched_vest.png',
-  patched_vest: '/assets/icon_item_patched_vest.png',
-  riotJacket: '/assets/icon_item_riot_jacket.png',
-  riot_jacket: '/assets/icon_item_riot_jacket.png',
-  plateCoat: '/assets/icon_item_plate_coat.png',
-  plate_coat: '/assets/icon_item_plate_coat.png',
-  workBoots: '/assets/icon_item_work_boots.png',
-  work_boots: '/assets/icon_item_work_boots.png',
-  courierLeggings: '/assets/icon_item_courier_leggings.png',
-  courier_leggings: '/assets/icon_item_courier_leggings.png',
-  hydraulicShins: '/assets/icon_item_hydraulic_shins.png',
-  hydraulic_shins: '/assets/icon_item_hydraulic_shins.png',
-  gauzeRoll: '/assets/icon_item_gauze_roll.png',
-  gauze_roll: '/assets/icon_item_gauze_roll.png',
-  sugarTin: '/assets/icon_item_sugar_tin.png',
-  sugar_tin: '/assets/icon_item_sugar_tin.png',
-
-  // Slot placeholders & UI
-  head: '/assets/icon_item_welding_goggles.png',
-  body: '/assets/icon_item_patched_vest.png',
-  legs: '/assets/icon_item_work_boots.png',
-  coin: '/assets/ui_coin.png',
-};
+// Backwards-compatible export
+export function SenaPortrait(props) {
+  return <CharacterPortrait {...props} />;
+}
 
 /**
- * 32x32 Manifest-Loaded Pixel Icon for Skills, Equipment, Supplies, and Coins.
- * Adds code-drawn grade frame color (Scrap grey, Salvaged teal, Relic brass).
+ * 12x12 Pixel-Art Status Icon drawn from code (No text inside, max 3 colors + 1px dark outline)
  */
-export function PixelIcon({
-  iconType,
-  itemId,
-  skillId,
-  grade = 'Scrap',
-  size = 32,
-  className = '',
-}) {
-  const key = iconType || itemId || skillId || 'head';
-  const src = ICON_ASSET_MAP[key] || '/assets/icon_item_patched_vest.png';
-  const borderColor = getGradeColor(grade);
+export function StatusIcon({ statusId, size = 24 }) {
+  const canvasRef = useRef(null);
 
-  if (key === 'coin') {
-    return (
-      <img
-        src="/assets/ui_coin.png"
-        alt="Gold Coin"
-        width={size}
-        height={size}
-        className={`pixelated inline-block shrink-0 ${className}`}
-      />
-    );
-  }
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, 12, 12);
+
+    // 1px dark soot backing outline helper
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(0, 0, 12, 12);
+
+    switch (statusId) {
+      case 'bleed': {
+        // Two falling blood drops
+        ctx.fillStyle = '#7A1C1C';
+        ctx.fillRect(3, 2, 2, 4);
+        ctx.fillRect(7, 5, 2, 5);
+        ctx.fillStyle = PALETTE.blood;
+        ctx.fillRect(2, 4, 4, 3);
+        ctx.fillRect(6, 7, 4, 3);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(3, 5, 1, 1);
+        ctx.fillRect(7, 8, 1, 1);
+        break;
+      }
+      case 'burn': {
+        // Three jagged brass flame tongues
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(2, 5, 8, 5);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(2, 3, 2, 6);
+        ctx.fillRect(5, 2, 2, 7);
+        ctx.fillRect(8, 4, 2, 5);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 6, 2, 3);
+        break;
+      }
+      case 'corrode': {
+        // Dripping lye-green droplet eating a notch out of a steel bar
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(1, 7, 4, 3);
+        ctx.fillRect(7, 7, 4, 3);
+        ctx.fillStyle = '#6B7E2A';
+        ctx.fillRect(4, 8, 4, 2);
+        ctx.fillStyle = PALETTE.lye;
+        ctx.fillRect(5, 2, 2, 5);
+        ctx.fillRect(4, 4, 4, 3);
+        break;
+      }
+      case 'exposed': {
+        // Cracked armor plate with a blood gap down the middle
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(2, 2, 3, 8);
+        ctx.fillRect(7, 2, 3, 8);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(2, 2, 3, 1);
+        ctx.fillRect(7, 2, 3, 1);
+        ctx.fillStyle = PALETTE.blood;
+        ctx.fillRect(5, 2, 2, 8);
+        ctx.fillRect(4, 5, 4, 2);
+        break;
+      }
+      case 'weakened': {
+        // Bent blade pointing down
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(4, 1, 4, 2);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(5, 3, 2, 4);
+        ctx.fillRect(3, 7, 3, 3);
+        ctx.fillStyle = PALETTE.boneDark;
+        ctx.fillRect(5, 3, 1, 3);
+        break;
+      }
+      case 'slow': {
+        // Boot with a ball and chain
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(2, 3, 3, 5);
+        ctx.fillRect(2, 7, 5, 2);
+        ctx.fillStyle = PALETTE.boneDark;
+        ctx.fillRect(6, 7, 2, 1);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(8, 6, 3, 3);
+        break;
+      }
+      case 'pinned': {
+        // Iron stake driven through a ring
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(2, 6, 8, 3);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(5, 1, 2, 10);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(4, 1, 4, 2);
+        break;
+      }
+      case 'stun': {
+        // Cracked bell with two sound lines
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 3, 4, 5);
+        ctx.fillRect(3, 7, 6, 2);
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(5, 5, 1, 3);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(1, 3, 1, 4);
+        ctx.fillRect(10, 3, 1, 4);
+        break;
+      }
+      case 'lifted': {
+        // Upward verdigris arrow under a block
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(3, 2, 6, 3);
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(5, 6, 2, 5);
+        ctx.fillRect(3, 7, 6, 1);
+        ctx.fillRect(4, 6, 4, 1);
+        break;
+      }
+      case 'blind': {
+        // Eye with a diagonal slash across it
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(2, 5, 8, 2);
+        ctx.fillRect(4, 4, 4, 4);
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(5, 5, 2, 2);
+        ctx.fillStyle = PALETTE.blood;
+        for (let i = 2; i < 10; i++) {
+          ctx.fillRect(i, 11 - i, 2, 1);
+        }
+        break;
+      }
+      case 'choke': {
+        // Two wavy smoke lines rising
+        ctx.fillStyle = PALETTE.bog;
+        ctx.fillRect(3, 2, 2, 8);
+        ctx.fillRect(7, 2, 2, 8);
+        ctx.fillStyle = PALETTE.lye;
+        ctx.fillRect(2, 4, 2, 2);
+        ctx.fillRect(4, 7, 2, 2);
+        ctx.fillRect(6, 3, 2, 2);
+        ctx.fillRect(8, 6, 2, 2);
+        break;
+      }
+      case 'marked': {
+        // Brass crosshair
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 1, 2, 3);
+        ctx.fillRect(5, 8, 2, 3);
+        ctx.fillRect(1, 5, 3, 2);
+        ctx.fillRect(8, 5, 3, 2);
+        ctx.fillStyle = PALETTE.blood;
+        ctx.fillRect(5, 5, 2, 2);
+        break;
+      }
+      case 'overloaded': {
+        // Horseshoe magnet with two opposing arrows
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(2, 3, 2, 6);
+        ctx.fillRect(8, 3, 2, 6);
+        ctx.fillRect(2, 8, 8, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(2, 2, 2, 2);
+        ctx.fillRect(8, 2, 2, 2);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 3, 2, 3);
+        break;
+      }
+      case 'momentum': {
+        // Forward chevron stack
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(2, 3, 2, 2);
+        ctx.fillRect(4, 5, 2, 2);
+        ctx.fillRect(2, 7, 2, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(6, 3, 2, 2);
+        ctx.fillRect(8, 5, 2, 2);
+        ctx.fillRect(6, 7, 2, 2);
+        break;
+      }
+      case 'redline': {
+        // Full chevron stack with a blood-red outline
+        ctx.fillStyle = PALETTE.blood;
+        ctx.fillRect(1, 1, 10, 10);
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(2, 2, 8, 8);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(3, 3, 2, 6);
+        ctx.fillRect(6, 4, 3, 4);
+        break;
+      }
+      case 'guarding': {
+        // Raised shield block
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(2, 2, 8, 7);
+        ctx.fillRect(4, 9, 4, 2);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(2, 2, 8, 1);
+        ctx.fillRect(5, 4, 2, 4);
+        break;
+      }
+      case 'steadyAim': {
+        // Scope reticle with a dot
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(2, 2, 8, 1);
+        ctx.fillRect(2, 9, 8, 1);
+        ctx.fillRect(2, 2, 1, 8);
+        ctx.fillRect(9, 2, 1, 8);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 5, 2, 2);
+        break;
+      }
+      case 'holdBreath': {
+        // Calm horizontal line / lungs
+        ctx.fillStyle = PALETTE.bog;
+        ctx.fillRect(2, 3, 3, 4);
+        ctx.fillRect(7, 3, 3, 4);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(1, 8, 10, 2);
+        break;
+      }
+      case 'quickHands': {
+        // Two blurred bolt shapes
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(2, 3, 7, 2);
+        ctx.fillRect(3, 7, 7, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(8, 3, 2, 2);
+        ctx.fillRect(9, 7, 2, 2);
+        break;
+      }
+      case 'ironHide': {
+        // Riveted plate square
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(2, 2, 8, 8);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(3, 3, 1, 1);
+        ctx.fillRect(8, 3, 1, 1);
+        ctx.fillRect(3, 8, 1, 1);
+        ctx.fillRect(8, 8, 1, 1);
+        break;
+      }
+      case 'scrapSkin':
+      case 'secondSkin': {
+        // Ring of four small scrap squares
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(5, 1, 2, 2);
+        ctx.fillRect(5, 9, 2, 2);
+        ctx.fillRect(1, 5, 2, 2);
+        ctx.fillRect(9, 5, 2, 2);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(4, 4, 4, 4);
+        break;
+      }
+      case 'grounded': {
+        // Boot planted on a solid bar
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(4, 2, 3, 5);
+        ctx.fillRect(3, 6, 6, 2);
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(1, 9, 10, 2);
+        break;
+      }
+      case 'wellFed': {
+        // Steaming bowl
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(2, 6, 8, 3);
+        ctx.fillRect(4, 9, 4, 1);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(4, 2, 1, 3);
+        ctx.fillRect(7, 2, 1, 3);
+        break;
+      }
+      case 'haste': {
+        // Double forward arrow
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(2, 4, 3, 4);
+        ctx.fillRect(6, 4, 3, 4);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(4, 5, 2, 2);
+        ctx.fillRect(8, 5, 2, 2);
+        break;
+      }
+      case 'focus': {
+        // Diamond eye
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 2, 2, 8);
+        ctx.fillRect(2, 5, 8, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 5, 2, 2);
+        break;
+      }
+      case 'warm': {
+        // Small flame in a ring
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(2, 8, 8, 2);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 3, 4, 5);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 5, 2, 2);
+        break;
+      }
+      case 'bounty': {
+        // Stamped coin
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(3, 2, 6, 8);
+        ctx.fillRect(2, 3, 8, 6);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(5, 4, 2, 4);
+        break;
+      }
+      default: {
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(3, 3, 6, 6);
+        break;
+      }
+    }
+  }, [statusId]);
 
   return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderColor,
-      }}
-      className={`relative inline-block shrink-0 border-2 bg-[#0B0D10] overflow-hidden ${className}`}
-    >
-      <img
-        src={src}
-        alt={key}
-        width={size}
-        height={size}
-        className="pixelated block w-full h-full"
-      />
-    </div>
+    <canvas
+      ref={canvasRef}
+      width={12}
+      height={12}
+      style={{ width: size, height: size }}
+      className="pixelated block shrink-0 bg-[#0B0D10]"
+    />
   );
 }
 
 /**
- * 128x12 Pixel Bar Component using /assets/ui_bar_hp.png, ui_bar_stamina.png, ui_bar_xp.png
- * (2 frames: frame 0 = empty frame at [0..128], frame 1 = fill bar at [128..256]).
+ * 16x16 Pixel-Art Item / Skill Icon drawn from code onto an offscreen canvas
  */
-export function PixelBar({ kind = 'hp', ratio = 1, width = 128, height = 12 }) {
-  const clamped = Math.max(0, Math.min(1, ratio));
-  const assetUrl =
-    kind === 'hp'
-      ? '/assets/ui_bar_hp.png'
-      : kind === 'stamina'
-      ? '/assets/ui_bar_stamina.png'
-      : '/assets/ui_bar_xp.png';
+export function PixelIcon({ itemId, size = 32 }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.clearRect(0, 0, 16, 16);
+
+    switch (itemId) {
+      case 'weldingGoggles': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(1, 5, 14, 6);
+        ctx.fillStyle = PALETTE.boneDark;
+        ctx.fillRect(2, 6, 5, 4);
+        ctx.fillRect(9, 6, 5, 4);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(3, 7, 3, 2);
+        ctx.fillRect(10, 7, 3, 2);
+        break;
+      }
+      case 'surplusRespirator': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(3, 3, 10, 10);
+        ctx.fillStyle = PALETTE.bog;
+        ctx.fillRect(4, 4, 8, 6);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(2, 8, 4, 4);
+        ctx.fillRect(10, 8, 4, 4);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(6, 5, 4, 2);
+        break;
+      }
+      case 'ridersHelmet': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(2, 2, 12, 12);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(3, 3, 10, 10);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(4, 6, 8, 3);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(6, 2, 4, 2);
+        break;
+      }
+      case 'patchedVest': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(3, 2, 10, 12);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(4, 3, 8, 10);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(5, 8, 3, 3);
+        ctx.fillStyle = PALETTE.boneDark;
+        ctx.fillRect(8, 4, 3, 3);
+        break;
+      }
+      case 'riotJacket': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(2, 2, 12, 12);
+        ctx.fillStyle = PALETTE.bog;
+        ctx.fillRect(3, 3, 10, 10);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 4, 6, 2);
+        ctx.fillRect(5, 8, 6, 2);
+        break;
+      }
+      case 'plateCoat': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(2, 1, 12, 14);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(3, 2, 10, 12);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 4, 8, 3);
+        ctx.fillRect(6, 8, 4, 5);
+        break;
+      }
+      case 'workBoots': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(2, 3, 12, 11);
+        ctx.fillStyle = PALETTE.rustDark;
+        ctx.fillRect(3, 4, 4, 8);
+        ctx.fillRect(9, 4, 4, 8);
+        ctx.fillStyle = PALETTE.boneDark;
+        ctx.fillRect(2, 11, 6, 2);
+        ctx.fillRect(8, 11, 6, 2);
+        break;
+      }
+      case 'courierLeggings': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(3, 2, 10, 12);
+        ctx.fillStyle = PALETTE.bog;
+        ctx.fillRect(4, 3, 3, 10);
+        ctx.fillRect(9, 3, 3, 10);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(4, 7, 3, 2);
+        ctx.fillRect(9, 7, 3, 2);
+        break;
+      }
+      case 'hydraulicShins': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(3, 2, 10, 12);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 3, 3, 10);
+        ctx.fillRect(9, 3, 3, 10);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(5, 5, 1, 6);
+        ctx.fillRect(10, 5, 1, 6);
+        break;
+      }
+      case 'gauzeRoll': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(3, 3, 10, 10);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(4, 4, 8, 8);
+        ctx.fillStyle = PALETTE.blood;
+        ctx.fillRect(7, 5, 2, 6);
+        ctx.fillRect(5, 7, 6, 2);
+        break;
+      }
+      case 'sugarTin': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(3, 3, 10, 10);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 4, 8, 8);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(5, 6, 6, 4);
+        break;
+      }
+      case 'lyeWash': {
+        // Canteen bottle of neutralizer wash
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(4, 2, 8, 12);
+        ctx.fillStyle = PALETTE.bog;
+        ctx.fillRect(5, 5, 6, 8);
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(6, 7, 4, 4);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(6, 2, 4, 2);
+        break;
+      }
+      case 'hotStew': {
+        // Tin bowl of hot stew with steam
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(2, 6, 12, 7);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(3, 7, 10, 5);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 7, 8, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 2, 2, 3);
+        ctx.fillRect(9, 3, 2, 2);
+        break;
+      }
+      case 'stimStick': {
+        // Ampoule injector stick
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(5, 1, 6, 14);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(6, 2, 4, 10);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(7, 4, 2, 5);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(6, 12, 4, 2);
+        break;
+      }
+      // SENA SKILLS
+      case 'skill_lunge': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.signal;
+        for (let i = 2; i < 14; i++) {
+          ctx.fillRect(i, 15 - i, 2, 2);
+        }
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(11, 2, 3, 3);
+        break;
+      }
+      case 'skill_groundBreak': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(7, 2, 2, 9);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(2, 11, 12, 2);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 13, 8, 2);
+        break;
+      }
+      case 'skill_railSpike': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(2, 7, 9, 3);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(9, 6, 5, 5);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(4, 8, 8, 1);
+        break;
+      }
+      case 'skill_sevenCuts': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(2, 3, 12, 2);
+        ctx.fillRect(3, 7, 10, 2);
+        ctx.fillRect(2, 11, 12, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(7, 1, 2, 14);
+        break;
+      }
+      // ROOK SKILLS
+      case 'skill_rivetSpread': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(2, 7, 4, 2);
+        ctx.fillRect(7, 3, 6, 2);
+        ctx.fillRect(8, 7, 6, 2);
+        ctx.fillRect(7, 11, 6, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(12, 3, 2, 2);
+        ctx.fillRect(13, 7, 2, 2);
+        ctx.fillRect(12, 11, 2, 2);
+        break;
+      }
+      case 'skill_kickback': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(2, 6, 6, 4);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(8, 5, 6, 6);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(1, 4, 3, 2);
+        ctx.fillRect(1, 10, 3, 2);
+        break;
+      }
+      case 'skill_tripwire': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(2, 4, 2, 9);
+        ctx.fillRect(12, 4, 2, 9);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 8, 8, 1);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(2, 4, 2, 2);
+        ctx.fillRect(12, 4, 2, 2);
+        break;
+      }
+      case 'skill_tenCount': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 2, 8, 2);
+        ctx.fillRect(2, 6, 12, 1);
+        ctx.fillRect(6, 2, 1, 12);
+        ctx.fillStyle = PALETTE.blood;
+        ctx.fillRect(7, 7, 3, 3);
+        break;
+      }
+      // INES SKILLS
+      case 'skill_pull': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(3, 4, 8, 2);
+        ctx.fillRect(3, 10, 8, 2);
+        ctx.fillRect(3, 4, 2, 8);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(10, 4, 3, 2);
+        ctx.fillRect(10, 10, 3, 2);
+        break;
+      }
+      case 'skill_spinUp': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(4, 2, 8, 2);
+        ctx.fillRect(4, 12, 8, 2);
+        ctx.fillRect(2, 4, 2, 8);
+        ctx.fillRect(12, 4, 2, 8);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(6, 6, 4, 4);
+        break;
+      }
+      case 'skill_lump': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(3, 3, 10, 10);
+        ctx.fillStyle = PALETTE.rust;
+        ctx.fillRect(5, 5, 6, 6);
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(3, 3, 10, 2);
+        ctx.fillRect(3, 3, 2, 10);
+        break;
+      }
+      case 'skill_scrapfall': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(3, 2, 10, 7);
+        ctx.fillStyle = PALETTE.verdigris;
+        ctx.fillRect(2, 11, 12, 2);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 9, 6, 2);
+        break;
+      }
+      default: {
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(3, 3, 10, 10);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(6, 6, 4, 4);
+      }
+    }
+  }, [itemId]);
 
   return (
-    <div
-      style={{ width, height }}
-      className="relative overflow-hidden bg-[#0B0D10] select-none"
-    >
-      {/* Frame 0: Bar Empty Background */}
-      <div
-        className="pixelated absolute inset-0"
-        style={{
-          backgroundImage: `url(${assetUrl})`,
-          backgroundSize: `${width * 2}px ${height}px`,
-          backgroundPosition: '0px 0px',
-          backgroundRepeat: 'no-repeat',
-        }}
-      />
-      {/* Frame 1: Clipped Fill Mask */}
-      <div
-        className="pixelated absolute top-0 left-0 bottom-0 overflow-hidden transition-[width] duration-75"
-        style={{ width: `${Math.round(clamped * 100)}%` }}
-      >
-        <div
-          className="pixelated"
-          style={{
-            width,
-            height,
-            backgroundImage: `url(${assetUrl})`,
-            backgroundSize: `${width * 2}px ${height}px`,
-            backgroundPosition: `-${width}px 0px`,
-            backgroundRepeat: 'no-repeat',
-          }}
-        />
-      </div>
-    </div>
+    <canvas
+      ref={canvasRef}
+      width={16}
+      height={16}
+      style={{ width: size, height: size }}
+      className="pixelated block shrink-0 bg-[#0B0D10] border border-[#3A3F47]"
+    />
   );
 }
 
 export function getGradeColor(grade) {
-  if (grade === 'Relic') return GRADES.Relic.color;
-  if (grade === 'Salvaged') return GRADES.Salvaged.color;
-  return PALETTE.bone;
+  return GRADES[grade]?.color || PALETTE.boneDark;
 }

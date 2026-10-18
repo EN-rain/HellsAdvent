@@ -1,14 +1,19 @@
 import React from 'react';
-import { SHOP_ITEMS, PLAYER_CONFIG, ENEMIES_CONFIG } from '../data/config.js';
-import { SenaPortrait, PixelIcon, getGradeColor } from './PixelWidgets.jsx';
+import { SHOP_ITEMS, ENEMIES_CONFIG } from '../data/config.js';
+import { CharacterPortrait, PixelIcon, getGradeColor } from './PixelWidgets.jsx';
 
 export function InventoryModal({ engine, onClose }) {
   const p = engine.player;
+  const cls = p.classConfig;
+  const accent = cls.accentColor;
+
   const slots = [
     { key: 'head', label: 'Head' },
     { key: 'body', label: 'Body' },
     { key: 'legs', label: 'Legs' },
   ];
+
+  const supplyIds = ['gauzeRoll', 'sugarTin', 'lyeWash', 'hotStew', 'stimStick'];
 
   return (
     <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/85 p-6">
@@ -17,10 +22,10 @@ export function InventoryModal({ engine, onClose }) {
         <div className="flex items-center justify-between border-b-2 border-[#3A3F47] px-5 py-3.5 bg-[#161A20]">
           <div>
             <h2 className="text-base font-bold tracking-wider text-[#D9D2C3]">
-              RUNNER PACK & EQUIPMENT [I]
+              RUNNER PACK &amp; EQUIPMENT [I]
             </h2>
             <p className="text-xs text-[#9E9789] mt-0.5">
-              Equipped gear alters your stats and recolors Sena&apos;s sprite in real time.
+              Equipped gear and promotion stamps alter your stats and sprite in real time.
             </p>
           </div>
           <div className="flex items-center gap-4">
@@ -29,7 +34,7 @@ export function InventoryModal({ engine, onClose }) {
             </span>
             <button
               onClick={onClose}
-              className="px-3 py-1.5 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3]"
+              className="px-3 py-1.5 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
             >
               [ESC / I] CLOSE
             </button>
@@ -37,23 +42,26 @@ export function InventoryModal({ engine, onClose }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 p-5 overflow-y-auto">
-          {/* Left 5 Cols: Sena Character Sheet & Equipped Slots */}
+          {/* Left 5 Cols: Character Sheet & Equipped Slots */}
           <div className="md:col-span-5 space-y-4">
             <div className="bg-[#161A20] border border-[#3A3F47] p-4 flex items-start gap-4">
-              <SenaPortrait
+              <CharacterPortrait
+                classId={p.classId}
                 expression={p.getPortraitExpression()}
                 equipped={p.equipped}
+                stage={p.stage}
+                branch={p.branch}
                 size={72}
               />
               <div className="flex-1 text-xs space-y-1 tabular-nums">
                 <div className="text-sm font-bold text-[#D9D2C3]">
-                  {PLAYER_CONFIG.name}
+                  {cls.characterName}
                 </div>
-                <div className="text-[11px] text-[#00F0FF] font-bold">
-                  Level {p.level} {PLAYER_CONFIG.role}
+                <div className="text-[11px] font-bold" style={{ color: accent }}>
+                  Lv {p.level} · {p.getTitle()}, {p.getStageLabel()}
                 </div>
                 <div className="text-[11px] text-[#9E9789]">
-                  Weapon: {PLAYER_CONFIG.weaponName}
+                  Weapon: {cls.weaponName}
                 </div>
                 <div className="pt-1.5 border-t border-[#3A3F47] grid grid-cols-2 gap-x-2 gap-y-1 text-[#D9D2C3]">
                   <span>HP: {Math.ceil(p.hp)}/{p.maxHp}</span>
@@ -109,7 +117,7 @@ export function InventoryModal({ engine, onClose }) {
                     {item && (
                       <button
                         onClick={() => engine.unequipSlot(key)}
-                        className="px-2.5 py-1 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] text-[11px] text-[#D9D2C3]"
+                        className="px-2.5 py-1 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] text-[11px] text-[#D9D2C3] cursor-pointer"
                       >
                         UNEQUIP
                       </button>
@@ -127,22 +135,23 @@ export function InventoryModal({ engine, onClose }) {
               <div className="text-xs font-bold text-[#9E9789] uppercase tracking-wider mb-2.5">
                 FIELD SUPPLIES (CONSUMABLES)
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {['gauzeRoll', 'sugarTin'].map((supId) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {supplyIds.map((supId) => {
                   const item = SHOP_ITEMS[supId];
+                  if (!item) return null;
                   const count = p.supplies[supId] || 0;
                   return (
                     <div
                       key={supId}
-                      className="p-3 bg-[#0B0D10] border border-[#3A3F47] flex items-center justify-between"
+                      className="p-2.5 bg-[#0B0D10] border border-[#3A3F47] flex items-center justify-between gap-2"
                     >
                       <div className="flex items-center gap-2.5">
-                        <PixelIcon itemId={supId} size={32} />
+                        <PixelIcon itemId={supId} size={30} />
                         <div>
                           <div className="text-xs font-bold text-[#D9D2C3]">
                             {item.name} (x{count})
                           </div>
-                          <div className="text-[11px] text-[#9E9789]">
+                          <div className="text-[10px] text-[#9E9789] leading-snug">
                             {item.desc}
                           </div>
                         </div>
@@ -150,7 +159,7 @@ export function InventoryModal({ engine, onClose }) {
                       <button
                         disabled={count <= 0}
                         onClick={() => engine.player.useSupply(supId, engine.particles)}
-                        className={`px-2.5 py-1 text-xs font-bold border ${
+                        className={`px-2 py-1 text-[11px] font-bold border shrink-0 cursor-pointer ${
                           count > 0
                             ? 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF]'
                             : 'bg-[#161A20] border-[#3A3F47] text-[#3A3F47] cursor-not-allowed'
@@ -199,7 +208,7 @@ export function InventoryModal({ engine, onClose }) {
                         </div>
                         <button
                           onClick={() => engine.equipFromInventory(item.id)}
-                          className="px-3 py-1 bg-[#1F4D4A] border border-[#00F0FF] text-xs font-bold text-[#00F0FF]"
+                          className="px-3 py-1 bg-[#1F4D4A] border border-[#00F0FF] text-xs font-bold text-[#00F0FF] cursor-pointer"
                         >
                           EQUIP
                         </button>

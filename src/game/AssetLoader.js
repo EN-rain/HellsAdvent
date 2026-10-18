@@ -69,9 +69,14 @@ class AssetManager {
             this.loadedCount += 1;
             this.progress = Math.min(1, this.loadedCount / Math.max(1, this.totalToLoad));
             this._notify();
-            resolve(img);
+            if (img.complete && img.naturalWidth > 0) {
+              resolve(img);
+            } else {
+              resolve(null);
+            }
           };
           img.onerror = () => {
+            // Image failed or missing — skip cleanly without blocking
             this.loadedCount += 1;
             this.progress = Math.min(1, this.loadedCount / Math.max(1, this.totalToLoad));
             this._notify();
@@ -109,11 +114,14 @@ class AssetManager {
   }
 
   getImage(id) {
-    return this.images.get(id) || null;
+    const img = this.images.get(id);
+    if (img && img.complete && img.naturalWidth > 0) return img;
+    return null;
   }
 
   /**
    * Returns a cached offscreen canvas containing a single extracted frame (optionally horizontally mirrored).
+   * Checks if image is working; if not, skips and returns null safely.
    */
   getFrameCanvas(id, frameIdx = 0, flipX = false) {
     const key = `${id}_${frameIdx}_${flipX ? 1 : 0}`;
@@ -126,39 +134,49 @@ class AssetManager {
     const fh = spec.frameHeight;
     const f = Math.max(0, Math.min(spec.frameCount - 1, Math.floor(frameIdx)));
 
-    const c = document.createElement('canvas');
-    c.width = fw;
-    c.height = fh;
-    const ctx = c.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-
-    if (flipX) {
-      ctx.translate(fw, 0);
-      ctx.scale(-1, 1);
-    }
-
     const atlasInfo = spec.atlas;
     const atlasImg = atlasInfo ? this.atlases.get(atlasInfo.atlas) : null;
-    if (atlasImg) {
-      ctx.drawImage(
-        atlasImg,
-        atlasInfo.x + f * fw,
-        atlasInfo.y,
-        fw,
-        fh,
-        0,
-        0,
-        fw,
-        fh
-      );
-    } else {
-      const stripImg = this.images.get(id);
-      if (!stripImg) return null;
-      ctx.drawImage(stripImg, f * fw, 0, fw, fh, 0, 0, fw, fh);
+    const stripImg = this.images.get(id);
+
+    const hasValidAtlas = atlasImg && atlasImg.complete && atlasImg.naturalWidth > 0;
+    const hasValidStrip = stripImg && stripImg.complete && stripImg.naturalWidth > 0;
+    if (!hasValidAtlas && !hasValidStrip) {
+      return null;
     }
 
-    this.tintCache.set(key, c);
-    return c;
+    try {
+      const c = document.createElement('canvas');
+      c.width = fw;
+      c.height = fh;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      if (flipX) {
+        ctx.translate(fw, 0);
+        ctx.scale(-1, 1);
+      }
+
+      if (hasValidAtlas) {
+        ctx.drawImage(
+          atlasImg,
+          atlasInfo.x + f * fw,
+          atlasInfo.y,
+          fw,
+          fh,
+          0,
+          0,
+          fw,
+          fh
+        );
+      } else if (hasValidStrip) {
+        ctx.drawImage(stripImg, f * fw, 0, fw, fh, 0, 0, fw, fh);
+      }
+
+      this.tintCache.set(key, c);
+      return c;
+    } catch (_e) {
+      return null;
+    }
   }
 
   /**

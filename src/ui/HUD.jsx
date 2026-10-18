@@ -1,440 +1,802 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   PALETTE,
-  SKILLS_CONFIG,
   WORLD_CONFIG,
   ENEMIES_CONFIG,
 } from '../data/config.js';
-import { SenaPortrait, PixelIcon, PixelBar } from './PixelWidgets.jsx';
+import { CharacterPortrait, PixelIcon, StatusIcon } from './PixelWidgets.jsx';
 import { sound } from '../game/Audio.js';
 
-export function HUD({ snapshot, engine }) {
-  const minimapRef = useRef(null);
+function Minimap({ playerX, playerY, defeatedBosses, accentColor }) {
+  const canvasRef = useRef(null);
 
   useEffect(() => {
-    const canvas = minimapRef.current;
-    if (!canvas || !snapshot) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
-    const w = canvas.width;
-    const h = canvas.height;
+    const size = 132;
+    const scale = size / WORLD_CONFIG.size;
 
-    ctx.fillStyle = PALETTE.soot;
-    ctx.fillRect(0, 0, w, h);
+    // 1. Background sectors
+    ctx.fillStyle = '#0B0D10';
+    ctx.fillRect(0, 0, size, size);
 
+    // North: Slab Town
+    ctx.fillStyle = '#232830';
+    ctx.fillRect(24, 0, size - 48, 52);
+
+    // South: Copper Flats
+    ctx.fillStyle = '#4A2416';
+    ctx.fillRect(24, size - 52, size - 48, 52);
+
+    // West: Route 9
     ctx.fillStyle = '#181C22';
-    ctx.fillRect(0, 0, w / 2, h / 2);
-    ctx.fillStyle = '#1C1A18';
-    ctx.fillRect(w / 2, 0, w / 2, h / 2);
-    ctx.fillStyle = '#102422';
-    ctx.fillRect(0, h / 2, w / 2, h / 2);
-    ctx.fillStyle = '#2A1610';
-    ctx.fillRect(w / 2, h / 2, w / 2, h / 2);
+    ctx.fillRect(0, 24, 52, size - 48);
 
-    const scaleX = w / WORLD_CONFIG.width;
-    const scaleY = h / WORLD_CONFIG.height;
-    const kx = WORLD_CONFIG.kettleCenter.x * scaleX;
-    const ky = WORLD_CONFIG.kettleCenter.y * scaleY;
-    const kr = WORLD_CONFIG.kettleSafeRadius * scaleX;
+    // East: Lye Marsh
+    ctx.fillStyle = '#142B28';
+    ctx.fillRect(size - 52, 24, 52, size - 48);
 
-    ctx.strokeStyle = PALETTE.signal;
+    // Crossroad highways
+    ctx.fillStyle = '#2B3038';
+    ctx.fillRect(size / 2 - 3, 0, 6, size);
+    ctx.fillRect(0, size / 2 - 3, size, 6);
+
+    // Center Kettle safe zone circle
+    const kx = WORLD_CONFIG.kettleCenter.x * scale;
+    const ky = WORLD_CONFIG.kettleCenter.y * scale;
+    const kr = WORLD_CONFIG.kettleRadius * scale;
+    ctx.fillStyle = '#1F242B';
+    ctx.strokeStyle = PALETTE.boneDark;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(kx, ky, Math.max(4, kr), 0, Math.PI * 2);
+    ctx.arc(kx, ky, kr, 0, Math.PI * 2);
+    ctx.fill();
     ctx.stroke();
 
-    for (const [id, bossCfg] of Object.entries(ENEMIES_CONFIG.bosses)) {
-      const bx = bossCfg.arenaCenter.x * scaleX;
-      const by = bossCfg.arenaCenter.y * scaleY;
-      const defeated = snapshot.defeatedBosses && snapshot.defeatedBosses[id];
-      ctx.fillStyle = defeated ? PALETTE.slag : PALETTE.blood;
-      ctx.fillRect(Math.round(bx - 2), Math.round(by - 2), 4, 4);
+    // Ume & Harlow markers in Kettle
+    ctx.fillStyle = PALETTE.brass;
+    ctx.fillRect(kx - 4, ky - 2, 3, 3);
+    ctx.fillStyle = PALETTE.verdigris;
+    ctx.fillRect(kx + 2, ky - 2, 3, 3);
+
+    // 4 Fixed Boss Arenas
+    for (const boss of Object.values(ENEMIES_CONFIG.bosses)) {
+      const bx = Math.round(boss.arenaCenter.x * scale);
+      const by = Math.round(boss.arenaCenter.y * scale);
+      const isBeaten = defeatedBosses && defeatedBosses[boss.id];
+      ctx.fillStyle = isBeaten ? PALETTE.slag : PALETTE.blood;
+      ctx.fillRect(bx - 3, by - 3, 6, 6);
+      ctx.strokeStyle = PALETTE.soot;
+      ctx.strokeRect(bx - 3, by - 3, 6, 6);
     }
 
-    const px = snapshot.x * scaleX;
-    const py = snapshot.y * scaleY;
-    ctx.fillStyle = PALETTE.signal;
-    ctx.fillRect(Math.round(px - 2), Math.round(py - 2), 5, 5);
-    ctx.fillStyle = PALETTE.bone;
-    ctx.fillRect(Math.round(px - 1), Math.round(py - 1), 3, 3);
-  }, [snapshot]);
+    // Player dot (Class Accent)
+    const px = Math.max(3, Math.min(size - 3, Math.round(playerX * scale)));
+    const py = Math.max(3, Math.min(size - 3, Math.round(playerY * scale)));
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(px - 3, py - 3, 7, 7);
+    ctx.fillStyle = accentColor || PALETTE.signal;
+    ctx.fillRect(px - 2, py - 2, 5, 5);
+  }, [playerX, playerY, defeatedBosses, accentColor]);
+
+  return (
+    <div className="bg-[#0B0D10] border-2 border-[#3A3F47] p-1.5">
+      <canvas
+        ref={canvasRef}
+        width={132}
+        height={132}
+        className="pixelated block"
+      />
+      <div className="mt-1 flex items-center justify-between text-[10px] text-[#D9D2C3]/80">
+        <span>N:SLAB</span>
+        <span>W:RT9</span>
+        <span>E:LYE</span>
+        <span>S:FLATS</span>
+      </div>
+    </div>
+  );
+}
+
+function StatusSlotBox({ st, onHover }) {
+  const borderCol = st.isBuff ? PALETTE.signal : PALETTE.blood;
+  const elapsedPct =
+    st.duration && st.duration < 9000
+      ? Math.max(0, Math.min(1, 1 - st.remaining / st.duration))
+      : 0;
+
+  return (
+    <div
+      onMouseEnter={() => onHover(st)}
+      onMouseLeave={() => onHover(null)}
+      className="relative w-[18px] h-[18px] bg-[#0B0D10] flex items-center justify-center cursor-help"
+      style={{ border: `1px solid ${borderCol}` }}
+      title={st.tooltip}
+    >
+      <StatusIcon statusId={st.id} size={14} />
+
+      {/* Clockwise / vertical dark wipe showing elapsed duration */}
+      {elapsedPct > 0 && (
+        <div
+          className="absolute top-0 left-0 right-0 bg-[#0B0D10]/70 pointer-events-none"
+          style={{ height: `${Math.round(elapsedPct * 100)}%` }}
+        />
+      )}
+
+      {/* Stack badge in bottom-right corner */}
+      {st.stacks > 1 && (
+        <span
+          className="absolute -bottom-0.5 right-0 bg-[#0B0D10] px-0.5 text-[8px] font-bold leading-none tabular-nums"
+          style={{ color: borderCol }}
+        >
+          {st.stacks}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ClassMechanicBar({ mech, accentColor, engine }) {
+  if (!mech) return null;
+
+  if (mech.type === 'momentum') {
+    const isRedline = mech.redline;
+    return (
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold tracking-wider text-[#9E9789]">
+            {isRedline ? 'REDLINE' : 'MOMENTUM'}
+          </span>
+          <div className="flex items-center gap-1 ml-1">
+            {Array.from({ length: mech.maxStacks || 5 }, (_, idx) => {
+              const active = idx < mech.stacks;
+              return (
+                <div
+                  key={idx}
+                  className="w-3.5 h-2 border"
+                  style={{
+                    borderColor: active
+                      ? isRedline
+                        ? PALETTE.blood
+                        : accentColor
+                      : '#3A3F47',
+                    backgroundColor: active
+                      ? isRedline
+                        ? PALETTE.blood
+                        : accentColor
+                      : '#0B0D10',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        {engine.player.hasNode('brace') && (
+          <span
+            className="text-[9px] font-bold px-1 border"
+            style={{
+              borderColor: mech.guarding ? PALETTE.signal : '#3A3F47',
+              color: mech.guarding ? PALETTE.signal : '#9E9789',
+            }}
+          >
+            [V] GUARD {mech.guarding ? 'ON' : 'OFF'}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (mech.type === 'magazine') {
+    if (mech.reloading) {
+      const pct = Math.max(0, Math.min(100, mech.reloadProgress * 100));
+      return (
+        <div className="space-y-0.5 pt-0.5">
+          <div className="flex items-center justify-between text-[9px] font-bold">
+            <span className="text-[#FFC83D]">
+              RELOADING... PRESS [LMB / V] IN BRASS ZONE
+            </span>
+          </div>
+          <div className="relative h-2.5 w-full bg-[#0B0D10] border border-[#3A3F47]">
+            {/* 0.35s - 0.50s sweet spot notch */}
+            <div
+              className="absolute top-0 bottom-0 bg-[#FFC83D]/85"
+              style={{
+                left: `${(mech.windowStart || 0.35) * 100}%`,
+                width: `${((mech.windowEnd || 0.52) - (mech.windowStart || 0.35)) * 100}%`,
+              }}
+            />
+            {/* Moving cursor bar */}
+            <div
+              className="absolute top-0 bottom-0 w-1 bg-[#D9D2C3]"
+              style={{ left: `${pct}%` }}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold text-[#9E9789]">MAGAZINE</span>
+          <div className="flex items-center gap-0.5 ml-1">
+            {Array.from({ length: mech.maxBolts || 12 }, (_, idx) => {
+              const filled = idx < mech.bolts;
+              const isLastShot = idx === 0 && engine.player.hasNode('lastWord');
+              return (
+                <div
+                  key={idx}
+                  className="w-1.5 h-2.5 border"
+                  style={{
+                    borderColor: filled ? PALETTE.brass : '#3A3F47',
+                    backgroundColor: filled
+                      ? isLastShot
+                        ? PALETTE.blood
+                        : PALETTE.brass
+                      : '#0B0D10',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <span className="text-[9px] font-bold text-[#FFC83D] tabular-nums">
+          {mech.bolts}/{mech.maxBolts} [V]
+        </span>
+      </div>
+    );
+  }
+
+  if (mech.type === 'scrapOrbit') {
+    return (
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold text-[#9E9789]">SCRAP ORBIT</span>
+          <div className="flex items-center gap-1 ml-1">
+            {Array.from({ length: mech.maxCount || 6 }, (_, idx) => {
+              const active = idx < mech.count;
+              return (
+                <div
+                  key={idx}
+                  className="w-2.5 h-2.5 border"
+                  style={{
+                    borderColor: active ? PALETTE.verdigris : '#3A3F47',
+                    backgroundColor: active ? PALETTE.verdigris : '#0B0D10',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <span className="text-[9px] font-bold text-[#4FD6A0] tabular-nums">
+          +{Math.round(mech.count * 1.5)} DEF
+        </span>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+export function HUD({ snapshot, engine }) {
+  const [hoveredStatus, setHoveredStatus] = useState(null);
 
   if (!snapshot) return null;
 
-  const hpPct = Math.max(0, Math.min(1, snapshot.hp / Math.max(1, snapshot.maxHp)));
-  const stamPct = Math.max(
-    0,
-    Math.min(1, snapshot.stamina / Math.max(1, snapshot.maxStamina))
-  );
-  const xpPct = Math.max(0, Math.min(1, snapshot.xp / Math.max(1, snapshot.xpToNext)));
-  const ultPct = Math.max(0, Math.min(100, snapshot.ultimateCharge));
+  const accent = snapshot.accentColor || PALETTE.signal;
+  const hpPct = Math.max(0, Math.min(100, (snapshot.hp / snapshot.maxHp) * 100));
+  const stamPct = Math.max(0, Math.min(100, (snapshot.stamina / snapshot.maxStamina) * 100));
+  const xpPct = snapshot.xpToNext > 0
+    ? Math.max(0, Math.min(100, (snapshot.xp / snapshot.xpToNext) * 100))
+    : 100;
+  const neededCharge = snapshot.ultimateChargeNeeded || 100;
+  const ultPct = Math.max(0, Math.min(100, (snapshot.ultimateCharge / neededCharge) * 100));
+  const ultReady = snapshot.ultimateCharge >= neededCharge;
 
-  const skillsList = [
-    {
-      key: '1',
-      id: 'lunge',
-      name: SKILLS_CONFIG.lunge.name,
-      lvl: snapshot.skills.lunge,
-      cd: snapshot.cooldowns.lunge,
-      maxCd: snapshot.maxCooldowns.lunge,
-    },
-    {
-      key: '2',
-      id: 'groundBreak',
-      name: SKILLS_CONFIG.groundBreak.name,
-      lvl: snapshot.skills.groundBreak,
-      cd: snapshot.cooldowns.groundBreak,
-      maxCd: snapshot.maxCooldowns.groundBreak,
-    },
-    {
-      key: '3',
-      id: 'railSpike',
-      name: SKILLS_CONFIG.railSpike.name,
-      lvl: snapshot.skills.railSpike,
-      cd: snapshot.cooldowns.railSpike,
-      maxCd: snapshot.maxCooldowns.railSpike,
-    },
+  const skillList = snapshot.activeSkillDefs || [];
+  const buffs = (snapshot.statuses || []).filter((s) => s.isBuff).slice(0, 6);
+  const debuffs = (snapshot.statuses || []).filter((s) => !s.isBuff).slice(0, 6);
+
+  const getDirectionLabel = (bx, by) => {
+    const dx = bx - snapshot.x;
+    const dy = by - snapshot.y;
+    if (Math.hypot(dx, dy) < 280) return 'HERE';
+    if (Math.abs(dy) >= Math.abs(dx)) {
+      return dy < 0 ? 'NORTH' : 'SOUTH';
+    }
+    return dx < 0 ? 'WEST' : 'EAST';
+  };
+
+  const obj = snapshot.objective;
+  const objDir = obj ? getDirectionLabel(obj.boss.arenaCenter.x, obj.boss.arenaCenter.y) : '';
+  const canPromote = snapshot.canPromoteJourneyman || snapshot.canPromoteMaster;
+
+  const quickSupplies = [
+    { id: 'gauzeRoll', key: 'Q', label: 'Gauze Roll (+50 HP, Clears Bleed)' },
+    { id: 'sugarTin', key: 'F', label: 'Sugar Tin (+40 Stamina)' },
+    { id: 'lyeWash', key: 'Z', label: 'Lye Wash (Clears Corrode, Burn, Choke)' },
+    { id: 'hotStew', key: 'X', label: 'Hot Stew (Well Fed 180s)' },
+    { id: 'stimStick', key: 'C', label: 'Stim Stick (Haste + Focus 8s)' },
   ];
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-10 flex flex-col justify-between p-4 text-[#D9D2C3]">
-      {/* TOP ROW: Portrait + Bars (Left) | Boss Health Bar (Center) | Minimap + Objective (Right) */}
+    <div className="pointer-events-none fixed inset-0 z-10 flex flex-col justify-between p-4 select-none">
+      {/* TOP PERIMETER CLUSTER */}
       <div className="flex items-start justify-between gap-4">
-        {/* TOP-LEFT: Sena 96x96 Portrait & UI Bar Frames */}
-        <div
-          data-hud-interactive="true"
-          className="pointer-events-auto flex items-start gap-3 bg-[#0B0D10]/95 border-2 border-[#3A3F47] p-2.5 shadow-lg"
-        >
-          <div className="relative">
-            <SenaPortrait
-              expression={snapshot.portraitExpression}
-              equipped={snapshot.equipped}
-              size={64}
-            />
-            <div className="absolute -bottom-1.5 -right-1.5 bg-[#0B0D10] border border-[#00F0FF] px-1.5 py-0.5 text-[10px] font-bold text-[#00F0FF]">
-              LV.{snapshot.level}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5 min-w-[168px]">
-            <div className="flex items-center justify-between text-xs font-bold tracking-wider">
-              <span className="text-[#D9D2C3]">SENA IBUKI</span>
-              <span className="flex items-center gap-1 text-[#FFC83D]">
-                <PixelIcon iconType="coin" size={14} />
-                {snapshot.gold}G
-              </span>
+        {/* Top-Left: Class Portrait + Full Title Line + HP, Stamina, Class Mechanic, & Status Row */}
+        <div className="flex flex-col gap-1.5">
+          <div
+            className="flex items-start gap-3 bg-[#0B0D10]/90 border-2 p-2.5"
+            style={{ borderColor: '#3A3F47' }}
+          >
+            <div className="relative">
+              <CharacterPortrait
+                classId={snapshot.classId}
+                expression={snapshot.portraitExpression}
+                equipped={snapshot.equipped}
+                stage={snapshot.stage}
+                branch={snapshot.branch}
+                size={64}
+              />
+              <div
+                className="absolute -bottom-1 -right-1 bg-[#0B0D10] border px-1.5 py-0.5 text-[11px] font-bold"
+                style={{ borderColor: accent, color: accent }}
+              >
+                LV {snapshot.level}
+              </div>
             </div>
 
-            {/* HP BAR (ui_bar_hp.png) */}
-            <div>
-              <div className="flex justify-between text-[10px] mb-0.5">
-                <span className="text-[#FF3B3B] font-bold">HP</span>
-                <span>
-                  {snapshot.hp}/{snapshot.maxHp}
+            <div className="w-60 space-y-1.5">
+              {/* Character Name - Title, Stage */}
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <span
+                  className="font-bold tracking-wide truncate"
+                  style={{ color: accent }}
+                  title={snapshot.fullTitleLine}
+                >
+                  {snapshot.fullTitleLine}
+                </span>
+                <span className="font-bold text-[#FFC83D] tabular-nums shrink-0">
+                  {snapshot.gold} G
                 </span>
               </div>
-              <PixelBar kind="hp" ratio={hpPct} width={160} height={12} />
-            </div>
 
-            {/* STAMINA BAR (ui_bar_stamina.png) */}
-            <div>
-              <div className="flex justify-between text-[10px] mb-0.5">
-                <span className="text-[#00F0FF] font-bold">STM</span>
-                <span>
-                  {snapshot.stamina}/{snapshot.maxStamina}
-                </span>
-              </div>
-              <PixelBar kind="stamina" ratio={stamPct} width={160} height={12} />
-            </div>
-
-            {/* XP BAR (ui_bar_xp.png) */}
-            <div>
-              <div className="flex justify-between text-[9px] text-[#D9D2C3]/80 mb-0.5">
-                <span className="text-[#FFC83D] font-bold">EXP</span>
-                <span>
-                  {snapshot.xp}/{snapshot.xpToNext}
-                </span>
-              </div>
-              <PixelBar kind="xp" ratio={xpPct} width={160} height={10} />
-            </div>
-          </div>
-        </div>
-
-        {/* TOP-CENTER: Active Boss Bar OR Boss Title Card */}
-        <div className="flex flex-col items-center flex-1 max-w-xl mx-auto">
-          {snapshot.activeBoss && (
-            <div className="w-full bg-[#0B0D10]/95 border-2 border-[#FF3B3B] p-2.5 shadow-lg">
-              <div className="flex items-center justify-between text-xs font-bold mb-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[#FF3B3B] uppercase tracking-widest">
-                    {snapshot.activeBoss.name}
-                  </span>
-                  <span className="text-[10px] text-[#D9D2C3]/70">
-                    — {snapshot.activeBoss.subtitle}
+              {/* HP BAR */}
+              <div className="relative h-4 w-full bg-[#161A20] border border-[#3A3F47]">
+                <div
+                  className="h-full bg-[#FF3B3B] transition-all duration-75"
+                  style={{ width: `${hpPct}%` }}
+                />
+                <div className="absolute inset-0 flex items-center justify-between px-1.5 text-[11px] font-bold text-[#D9D2C3] tabular-nums">
+                  <span>HP</span>
+                  <span>
+                    {snapshot.hp} / {snapshot.maxHp}
                   </span>
                 </div>
-                <span className="px-1.5 py-0.5 bg-[#8B3A1E] text-[#FFC83D] text-[10px]">
-                  PHASE {snapshot.activeBoss.phase}/3
+              </div>
+
+              {/* STAMINA BAR */}
+              <div className="relative h-3.5 w-full bg-[#161A20] border border-[#3A3F47]">
+                <div
+                  className="h-full transition-all duration-75"
+                  style={{ width: `${stamPct}%`, backgroundColor: accent }}
+                />
+                <div className="absolute inset-0 flex items-center justify-between px-1.5 text-[10px] font-bold text-[#0B0D10] mix-blend-screen tabular-nums">
+                  <span className="text-[#D9D2C3]">STAM</span>
+                  <span className="text-[#D9D2C3]">
+                    {snapshot.stamina} / {snapshot.maxStamina}
+                  </span>
+                </div>
+              </div>
+
+              {/* CLASS MECHANIC BAR (Momentum / Magazine / Scrap Orbit) */}
+              <ClassMechanicBar
+                mech={snapshot.classMechanic}
+                accentColor={accent}
+                engine={engine}
+              />
+
+              {/* XP BAR */}
+              <div className="relative h-1.5 w-full bg-[#161A20] border border-[#3A3F47]">
+                <div
+                  className="h-full bg-[#D9D2C3] transition-all duration-100"
+                  style={{ width: `${xpPct}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-[#D9D2C3]/75 tabular-nums">
+                <span>
+                  ATK {snapshot.atk} · DEF {snapshot.def} · SPD {snapshot.speed}
+                </span>
+                <span>
+                  XP {snapshot.xp}/{snapshot.xpToNext}
                 </span>
               </div>
-              <div className="relative h-3.5 w-full bg-[#3A3F47] border border-[#0B0D10]">
+            </div>
+          </div>
+
+          {/* STATUS BAR ROW (Buffs on left framed in Signal, Debuffs on right framed in Blood) */}
+          {(buffs.length > 0 || debuffs.length > 0) && (
+            <div
+              data-hud-interactive="true"
+              className="pointer-events-auto flex flex-col gap-1 bg-[#0B0D10]/90 border border-[#3A3F47] px-2 py-1.5"
+            >
+              <div className="flex items-center justify-between gap-3">
+                {/* Buffs (up to 6) */}
+                <div className="flex items-center gap-1">
+                  {buffs.map((st) => (
+                    <StatusSlotBox key={st.id} st={st} onHover={setHoveredStatus} />
+                  ))}
+                </div>
+                {/* Debuffs (up to 6) */}
+                <div className="flex items-center gap-1">
+                  {debuffs.map((st) => (
+                    <StatusSlotBox key={st.id} st={st} onHover={setHoveredStatus} />
+                  ))}
+                </div>
+              </div>
+
+              {hoveredStatus && (
+                <div className="text-[10px] font-bold text-[#D9D2C3] tabular-nums">
+                  {hoveredStatus.tooltip}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Top-Center: Objective Line + Promotion Notice + Active Boss Health & Stagger Bar */}
+        <div className="flex flex-col items-center gap-2 max-w-xl w-full">
+          {obj && (
+            <div className="bg-[#0B0D10]/90 border border-[#3A3F47] px-3.5 py-1 text-xs text-[#D9D2C3] tracking-wide tabular-nums">
+              <span className="text-[#9E9789]">OBJECTIVE: </span>
+              <span className="font-bold" style={{ color: accent }}>
+                {obj.boss.name}
+              </span>
+              <span className="text-[#9E9789]">
+                {' '}
+                · {objDir} ({Math.round(obj.dist / 16)}m)
+              </span>
+            </div>
+          )}
+
+          {canPromote && (
+            <div className="bg-[#0B0D10]/95 border-2 border-[#FFC83D] px-3.5 py-1 text-xs font-bold text-[#FFC83D] tracking-wide">
+              PROMOTION READY AT KETTLE — VISIT HARLOW&apos;S TRADE REGISTER [E]
+            </div>
+          )}
+
+          {/* Large Boss Health Bar + Stagger Bar across the top when fighting a Boss */}
+          {snapshot.activeBoss && (
+            <div className="w-full bg-[#0B0D10]/95 border-2 border-[#FF3B3B] p-2 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <div>
+                  <span className="font-bold text-[#FF3B3B] uppercase tracking-wider">
+                    {snapshot.activeBoss.name}
+                  </span>
+                  <span className="text-[#9E9789] ml-2 text-[11px]">
+                    {snapshot.activeBoss.subtitle}
+                  </span>
+                </div>
+                <span className="text-[#FFC83D] font-bold text-[11px]">
+                  PHASE {snapshot.activeBoss.phase} / 3
+                </span>
+              </div>
+              <div className="relative h-4 w-full bg-[#161A20] border border-[#3A3F47]">
                 <div
-                  className="h-full bg-[#FF3B3B] transition-all duration-100"
+                  className="h-full bg-[#FF3B3B] transition-all duration-75"
                   style={{
                     width: `${Math.max(
                       0,
-                      Math.min(
-                        100,
-                        (snapshot.activeBoss.hp / snapshot.activeBoss.maxHp) * 100
-                      )
+                      Math.min(100, (snapshot.activeBoss.hp / snapshot.activeBoss.maxHp) * 100)
                     )}%`,
                   }}
                 />
                 <div className="absolute top-0 bottom-0 left-[30%] w-0.5 bg-[#0B0D10]" />
                 <div className="absolute top-0 bottom-0 left-[60%] w-0.5 bg-[#0B0D10]" />
-                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-[#D9D2C3]">
+                <div className="absolute inset-0 flex items-center justify-center text-[11px] font-bold text-[#D9D2C3] tabular-nums">
                   {snapshot.activeBoss.hp} / {snapshot.activeBoss.maxHp}
+                </div>
+              </div>
+
+              {/* Boss Stagger Meter */}
+              <div className="relative h-2.5 w-full bg-[#161A20] border border-[#3A3F47]">
+                <div
+                  className="h-full bg-[#FFC83D] transition-all duration-75"
+                  style={{
+                    width: `${
+                      snapshot.activeBoss.staggered
+                        ? 100
+                        : Math.max(0, Math.min(100, snapshot.activeBoss.staggerPct || 0))
+                    }%`,
+                  }}
+                />
+                <div className="absolute inset-0 flex items-center justify-between px-1.5 text-[9px] font-bold text-[#D9D2C3] tabular-nums">
+                  <span>STAGGER</span>
+                  <span className="text-[#FFC83D]">
+                    {snapshot.activeBoss.staggered
+                      ? 'STAGGERED (+35% DMG TAKEN)'
+                      : `${snapshot.activeBoss.staggerPct || 0}%`}
+                  </span>
                 </div>
               </div>
             </div>
           )}
 
+          {/* Boss Name Card on Spawn / Arena Entry */}
           {snapshot.bossNameCard && (
-            <div className="mt-3 px-6 py-2 bg-[#0B0D10]/95 border-y-2 border-[#FF3B3B] text-center">
-              <div className="text-base font-bold tracking-[0.2em] text-[#FF3B3B]">
-                {snapshot.bossNameCard.title}
+            <div className="mt-2 bg-[#0B0D10] border-2 border-[#FFC83D] px-8 py-3 text-center">
+              <div className="text-[10px] tracking-[0.25em] text-[#FFC83D] uppercase">
+                AREA BOSS DETECTED
               </div>
-              <div className="text-xs text-[#D9D2C3]">
+              <div className="text-xl font-bold tracking-wider text-[#D9D2C3] mt-0.5">
+                {snapshot.bossNameCard.name}
+              </div>
+              <div className="text-xs text-[#8B3A1E] mt-0.5">
                 {snapshot.bossNameCard.subtitle}
               </div>
             </div>
           )}
         </div>
 
-        {/* TOP-RIGHT: Minimap Frame (/assets/ui_minimap_frame.png) + Area Info */}
-        <div
-          data-hud-interactive="true"
-          className="pointer-events-auto flex flex-col items-end gap-2"
-        >
-          <div className="flex items-start gap-2.5 bg-[#0B0D10]/95 border-2 border-[#3A3F47] p-2">
-            <div className="flex flex-col justify-between text-right min-w-[135px]">
-              <div>
-                <div className="text-xs font-bold text-[#00F0FF] uppercase tracking-wider">
-                  {snapshot.areaName}
-                </div>
-                <div className="text-[10px] text-[#D9D2C3]/75">
-                  {snapshot.areaSubtitle}
-                </div>
-              </div>
-
-              <div className="mt-2">
-                {snapshot.isSafeZone ? (
-                  <span className="inline-block px-1.5 py-0.5 bg-[#1F4D4A] text-[#00F0FF] text-[10px] font-bold">
-                    SAFE CAMP • HP REGEN
-                  </span>
-                ) : snapshot.stormActive ? (
-                  <span className="inline-block px-1.5 py-0.5 bg-[#8B3A1E] text-[#FFC83D] text-[10px] font-bold">
-                    ASH SQUALL ACTIVE
-                  </span>
-                ) : (
-                  <span className="inline-block px-1.5 py-0.5 bg-[#3A3F47]/60 text-[#D9D2C3] text-[10px]">
-                    HOSTILE SECTOR
-                  </span>
-                )}
-              </div>
-
-              {snapshot.objective && (
-                <div className="mt-2 pt-1.5 border-t border-[#3A3F47] text-[10px]">
-                  <div className="text-[#FFC83D] font-bold">
-                    TARGET: {snapshot.objective.name}
-                  </div>
-                  <div className="text-[#D9D2C3]/80">
-                    {snapshot.objective.direction} • {snapshot.objective.distance}m
-                  </div>
-                </div>
-              )}
+        {/* Top-Right: Minimap & Current Zone Indicator */}
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="bg-[#0B0D10]/90 border border-[#3A3F47] px-2.5 py-1 text-right">
+            <div className="text-xs font-bold text-[#D9D2C3] uppercase tracking-wider">
+              {snapshot.areaName}
             </div>
-
-            <div className="relative w-[96px] h-[96px]">
-              <canvas
-                ref={minimapRef}
-                width={88}
-                height={88}
-                className="pixelated absolute top-[4px] left-[4px] block"
-              />
-              <img
-                src="/assets/ui_minimap_frame.png"
-                alt="Minimap Frame"
-                width={96}
-                height={96}
-                className="pixelated pointer-events-none relative z-10 block w-full h-full"
-              />
+            <div className="text-[10px] text-[#9E9789]">
+              {snapshot.areaSubtitle}
+              {snapshot.stormActive ? ' · DUST STORM' : ''}
             </div>
           </div>
-
-          <div className="flex items-center gap-1.5">
-            {snapshot.nearUme && (
-              <button
-                onClick={() => engine.setUiState('shop')}
-                className="px-2.5 py-1 bg-[#8B3A1E] hover:bg-[#8B3A1E]/80 border border-[#FFC83D] text-[#FFC83D] text-xs font-bold cursor-pointer"
-              >
-                [E] UME&apos;S COUNTER
-              </button>
-            )}
-            <button
-              onClick={() => engine.setUiState('inventory')}
-              className="px-2.5 py-1 bg-[#0B0D10]/90 hover:bg-[#3A3F47] border border-[#3A3F47] text-xs font-bold cursor-pointer"
-            >
-              [I] GEAR
-            </button>
-            <button
-              onClick={() => engine.setUiState('skills')}
-              className={`px-2.5 py-1 bg-[#0B0D10]/90 hover:bg-[#3A3F47] border text-xs font-bold cursor-pointer ${
-                snapshot.skillPoints > 0
-                  ? 'border-[#00F0FF] text-[#00F0FF]'
-                  : 'border-[#3A3F47] text-[#D9D2C3]'
-              }`}
-            >
-              [K] SKILLS {snapshot.skillPoints > 0 ? `(+${snapshot.skillPoints})` : ''}
-            </button>
-            <button
-              onClick={() => {
-                sound.toggleMute();
-                engine.notifyUi();
-              }}
-              className="px-2 py-1 bg-[#0B0D10]/90 hover:bg-[#3A3F47] border border-[#3A3F47] text-xs cursor-pointer"
-            >
-              {sound.muted ? 'MUTE' : 'SFX'}
-            </button>
-            <button
-              onClick={() => engine.setUiState('pause')}
-              className="px-2.5 py-1 bg-[#0B0D10]/90 hover:bg-[#3A3F47] border border-[#3A3F47] text-xs font-bold cursor-pointer"
-            >
-              [ESC]
-            </button>
-          </div>
+          <Minimap
+            playerX={snapshot.x}
+            playerY={snapshot.y}
+            defeatedBosses={snapshot.defeatedBosses}
+            accentColor={accent}
+          />
         </div>
       </div>
 
-      {/* BOTTOM ROW: Active Skills Bar (1, 2, 3, SPACE, R Ultimate, & Q/F Supplies) */}
-      <div className="flex items-end justify-center">
+      {/* BOTTOM ACTION BAR: Supplies (Q/F/Z/X/C), Skills (1/2/3), Ultimate (R), Panel Shortcuts */}
+      <div className="flex items-end justify-between gap-3">
+        {/* Left: Consumable Quick Slots & Panel Buttons */}
         <div
           data-hud-interactive="true"
-          className="pointer-events-auto flex items-center gap-2.5 bg-[#0B0D10]/95 border-2 border-[#3A3F47] px-3 py-2 shadow-lg"
+          className="pointer-events-auto flex items-center gap-1.5 bg-[#0B0D10]/90 border-2 border-[#3A3F47] p-2"
         >
-          {skillsList.map((sk) => {
-            const onCd = sk.cd > 0.05;
-            const cdPct = onCd ? Math.min(100, (sk.cd / sk.maxCd) * 100) : 0;
+          {quickSupplies.map((sup) => {
+            const count = snapshot.supplies[sup.id] || 0;
             return (
-              <div
-                key={sk.id}
-                className="relative flex flex-col items-center"
-                title={`${sk.name} (Lv.${sk.lvl})`}
+              <button
+                key={sup.id}
+                onClick={() => engine.player.useSupply(sup.id, engine.particles)}
+                className="relative flex flex-col items-center justify-center w-11 h-12 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] cursor-pointer"
+                title={sup.label}
               >
-                <div className="relative w-11 h-11 border border-[#3A3F47] bg-[#0B0D10] flex items-center justify-center">
-                  <PixelIcon iconType={sk.id} size={36} />
+                <PixelIcon itemId={sup.id} size={22} />
+                <span className="text-[10px] font-bold text-[#D9D2C3] mt-0.5 tabular-nums">
+                  x{count}
+                </span>
+                <span
+                  className="absolute top-0.5 left-1 text-[9px] font-bold"
+                  style={{ color: accent }}
+                >
+                  {sup.key}
+                </span>
+              </button>
+            );
+          })}
+
+          <div className="h-10 w-px bg-[#3A3F47] mx-0.5" />
+
+          <button
+            onClick={() => engine.setUiState('inventory')}
+            className="px-2.5 py-2 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] whitespace-nowrap cursor-pointer"
+          >
+            [I] GEAR
+          </button>
+
+          <button
+            onClick={() => engine.setUiState('skills')}
+            className={`px-2.5 py-2 bg-[#161A20] border text-xs font-bold whitespace-nowrap cursor-pointer ${
+              snapshot.skillPoints > 0
+                ? 'border-[#00F0FF] text-[#00F0FF]'
+                : 'border-[#3A3F47] text-[#D9D2C3] hover:border-[#00F0FF]'
+            }`}
+          >
+            [K] SKILLS {snapshot.skillPoints > 0 ? `(+${snapshot.skillPoints})` : ''}
+          </button>
+
+          {snapshot.nearUme && (
+            <button
+              onClick={() => engine.setUiState('shop')}
+              className="px-2.5 py-2 bg-[#1F4D4A] border border-[#00F0FF] text-xs font-bold text-[#00F0FF] whitespace-nowrap cursor-pointer"
+            >
+              [E] UME SHOP
+            </button>
+          )}
+
+          {snapshot.nearHarlow && (
+            <button
+              onClick={() => engine.setUiState('harlow')}
+              className="px-2.5 py-2 bg-[#161A20] border-2 border-[#FFC83D] text-xs font-bold text-[#FFC83D] whitespace-nowrap cursor-pointer"
+            >
+              [E] HARLOW · REGISTER
+            </button>
+          )}
+        </div>
+
+        {/* Center: Three Class Skill Icons with Hotkeys & Cooldown Sweeps + Ultimate Charge Ring */}
+        <div className="flex items-center gap-3 bg-[#0B0D10]/90 border-2 border-[#3A3F47] px-3.5 py-2">
+          {skillList.map((sk) => {
+            const onCd = sk.cd > 0.05;
+            const cdRatio = sk.maxCd > 0 ? Math.min(1, sk.cd / sk.maxCd) : 0;
+            const lowStam = snapshot.stamina < sk.cost;
+
+            return (
+              <div key={sk.id} className="flex flex-col items-center">
+                <div
+                  className="relative w-13 h-13 bg-[#161A20] border-2 flex items-center justify-center"
+                  style={{
+                    borderColor: onCd
+                      ? '#3A3F47'
+                      : lowStam
+                      ? PALETTE.rust
+                      : accent,
+                  }}
+                >
+                  <PixelIcon itemId={sk.icon} size={32} />
+
+                  {/* Cooldown vertical sweep overlay */}
                   {onCd && (
                     <div
-                      className="absolute bottom-0 left-0 right-0 bg-[#0B0D10]/85 flex items-center justify-center text-xs font-bold text-[#FF3B3B]"
-                      style={{ height: `${cdPct}%` }}
+                      className="absolute bottom-0 left-0 right-0 bg-[#0B0D10]/85 flex items-center justify-center"
+                      style={{ height: `${cdRatio * 100}%` }}
                     >
-                      {sk.cd.toFixed(1)}
+                      <span className="text-xs font-bold text-[#FFC83D] tabular-nums">
+                        {sk.cd.toFixed(1)}
+                      </span>
                     </div>
                   )}
-                  <span className="absolute top-0.5 left-1 text-[10px] font-bold text-[#00F0FF]">
-                    {sk.key}
+
+                  <span
+                    className="absolute top-0.5 left-1 text-[10px] font-bold"
+                    style={{ color: accent }}
+                  >
+                    {sk.hotkey}
                   </span>
-                  <span className="absolute bottom-0.5 right-1 text-[9px] text-[#FFC83D]">
-                    L{sk.lvl}
+                  <span className="absolute bottom-0.5 right-1 text-[9px] text-[#D9D2C3]/80">
+                    L{sk.level}
                   </span>
                 </div>
-                <span className="text-[10px] mt-0.5 text-[#D9D2C3]/85">
+                <span className="text-[10px] text-[#D9D2C3] mt-1 font-medium whitespace-nowrap">
                   {sk.name}
                 </span>
               </div>
             );
           })}
 
-          <div className="flex flex-col items-center">
-            <div className="relative w-11 h-11 border border-[#3A3F47] bg-[#0B0D10] flex flex-col items-center justify-center">
-              <span className="text-[10px] font-bold text-[#00F0FF]">SPC</span>
-              <span className="text-[9px] text-[#D9D2C3]">STEP</span>
-              {snapshot.cooldowns.dodge > 0.05 && (
-                <div className="absolute inset-0 bg-[#0B0D10]/85 flex items-center justify-center text-xs font-bold text-[#FF3B3B]">
-                  {snapshot.cooldowns.dodge.toFixed(1)}
-                </div>
-              )}
-            </div>
-            <span className="text-[10px] mt-0.5 text-[#D9D2C3]/85">Dodge</span>
-          </div>
-
-          <div className="h-10 w-0.5 bg-[#3A3F47] mx-1" />
-
-          {/* R: SEVEN CUTS ULTIMATE */}
+          {/* Dodge Indicator */}
           <div className="flex flex-col items-center">
             <div
-              className={`relative w-12 h-12 border-2 flex items-center justify-center ${
-                ultPct >= 100
-                  ? 'border-[#00F0FF] bg-[#1F4D4A]/50 animate-pulse'
-                  : 'border-[#3A3F47] bg-[#0B0D10]'
+              className={`relative w-13 h-13 bg-[#161A20] border-2 flex items-center justify-center ${
+                snapshot.cooldowns.dodge > 0.05 ? 'border-[#3A3F47]' : 'border-[#D9D2C3]'
               }`}
             >
-              <PixelIcon
-                iconType={ultPct >= 100 ? 'sevenCuts' : 'locked'}
-                size={38}
-              />
-              <span className="absolute top-0.5 left-1 text-[10px] font-bold text-[#00F0FF]">
-                R
-              </span>
-              <span className="absolute bottom-0.5 right-1 text-[9px] font-bold text-[#FFC83D]">
-                {Math.floor(ultPct)}%
+              <span className="text-[11px] font-bold text-[#D9D2C3]">ROLL</span>
+              {snapshot.cooldowns.dodge > 0.05 && (
+                <div
+                  className="absolute bottom-0 left-0 right-0 bg-[#0B0D10]/85 flex items-center justify-center"
+                  style={{
+                    height: `${Math.min(
+                      100,
+                      (snapshot.cooldowns.dodge / snapshot.maxCooldowns.dodge) * 100
+                    )}%`,
+                  }}
+                >
+                  <span className="text-xs font-bold text-[#D9D2C3] tabular-nums">
+                    {snapshot.cooldowns.dodge.toFixed(1)}
+                  </span>
+                </div>
+              )}
+              <span className="absolute top-0.5 left-1 text-[9px] font-bold text-[#9E9789]">
+                SPC
               </span>
             </div>
-            <span
-              className={`text-[10px] mt-0.5 font-bold ${
-                ultPct >= 100 ? 'text-[#00F0FF]' : 'text-[#D9D2C3]/70'
-              }`}
-            >
-              Seven Cuts
-            </span>
+            <span className="text-[10px] text-[#9E9789] mt-1 whitespace-nowrap">Dodge</span>
           </div>
 
-          <div className="h-10 w-0.5 bg-[#3A3F47] mx-1" />
+          <div className="h-12 w-px bg-[#3A3F47] mx-1" />
 
-          {/* Q & F SUPPLIES */}
-          <button
-            onClick={() => engine.player.useSupply('gauzeRoll', engine.particles)}
-            className="flex flex-col items-center cursor-pointer"
-          >
-            <div className="relative w-10 h-10 border border-[#3A3F47] bg-[#0B0D10] flex items-center justify-center">
-              <PixelIcon iconType="gauzeRoll" size={32} />
-              <span className="absolute top-0.5 left-1 text-[9px] font-bold text-[#00F0FF]">
-                Q
-              </span>
-              <span className="absolute bottom-0.5 right-1 text-[10px] font-bold text-[#D9D2C3]">
-                x{snapshot.supplies.gauzeRoll || 0}
-              </span>
+          {/* Ultimate Charge Ring [R] */}
+          <div className="flex flex-col items-center">
+            <div
+              onClick={() => {
+                engine.player.useUltimate(
+                  engine.keys.worldMouseX,
+                  engine.keys.worldMouseY,
+                  engine.spawner.enemies,
+                  engine.projectiles,
+                  engine.particles,
+                  engine.camera,
+                  engine.world,
+                  engine.settings
+                );
+              }}
+              className={`relative w-14 h-14 flex items-center justify-center cursor-pointer transition-transform ${
+                snapshot.invalidUltShake ? 'translate-x-1 duration-75 text-[#FF3B3B]' : ''
+              } ${snapshot.ultReadyFlash ? 'scale-105' : ''}`}
+              title={
+                ultReady
+                  ? `[R] ${snapshot.ultimateDef?.name || 'Ultimate'} Ready!`
+                  : `Charging ${snapshot.ultimateDef?.name || 'Ultimate'} (${Math.floor(ultPct)}%)`
+              }
+            >
+              <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="23"
+                  fill="#0B0D10"
+                  stroke="#3A3F47"
+                  strokeWidth="4"
+                />
+                <circle
+                  cx="28"
+                  cy="28"
+                  r="23"
+                  fill="none"
+                  stroke={ultReady ? accent : snapshot.invalidUltShake ? PALETTE.blood : PALETTE.brass}
+                  strokeWidth="4"
+                  strokeDasharray={2 * Math.PI * 23}
+                  strokeDashoffset={2 * Math.PI * 23 * (1 - ultPct / 100)}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span
+                  className="text-xs font-bold tabular-nums"
+                  style={{ color: ultReady ? accent : PALETTE.bone }}
+                >
+                  {ultReady ? 'READY' : `${Math.floor(ultPct)}%`}
+                </span>
+                <span className="text-[9px] font-bold text-[#FFC83D]">[R]</span>
+              </div>
             </div>
-            <span className="text-[9px] mt-0.5 text-[#D9D2C3]/80">Gauze</span>
+            <span
+              className="text-[10px] font-bold mt-0.5 whitespace-nowrap"
+              style={{ color: accent }}
+            >
+              {snapshot.ultimateDef?.name || 'Ultimate'}
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Quick Mute & Pause Affordance */}
+        <div
+          data-hud-interactive="true"
+          className="pointer-events-auto flex items-center gap-2 bg-[#0B0D10]/90 border-2 border-[#3A3F47] p-2"
+        >
+          <button
+            onClick={() => {
+              sound.toggleMute();
+              engine.notifyUi();
+            }}
+            className="px-2.5 py-2 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] whitespace-nowrap cursor-pointer"
+          >
+            {sound.muted ? 'AUDIO: OFF' : 'AUDIO: ON'}
           </button>
-
           <button
-            onClick={() => engine.player.useSupply('sugarTin', engine.particles)}
-            className="flex flex-col items-center cursor-pointer"
+            onClick={() => engine.setUiState('pause')}
+            className="px-2.5 py-2 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] whitespace-nowrap cursor-pointer"
           >
-            <div className="relative w-10 h-10 border border-[#3A3F47] bg-[#0B0D10] flex items-center justify-center">
-              <PixelIcon iconType="sugarTin" size={32} />
-              <span className="absolute top-0.5 left-1 text-[9px] font-bold text-[#00F0FF]">
-                F
-              </span>
-              <span className="absolute bottom-0.5 right-1 text-[10px] font-bold text-[#D9D2C3]">
-                x{snapshot.supplies.sugarTin || 0}
-              </span>
-            </div>
-            <span className="text-[9px] mt-0.5 text-[#D9D2C3]/80">Sugar</span>
+            [ESC] PAUSE
           </button>
         </div>
       </div>
     </div>
   );
 }
+
+export default HUD;

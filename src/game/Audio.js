@@ -5,6 +5,10 @@
  * - Ground Break: low sine drop plus noise burst
  * - Rail Spike: sharp metal ping
  * - Seven Cuts: 7 rising ticks, 200ms dead silence, then one big crack
+ * - Rook (Springgun, Reload, Perfect Reload, Tripwire, Mine)
+ * - Ines (Alternator hum, Magnet throw, Pull, Spin Up, Lump, Scrapfall)
+ * - Status Effects: Bleed (wet drip), Burn (crackle), Corrode (hiss),
+ *   Stun (dull ring), Buff apply (stamp tone), Buff end (soft click), Promotion Stamp
  */
 
 class SoundSystem {
@@ -36,7 +40,7 @@ class SoundSystem {
   }
 
   _canPlay() {
-    if (this.muted) return false;
+    if (this.muted || this.isSilenced()) return false;
     this.init();
     return !!this.ctx;
   }
@@ -84,6 +88,92 @@ class SoundSystem {
     filter.connect(nGain);
     nGain.connect(this.ctx.destination);
     noise.start(now);
+  }
+
+  playSpringgunShot(heavy = false) {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+
+    // Leaf-spring twang + nail-gun snap
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = heavy ? 'sawtooth' : 'triangle';
+    osc.frequency.setValueAtTime(heavy ? 480 : 720, now);
+    osc.frequency.exponentialRampToValueAtTime(heavy ? 110 : 185, now + (heavy ? 0.16 : 0.09));
+
+    gain.gain.setValueAtTime((heavy ? 0.34 : 0.22) * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + (heavy ? 0.17 : 0.1));
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + (heavy ? 0.17 : 0.1));
+  }
+
+  playReloadStart() {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(280, now);
+    osc.frequency.setValueAtTime(360, now + 0.04);
+    gain.gain.setValueAtTime(0.16 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.09);
+  }
+
+  playPerfectReload() {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const freqs = [880, 1320];
+    freqs.forEach((f, i) => {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(f, now + i * 0.04);
+      gain.gain.setValueAtTime(0.28 * this.masterVolume, now + i * 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.04 + 0.14);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now + i * 0.04);
+      osc.stop(now + i * 0.04 + 0.14);
+    });
+  }
+
+  playMagnetThrow(emptyPulse = false) {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = emptyPulse ? 'sine' : 'sawtooth';
+    osc.frequency.setValueAtTime(emptyPulse ? 240 : 540, now);
+    osc.frequency.exponentialRampToValueAtTime(emptyPulse ? 120 : 880, now + 0.1);
+    gain.gain.setValueAtTime(0.2 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.11);
+  }
+
+  playMagnetPull() {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(110, now);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.24);
+    gain.gain.setValueAtTime(0.32 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.26);
   }
 
   playHit(isCrit = false) {
@@ -144,9 +234,6 @@ class SoundSystem {
     noise.start(now);
   }
 
-  /**
-   * SKILL 1 — Lunge: Filtered noise sweep
-   */
   playSkillLunge() {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
@@ -170,14 +257,10 @@ class SoundSystem {
     noise.start(now);
   }
 
-  /**
-   * SKILL 2 — Ground Break: Low sine drop plus noise burst
-   */
   playSkillGroundBreak() {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
 
-    // Low sine drop
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sine';
@@ -192,7 +275,6 @@ class SoundSystem {
     osc.start(now);
     osc.stop(now + 0.4);
 
-    // Plus noise burst
     const noise = this.ctx.createBufferSource();
     noise.buffer = this._createNoiseBuffer(0.28);
     const filter = this.ctx.createBiquadFilter();
@@ -208,14 +290,10 @@ class SoundSystem {
     noise.start(now);
   }
 
-  /**
-   * SKILL 3 — Rail Spike: Sharp metal ping
-   */
   playSkillRailSpike() {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
 
-    // High resonant steel rail ping (two inharmonic partials)
     const freqs = [1480, 2910];
     freqs.forEach((f, idx) => {
       const osc = this.ctx.createOscillator();
@@ -234,13 +312,6 @@ class SoundSystem {
     });
   }
 
-  /**
-   * ULTIMATE — Seven Cuts:
-   * - Cut-in start cue
-   * - 7 rising ticks (playUltimateCut)
-   * - 200ms dead silence (nothing played)
-   * - One big crack on release (playUltimateReleaseCrack)
-   */
   playUltimateStart() {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
@@ -260,7 +331,6 @@ class SoundSystem {
   playUltimateCut(cutIndex = 0) {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
-    // Crisp rising metallic tick (0..6)
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'square';
@@ -281,7 +351,6 @@ class SoundSystem {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
 
-    // Sharp transient crack + deep rail shatter
     const noise = this.ctx.createBufferSource();
     noise.buffer = this._createNoiseBuffer(0.36);
     const filter = this.ctx.createBiquadFilter();
@@ -308,6 +377,138 @@ class SoundSystem {
     oGain.connect(this.ctx.destination);
     osc.start(now);
     osc.stop(now + 0.36);
+  }
+
+  // --- STATUS EFFECT SYNTHESIZED AUDIO ---
+
+  playStatusBleed() {
+    // Short wet drip
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(980, now + 0.045);
+    gain.gain.setValueAtTime(0.14 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.05);
+  }
+
+  playStatusBurn() {
+    // Short crackle
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this._createNoiseBuffer(0.06);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2200, now);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.18 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start(now);
+  }
+
+  playStatusCorrode() {
+    // Short lye hiss
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this._createNoiseBuffer(0.11);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'highpass';
+    filter.frequency.setValueAtTime(3400, now);
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.18 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start(now);
+  }
+
+  playStatusStun() {
+    // Dull metallic ring
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(610, now);
+    osc.frequency.exponentialRampToValueAtTime(390, now + 0.18);
+    gain.gain.setValueAtTime(0.24 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.19);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.19);
+  }
+
+  playBuffApply() {
+    // Stamp-like tone when a buff lands
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(220, now);
+    osc.frequency.setValueAtTime(330, now + 0.03);
+    gain.gain.setValueAtTime(0.2 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.11);
+  }
+
+  playBuffExpire() {
+    // Soft click when a buff ends
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(180, now + 0.025);
+    gain.gain.setValueAtTime(0.1 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.03);
+  }
+
+  playStamp() {
+    // Heavy rubber stamp hit for Harlow promotion & skill node unlock
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(150, now);
+    osc.frequency.exponentialRampToValueAtTime(42, now + 0.12);
+    gain.gain.setValueAtTime(0.45 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.13);
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this._createNoiseBuffer(0.08);
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(0.28 * this.masterVolume, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    noise.connect(nGain);
+    nGain.connect(this.ctx.destination);
+    noise.start(now);
   }
 
   playLevelUp() {
@@ -359,6 +560,56 @@ class SoundSystem {
     osc.stop(now + 0.04);
   }
 
+  playBuySell() {
+    this.playCoin();
+  }
+
+  playHarlowStamp() {
+    this.playStamp();
+  }
+
+  playUltimateReady() {
+    // Short low resonant tone when the ultimate ring fills
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(165, now);
+    osc.frequency.exponentialRampToValueAtTime(220, now + 0.18);
+    gain.gain.setValueAtTime(0.32 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.22);
+  }
+
+  playInvalidBuzz() {
+    // Short dull buzz when R is pressed without a valid target within 300px or in Kettle
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(98, now);
+    osc.frequency.setValueAtTime(82, now + 0.07);
+    gain.gain.setValueAtTime(0.26 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.16);
+  }
+
+  setSilenceWindow(durationSec = 0.2) {
+    this.silenceUntil = performance.now() + durationSec * 1000;
+  }
+
+  isSilenced() {
+    return this.silenceUntil && performance.now() < this.silenceUntil;
+  }
+
   playBossAlert() {
     if (!this._canPlay()) return;
     const now = this.ctx.currentTime;
@@ -373,62 +624,6 @@ class SoundSystem {
     gain.connect(this.ctx.destination);
     osc.start(now);
     osc.stop(now + 0.55);
-  }
-
-  playHitEnemy(isCrit = false) {
-    this.playHit(isCrit);
-  }
-
-  playLunge() {
-    this.playSkillLunge();
-  }
-
-  playGroundBreak() {
-    this.playSkillGroundBreak();
-  }
-
-  playRailSpike() {
-    this.playSkillRailSpike();
-  }
-
-  playSevenCutsStart() {
-    this.playUltimateStart();
-  }
-
-  playSevenCutsTick(cutIndex = 0) {
-    this.playUltimateCut(cutIndex);
-  }
-
-  playSevenCutsDetonate() {
-    this.playUltimateReleaseCrack();
-  }
-
-  playHeal() {
-    if (!this._canPlay()) return;
-    const now = this.ctx.currentTime;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(523.25, now);
-    osc.frequency.exponentialRampToValueAtTime(783.99, now + 0.16);
-    gain.gain.setValueAtTime(0.22 * this.masterVolume, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
-    osc.connect(gain);
-    gain.connect(this.ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.18);
-  }
-
-  playPlayerDeath() {
-    this.playBossAlert();
-  }
-
-  playEnemyDeath(isBoss = false) {
-    this.playHit(isBoss);
-  }
-
-  playBossPhase() {
-    this.playBossAlert();
   }
 }
 

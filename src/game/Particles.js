@@ -1,303 +1,905 @@
 /**
- * GRAVEL SKY — Manifest-Driven Skill Effect Strips, Ground Cracks, & Damage Numbers
- * All visual effects are drawn from preloaded sprite strips in /public/assets/manifest.json:
- * - fx_slash_smear (5 frames, 128x128)
- * - fx_dash_streak (4 frames, 160x48)
- * - fx_hit_cross (3 frames, 48x48)
- * - fx_shards (4 frames, 64x64)
- * - fx_shock_ring (6 frames, 256x256)
- * - fx_ground_cracks (3 variants, 192x192)
- * - fx_dust_puff (4 frames, 48x48)
- * - fx_spark (3 frames, 24x24)
- * - fx_ult_slash (3 variants, 320x40)
+ * GRAVEL SKY — Object-Pooled Particles, Ground Decals, Debris Parts, Cracks, & Skill VFX
+ * - All effects snap to integer pixels and step at 24 fps (1/24s).
+ * - Zero gradients, zero shadowBlur, zero alpha blending (uses Bayer dither or color-step fading).
+ * - Each effect uses at most 3 colors.
+ * - Ground stain decals capped at 60, lasting 20s.
  */
 
 import { PALETTE } from '../data/config.js';
-import { assets } from './AssetLoader.js';
+import {
+  drawPixelLine,
+  drawBresenhamCircle,
+  drawDitheredGlowRings,
+  passDither,
+  angleTo8Dir,
+} from './PixelArt.js';
+import { spriteRegistry } from './Sprites.js';
 
 export class ParticlePool {
-  constructor(maxFx = 180, maxTexts = 40, maxCracks = 32) {
-    this.fxList = Array.from({ length: maxFx }, () => ({
+  constructor(maxParticles = 500, maxNumbers = 80, maxSlashes = 32) {
+    // Square particles, dust puffs (3 sizes), lifted rocks with ground shades, cross-cut flashes
+    this.particles = Array.from({ length: maxParticles }, () => ({
       active: false,
-      assetId: 'fx_spark',
+      kind: 'pixel', // 'pixel' | 'dust' | 'rock' | 'ring' | 'crossFlash' | 'splitHalf'
       x: 0,
       y: 0,
+      z: 0, // height above ground for lifted rocks & tumbling debris
       vx: 0,
       vy: 0,
-      frame: 0,
-      timer: 0,
-      fps: 24,
-      flipX: false,
-      scale: 1,
-      tintColor: null,
-      layer: 'air', // 'ground' or 'air'
-    }));
-
-    this.cracks = Array.from({ length: maxCracks }, () => ({
-      active: false,
-      x: 0,
-      y: 0,
-      variant: 0,
+      vz: 0,
+      size: 2,
+      color: PALETTE.bone,
+      color2: PALETTE.rust,
       life: 0,
-      maxLife: 4.0,
+      maxLife: 0.4,
+      ringMaxRadius: 40,
+      splitCanvas: null,
+      splitClipSide: 0,
     }));
 
-    this.texts = Array.from({ length: maxTexts }, () => ({
+    // Ground stain decals & wet Leech trails (cap 60 decals, 20s lifetime)
+    this.decals = [];
+    this.maxDecals = 60;
+
+    // Tumbling 8-angle junk debris parts (can lid, goggles, wire, tarp, bone/rust shards)
+    this.debris = Array.from({ length: 120 }, () => ({
+      active: false,
+      partType: 'canLid',
+      x: 0,
+      y: 0,
+      z: 0,
+      vx: 0,
+      vy: 0,
+      vz: 0,
+      angle: 0,
+      vAngle: 8,
+      life: 0,
+      maxLife: 1.2,
+    }));
+
+    // Ground Break 8 jagged crack lines in soot with signal glowing inside (fading over 600ms)
+    this.groundCracks = Array.from({ length: 16 }, () => ({
+      active: false,
+      cx: 0,
+      cy: 0,
+      life: 0,
+      maxLife: 0.6,
+      arms: [], // 8 jagged polylines
+    }));
+
+    // Shrinking Lunge slash lines & Seven Cuts tapered white slash lines
+    this.slashes = Array.from({ length: maxSlashes }, () => ({
+      active: false,
+      kind: 'lunge', // 'lunge' (shrinks from both ends over 150ms) | 'sevenCuts' (tapered white slash)
+      x1: 0,
+      y1: 0,
+      x2: 0,
+      y2: 0,
+      color: PALETTE.signal,
+      life: 0,
+      maxLife: 0.15,
+    }));
+
+    // Floating integer damage numbers (crits in brass)
+    this.numbers = Array.from({ length: maxNumbers }, () => ({
       active: false,
       x: 0,
       y: 0,
-      vy: 0,
+      vy: -38,
       text: '',
       color: PALETTE.bone,
-      life: 0,
-      maxLife: 0.65,
       isCrit: false,
+      life: 0,
+      maxLife: 0.7,
     }));
+
+    // Loot & Grounded Scrap Pickups (gold, xp, item drops, and magnetic scrap for Ines)
+    this.pickups = [];
+    this.hitStopTimer = 0;
   }
 
-  spawnStripFx(assetId, x, y, opts = {}) {
-    const spec = assets.getSpec(assetId);
-    const fps = opts.fps || spec?.fps || 24;
-    for (let i = 0; i < this.fxList.length; i++) {
-      const fx = this.fxList[i];
-      if (!fx.active) {
-        fx.active = true;
-        fx.assetId = assetId;
-        fx.x = Math.round(x);
-        fx.y = Math.round(y);
-        fx.vx = opts.vx || 0;
-        fx.vy = opts.vy || 0;
-        fx.frame = opts.frame ?? 0;
-        fx.timer = 0;
-        fx.fps = fps;
-        fx.flipX = !!opts.flipX;
-        fx.scale = opts.scale || 1;
-        fx.tintColor = opts.tintColor || null;
-        fx.layer = opts.layer || 'air';
-        return fx;
+  clear() {
+    for (let i = 0; i < this.particles.length; i++) this.particles[i].active = false;
+    for (let i = 0; i < this.debris.length; i++) this.debris[i].active = false;
+    for (let i = 0; i < this.groundCracks.length; i++) this.groundCracks[i].active = false;
+    for (let i = 0; i < this.slashes.length; i++) this.slashes[i].active = false;
+    for (let i = 0; i < this.numbers.length; i++) this.numbers[i].active = false;
+    this.decals = [];
+    this.pickups = [];
+    this.hitStopTimer = 0;
+  }
+
+  triggerHitStop(duration = 0.05) {
+    this.hitStopTimer = Math.max(this.hitStopTimer, duration);
+  }
+
+  updateHitStop(dt) {
+    if (this.hitStopTimer > 0) {
+      this.hitStopTimer = Math.max(0, this.hitStopTimer - dt);
+      return true;
+    }
+    return false;
+  }
+
+  spawnPickup(x, y, type = 'gold', value = 5, itemId = null) {
+    const ang = Math.random() * Math.PI * 2;
+    const dist = 6 + Math.random() * 14;
+    this.pickups.push({
+      active: true,
+      type, // 'gold' | 'xp' | 'item' | 'scrap'
+      value,
+      itemId,
+      x: Math.round(x + Math.cos(ang) * dist),
+      y: Math.round(y + Math.sin(ang) * dist),
+      life: 25.0,
+      variant: Math.floor(Math.random() * 8),
+    });
+  }
+
+  getActiveScrapPickups() {
+    return this.pickups.filter((pk) => pk.active && pk.type === 'scrap');
+  }
+
+  // Add ground stain decal (cap 60, 20s duration)
+  spawnDecal(x, y, colorOrType = '#1A1312', radius = 5, life = 20.0) {
+    let color = colorOrType;
+    let r = radius;
+    if (colorOrType === 'scorch') {
+      color = '#14171C';
+      r = Math.max(8, Math.round(radius * 0.25));
+    } else if (colorOrType === 'crater') {
+      color = '#14171C';
+      r = Math.max(12, Math.round(radius * 0.3));
+    } else if (colorOrType === 'slash') {
+      color = '#1D2229';
+      r = 6;
+    } else if (colorOrType === 'footprint') {
+      color = '#161A20';
+      r = 2;
+    }
+    if (this.decals.length >= this.maxDecals) {
+      this.decals.shift();
+    }
+    this.decals.push({
+      x: Math.round(x),
+      y: Math.round(y),
+      color,
+      radius: Math.round(r),
+      life,
+      maxLife: life,
+    });
+  }
+
+  // Spawn tumbling 8-angle junk debris when an enemy dies or gets cut
+  spawnDebris(x, y, partType = 'canLid', count = 3) {
+    for (let c = 0; c < count; c++) {
+      for (let i = 0; i < this.debris.length; i++) {
+        const d = this.debris[i];
+        if (!d.active) {
+          d.active = true;
+          d.partType = partType;
+          d.x = x;
+          d.y = y;
+          d.z = 4 + Math.random() * 6;
+          const ang = Math.random() * Math.PI * 2;
+          const spd = 35 + Math.random() * 75;
+          d.vx = Math.cos(ang) * spd;
+          d.vy = Math.sin(ang) * spd;
+          d.vz = 65 + Math.random() * 55;
+          d.angle = Math.random() * Math.PI * 2;
+          d.vAngle = (Math.random() > 0.5 ? 1 : -1) * (8 + Math.random() * 10);
+          d.life = 0.9 + Math.random() * 0.5;
+          d.maxLife = d.life;
+          break;
+        }
+      }
+    }
+  }
+
+  spawnParticle({
+    kind = 'pixel',
+    x,
+    y,
+    z = 0,
+    vx = 0,
+    vy = 0,
+    vz = 0,
+    size = 2,
+    color = PALETTE.bone,
+    color2 = PALETTE.rust,
+    life = 0.35,
+    ringMaxRadius = 40,
+    splitCanvas = null,
+    splitClipSide = 0,
+  }) {
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      if (!p.active) {
+        p.active = true;
+        p.kind = kind;
+        p.x = x;
+        p.y = y;
+        p.z = z;
+        p.vx = vx;
+        p.vy = vy;
+        p.vz = vz;
+        p.size = size;
+        p.color = color;
+        p.color2 = color2;
+        p.life = life;
+        p.maxLife = life;
+        p.ringMaxRadius = ringMaxRadius;
+        p.splitCanvas = splitCanvas;
+        p.splitClipSide = splitClipSide;
+        return p;
       }
     }
     return null;
   }
 
-  // --- HIGH-LEVEL SKILL & COMBAT EFFECT SPAWNERS ---
-
-  spawnSlashArc(x, y, angle, radius = 26, _thickness = 5, _isCleave = false) {
-    const dx = Math.cos(angle) * (radius * 0.45);
-    const dy = Math.sin(angle) * (radius * 0.45);
-    this.spawnStripFx('fx_slash_smear', x + dx, y + dy, {
-      flipX: Math.cos(angle) < 0,
-      scale: 0.45,
-      fps: 24,
+  // Foot-contact or roll dust puff (3 sizes: 1=small, 2=medium, 3=large)
+  spawnDustPuff(x, y, sizeTier = 1, vx = 0, vy = 0) {
+    this.spawnParticle({
+      kind: 'dust',
+      x,
+      y,
+      vx,
+      vy,
+      size: sizeTier,
+      color: PALETTE.bone,
+      color2: PALETTE.slag,
+      life: 0.25 + sizeTier * 0.06,
     });
   }
 
-  spawnBurst(x, y, count = 6, color = PALETTE.signal, _speedMin = 25, _speedMax = 75) {
-    this.spawnStripFx('fx_spark', x, y, {
-      tintColor: color === PALETTE.blood ? PALETTE.blood : null,
-      fps: 24,
+  // 2-frame white cross-cut flash on Lunge enemy hit
+  spawnCrossCutFlash(x, y) {
+    this.spawnParticle({
+      kind: 'crossFlash',
+      x,
+      y,
+      size: 9,
+      color: PALETTE.bone,
+      life: 2 / 24, // 2 frames at 24fps
     });
-    if (count >= 6) {
-      this.spawnStripFx('fx_shards', x, y, { scale: 0.65, fps: 20 });
+  }
+
+  // Split enemy sprite halves sliding apart on Seven Cuts final release
+  spawnSplitEnemyHalves(x, y, spriteCanvas) {
+    if (!spriteCanvas) return;
+    for (const side of [-1, 1]) {
+      this.spawnParticle({
+        kind: 'splitHalf',
+        x,
+        y,
+        vx: side * 26,
+        vy: side * -14,
+        life: 0.45,
+        splitCanvas: spriteCanvas,
+        splitClipSide: side,
+      });
     }
   }
 
-  spawnHitSparks(x, y, angle, isCrit = false) {
-    this.spawnStripFx('fx_hit_cross', x, y, {
-      scale: isCrit ? 0.85 : 0.6,
-      tintColor: isCrit ? PALETTE.brass : null,
-      fps: 24,
+  /**
+   * Ground Break Impact VFX:
+   * - 1-frame full white ring
+   * - 220ms expanding Bresenham ring 2px thick (signal outer, bone inner)
+   * - 8 jagged crack lines in soot with signal glowing inside, fading over 600ms
+   * - Lifted rocks that rise and fall with their own ground shades
+   * - Three sizes of dust puffs rolling outward
+   */
+  spawnGroundBreakEffect(x, y, radius) {
+    // 1-frame full white ring on impact frame
+    this.spawnParticle({
+      kind: 'ring',
+      x,
+      y,
+      color: PALETTE.bone,
+      color2: PALETTE.bone,
+      ringMaxRadius: Math.round(radius * 0.45),
+      life: 1 / 24,
     });
-    this.spawnStripFx('fx_spark', x + Math.cos(angle) * 6, y + Math.sin(angle) * 6, {
-      fps: 24,
-    });
-  }
 
-  spawnDustPuff(x, y, count = 4) {
-    for (let i = 0; i < Math.min(2, count); i++) {
-      this.spawnStripFx(
-        'fx_dust_puff',
-        x + (i === 0 ? -4 : 4),
-        y + 2,
-        {
-          flipX: i % 2 === 1,
-          scale: 0.65,
-          fps: 18,
+    // 220ms expanding 2px Bresenham ring (signal outer, bone inner)
+    this.spawnParticle({
+      kind: 'ring',
+      x,
+      y,
+      color: PALETTE.signal,
+      color2: PALETTE.bone,
+      ringMaxRadius: Math.round(radius),
+      life: 0.22,
+    });
+
+    // 8 jagged crack lines in soot with signal glowing inside, fading over 600ms
+    for (let i = 0; i < this.groundCracks.length; i++) {
+      const gc = this.groundCracks[i];
+      if (!gc.active) {
+        gc.active = true;
+        gc.cx = Math.round(x);
+        gc.cy = Math.round(y);
+        gc.life = 0.6;
+        gc.maxLife = 0.6;
+        gc.arms = [];
+        for (let a = 0; a < 8; a++) {
+          const baseAng = (a / 8) * Math.PI * 2 + (Math.random() * 0.2 - 0.1);
+          const pts = [{ x: gc.cx, y: gc.cy }];
+          for (let s = 1; s <= 4; s++) {
+            const r = (s / 4) * (radius * 0.85);
+            const jitter = (s % 2 === 0 ? 1 : -1) * 0.16;
+            pts.push({
+              x: Math.round(gc.cx + Math.cos(baseAng + jitter) * r),
+              y: Math.round(gc.cy + Math.sin(baseAng + jitter) * r),
+            });
+          }
+          gc.arms.push(pts);
         }
+        break;
+      }
+    }
+
+    // Lifted rocks that rise and fall with their own ground shades
+    for (let r = 0; r < 10; r++) {
+      const ang = (r / 10) * Math.PI * 2 + Math.random() * 0.3;
+      const dist = 14 + Math.random() * (radius * 0.55);
+      this.spawnParticle({
+        kind: 'rock',
+        x: x + Math.cos(ang) * dist,
+        y: y + Math.sin(ang) * dist,
+        z: 2,
+        vx: Math.cos(ang) * 28,
+        vy: Math.sin(ang) * 28,
+        vz: 85 + Math.random() * 45,
+        size: r % 2 === 0 ? 3 : 2,
+        color: PALETTE.slag,
+        color2: PALETTE.bone,
+        life: 0.48,
+      });
+    }
+
+    // Three sizes of dust puffs rolling outward (tiers 3, 2, 1)
+    for (let d = 0; d < 12; d++) {
+      const ang = (d / 12) * Math.PI * 2;
+      const tier = (d % 3) + 1;
+      const spd = 45 + (3 - tier) * 25;
+      this.spawnDustPuff(
+        x + Math.cos(ang) * 10,
+        y + Math.sin(ang) * 10,
+        tier,
+        Math.cos(ang) * spd,
+        Math.sin(ang) * spd
       );
     }
   }
 
-  spawnGroundBreakCracks(x, y, _radius = 48) {
-    // Persistent ground crack decal (4s fade) + expanding fx_shock_ring
-    let slot = null;
-    for (let i = 0; i < this.cracks.length; i++) {
-      if (!this.cracks[i].active) {
-        slot = this.cracks[i];
-        break;
-      }
-    }
-    if (!slot) slot = this.cracks[0];
-    slot.active = true;
-    slot.x = Math.round(x);
-    slot.y = Math.round(y);
-    slot.variant = Math.floor(Math.random() * 3);
-    slot.life = 4.0;
-    slot.maxLife = 4.0;
-
-    this.spawnStripFx('fx_shock_ring', x, y, {
-      scale: 0.5,
-      fps: 22,
-      layer: 'ground',
-    });
-    this.spawnStripFx('fx_shards', x, y, { scale: 0.9, fps: 18 });
-  }
-
-  spawnRing(x, y, _maxRadius = 48, color = PALETTE.signal, _duration = 0.25) {
-    this.spawnStripFx('fx_shock_ring', x, y, {
-      scale: 0.45,
-      tintColor: color === PALETTE.signal ? null : color,
-      fps: 24,
-      layer: 'ground',
+  spawnShockwave(x, y, maxRadius, color = PALETTE.signal, duration = 0.22) {
+    this.spawnParticle({
+      kind: 'ring',
+      x,
+      y,
+      color,
+      color2: PALETTE.bone,
+      ringMaxRadius: Math.round(maxRadius),
+      life: duration,
     });
   }
 
-  spawnSlashLine(x1, y1, x2, y2, color = PALETTE.signal, _duration = 0.35) {
-    const mx = (x1 + x2) * 0.5;
-    const my = (y1 + y2) * 0.5;
-    const flipX = x2 < x1;
-    if (Math.hypot(x2 - x1, y2 - y1) > 90) {
-      this.spawnStripFx('fx_ult_slash', mx, my, {
-        flipX,
-        scale: 0.5,
-        tintColor: color === PALETTE.signal ? null : color,
-        fps: 20,
-      });
-    } else {
-      this.spawnStripFx('fx_dash_streak', mx, my, {
-        flipX,
-        scale: 0.55,
-        fps: 24,
+  spawnBurst(
+    x,
+    y,
+    count = 8,
+    color = PALETTE.signal,
+    speedMin = 30,
+    speedMax = 110,
+    size = 2,
+    life = 0.28
+  ) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = speedMin + Math.random() * (speedMax - speedMin);
+      this.spawnParticle({
+        kind: 'pixel',
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: Math.min(3, Math.max(1, size)),
+        color,
+        color2: PALETTE.rust,
+        life: life * (0.75 + Math.random() * 0.4),
       });
     }
   }
 
-  spawnDebrisBurst(x, y, _partIds = [], _isMachinery = false) {
-    this.spawnStripFx('fx_shards', x, y, { scale: 0.85, fps: 18 });
-    this.spawnStripFx('fx_dust_puff', x, y, { scale: 0.75, fps: 16 });
+  // Lunge 1px signal slash line that shrinks from both ends over 150ms, or Seven Cuts tapered slash
+  spawnSlashLine(x1, y1, x2, y2, color = PALETTE.signal, kind = 'lunge', duration = 0.15) {
+    for (let i = 0; i < this.slashes.length; i++) {
+      const s = this.slashes[i];
+      if (!s.active) {
+        s.active = true;
+        s.kind = kind;
+        s.x1 = Math.round(x1);
+        s.y1 = Math.round(y1);
+        s.x2 = Math.round(x2);
+        s.y2 = Math.round(y2);
+        s.color = color;
+        s.life = duration;
+        s.maxLife = duration;
+        return s;
+      }
+    }
+    return null;
   }
 
-  spawnDamageNumber(x, y, amount, isCrit = false, customColor = null) {
-    for (let i = 0; i < this.texts.length; i++) {
-      const t = this.texts[i];
-      if (!t.active) {
-        t.active = true;
-        t.x = Math.round(x + (Math.random() - 0.5) * 8);
-        t.y = Math.round(y - 10);
-        t.vy = isCrit ? -28 : -20;
-        t.text = typeof amount === 'number' ? `${Math.max(1, Math.round(amount))}` : `${amount}`;
-        t.color = customColor || (isCrit ? PALETTE.brass : PALETTE.bone);
-        t.maxLife = isCrit ? 0.75 : 0.55;
-        t.life = t.maxLife;
-        t.isCrit = isCrit;
-        return;
+  spawnDamageNumber(x, y, amount, isCrit = false, customText = null, customColor = null) {
+    for (let i = 0; i < this.numbers.length; i++) {
+      const n = this.numbers[i];
+      if (!n.active) {
+        n.active = true;
+        n.x = Math.round(x + (Math.random() * 12 - 6));
+        n.y = Math.round(y - 10);
+        n.vy = isCrit ? -44 : -32;
+        n.text =
+          customText !== null
+            ? customText
+            : isCrit
+            ? `${Math.round(amount)}!`
+            : `${Math.round(amount)}`;
+        n.color = customColor || (isCrit ? PALETTE.brass : PALETTE.bone);
+        n.isCrit = isCrit;
+        n.life = isCrit ? 0.85 : 0.65;
+        n.maxLife = n.life;
+        return n;
       }
+    }
+    return null;
+  }
+
+  spawnFloatingText(x, y, text, color = PALETTE.bone) {
+    return this.spawnDamageNumber(x, y, 0, false, String(text), color);
+  }
+
+  spawnSparks(x, y, count = 6, color = PALETTE.signal) {
+    this.spawnBurst(x, y, count, color, 35, 95, 2, 0.25);
+  }
+
+  spawnDirectionalSparks(x, y, angle = 0, spread = 0.6, count = 8, color = PALETTE.signal) {
+    for (let i = 0; i < count; i++) {
+      const a = angle + (Math.random() - 0.5) * spread;
+      const spd = 45 + Math.random() * 75;
+      this.spawnParticle({
+        kind: 'pixel',
+        x,
+        y,
+        vx: Math.cos(a) * spd,
+        vy: Math.sin(a) * spd,
+        size: i % 2 === 0 ? 2 : 1,
+        color,
+        color2: PALETTE.bone,
+        life: 0.22 + Math.random() * 0.14,
+      });
     }
   }
 
-  update(dt) {
-    for (let i = 0; i < this.fxList.length; i++) {
-      const fx = this.fxList[i];
-      if (!fx.active) continue;
-      fx.x += fx.vx * dt;
-      fx.y += fx.vy * dt;
-      fx.timer += dt;
-      const spec = assets.getSpec(fx.assetId);
-      const frameCount = spec ? spec.frameCount : 3;
-      const frameDur = 1 / Math.max(1, fx.fps);
-      if (fx.timer >= frameDur) {
-        fx.timer -= frameDur;
-        fx.frame += 1;
-        if (fx.frame >= frameCount) {
-          fx.active = false;
+  spawnGroundShockwave(x, y, radius = 80, color = PALETTE.signal) {
+    this.spawnGroundBreakEffect(x, y, radius);
+    this.spawnShockwave(x, y, radius, color, 0.24);
+  }
+
+  spawnCraterDecal(x, y, radius = 34, duration = 30.0) {
+    this.spawnDecal(x, y, '#111418', radius, duration);
+    // Draw 4-6 jagged radiate fracture decals
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const d = radius * (0.6 + Math.random() * 0.4);
+      this.spawnDecal(x + Math.cos(a) * d, y + Math.sin(a) * d, '#1A1D24', 4, duration);
+    }
+  }
+
+  spawnSlashArc(x, y, angle, arc = 1.6, radius = 36, color = PALETTE.signal) {
+    const a1 = angle - arc * 0.5;
+    const a2 = angle + arc * 0.5;
+    const x1 = x + Math.cos(a1) * radius;
+    const y1 = y + Math.sin(a1) * radius;
+    const x2 = x + Math.cos(a2) * radius;
+    const y2 = y + Math.sin(a2) * radius;
+    this.spawnSlashLine(x1, y1, x2, y2, color, 'sevenCuts', 0.14);
+  }
+
+  update(dt, player = null) {
+    // Update pickups & magnetic collection
+    for (let i = this.pickups.length - 1; i >= 0; i--) {
+      const pk = this.pickups[i];
+      if (!pk.active) {
+        this.pickups.splice(i, 1);
+        continue;
+      }
+      pk.life -= dt;
+      if (pk.life <= 0) {
+        this.pickups.splice(i, 1);
+        continue;
+      }
+      if (player && !player.dead && pk.type !== 'scrap') {
+        const dx = player.x - pk.x;
+        const dy = player.y - pk.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 75 && dist > 1) {
+          pk.x += (dx / dist) * 180 * dt;
+          pk.y += (dy / dist) * 180 * dt;
+        }
+        if (dist <= 18) {
+          pk.active = false;
+          if (pk.type === 'gold') {
+            player.addGold(pk.value, this);
+          } else if (pk.type === 'xp') {
+            player.gainXp(pk.value, this);
+          } else if (pk.type === 'item' && pk.itemId) {
+            if (pk.itemId === 'gauzeRoll' || pk.itemId === 'sugarTin') {
+              player.supplies[pk.itemId] = (player.supplies[pk.itemId] || 0) + 1;
+              this.spawnFloatingText(player.x, player.y - 22, '+1 GAUZE', PALETTE.signal);
+            } else if (!player.ownedEquipment.includes(pk.itemId)) {
+              player.ownedEquipment.push(pk.itemId);
+              this.spawnFloatingText(player.x, player.y - 22, `FOUND GEAR`, PALETTE.brass);
+            }
+          }
+          this.pickups.splice(i, 1);
         }
       }
     }
 
-    for (let i = 0; i < this.cracks.length; i++) {
-      const c = this.cracks[i];
-      if (!c.active) continue;
-      c.life -= dt;
-      if (c.life <= 0) c.active = false;
+    // Update ground decals (20s duration)
+    for (let i = this.decals.length - 1; i >= 0; i--) {
+      this.decals[i].life -= dt;
+      if (this.decals[i].life <= 0) {
+        this.decals.splice(i, 1);
+      }
     }
 
-    for (let i = 0; i < this.texts.length; i++) {
-      const t = this.texts[i];
-      if (!t.active) continue;
-      t.y += t.vy * dt;
-      t.vy *= 0.92;
-      t.life -= dt;
-      if (t.life <= 0) t.active = false;
+    // Update Ground Break cracks (600ms fade)
+    for (let i = 0; i < this.groundCracks.length; i++) {
+      const gc = this.groundCracks[i];
+      if (!gc.active) continue;
+      gc.life -= dt;
+      if (gc.life <= 0) gc.active = false;
+    }
+
+    // Update tumbling 8-angle debris parts (bounce on ground, then blink out)
+    for (let i = 0; i < this.debris.length; i++) {
+      const d = this.debris[i];
+      if (!d.active) continue;
+      d.life -= dt;
+      if (d.life <= 0) {
+        d.active = false;
+        continue;
+      }
+      d.x += d.vx * dt;
+      d.y += d.vy * dt;
+      d.z += d.vz * dt;
+      d.vz -= 240 * dt; // Gravity
+      if (d.z <= 0) {
+        d.z = 0;
+        d.vz = Math.abs(d.vz) * 0.45;
+        d.vx *= 0.65;
+        d.vy *= 0.65;
+        d.vAngle *= 0.6;
+      }
+      d.angle += d.vAngle * dt;
+    }
+
+    // Update particles
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      if (!p.active) continue;
+      p.life -= dt;
+      if (p.life <= 0) {
+        p.active = false;
+        continue;
+      }
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.kind === 'rock') {
+        p.z += p.vz * dt;
+        p.vz -= 260 * dt;
+        if (p.z < 0) {
+          p.z = 0;
+          p.vz = Math.abs(p.vz) * 0.35;
+          p.vx *= 0.5;
+          p.vy *= 0.5;
+        }
+      } else {
+        p.vx *= 0.9;
+        p.vy *= 0.9;
+      }
+    }
+
+    // Update slash lines
+    for (let i = 0; i < this.slashes.length; i++) {
+      const s = this.slashes[i];
+      if (!s.active) continue;
+      s.life -= dt;
+      if (s.life <= 0) s.active = false;
+    }
+
+    // Update floating damage numbers
+    for (let i = 0; i < this.numbers.length; i++) {
+      const n = this.numbers[i];
+      if (!n.active) continue;
+      n.life -= dt;
+      if (n.life <= 0) {
+        n.active = false;
+        continue;
+      }
+      n.y += n.vy * dt;
+      n.vy *= 0.9;
     }
   }
 
+  // Drawn on ground underneath entities (stain decals & Ground Break cracks)
   drawGroundLayer(ctx, camera) {
-    // 1. Ground Break radial cracks (fx_ground_cracks strip)
-    for (let i = 0; i < this.cracks.length; i++) {
-      const c = this.cracks[i];
-      if (!c.active) continue;
-      const pos = camera.worldToScreen(c.x, c.y);
-      const tint = c.life < 1.2 ? PALETTE.slag : null;
-      assets.drawSprite(ctx, 'fx_ground_cracks', c.variant, pos.x, pos.y, {
-        scaleX: 0.5,
-        scaleY: 0.5,
-        tintColor: tint,
-      });
+    const camX = camera.renderX;
+    const camY = camera.renderY;
+
+    // 1. Stain decals & Lye Leech wet trails (dithered in final 3s instead of alpha)
+    for (let i = 0; i < this.decals.length; i++) {
+      const dec = this.decals[i];
+      const sx = Math.round(dec.x - camX);
+      const sy = Math.round(dec.y - camY);
+      if (sx < -16 || sx > camera.width + 16 || sy < -16 || sy > camera.height + 16) continue;
+
+      // Blink/dither out in last 3 seconds
+      if (dec.life < 3.0 && Math.floor(dec.life * 8) % 2 === 0) continue;
+
+      ctx.fillStyle = dec.color;
+      const r = dec.radius;
+      ctx.fillRect(sx - r, sy - Math.max(1, r - 2), r * 2, Math.max(2, r * 2 - 3));
     }
 
-    // 2. Ground-layer effect strips (shockwaves)
-    for (let i = 0; i < this.fxList.length; i++) {
-      const fx = this.fxList[i];
-      if (!fx.active || fx.layer !== 'ground') continue;
-      const pos = camera.worldToScreen(fx.x, fx.y);
-      assets.drawSprite(ctx, fx.assetId, fx.frame, pos.x, pos.y, {
-        flipX: fx.flipX,
-        scaleX: fx.scale,
-        scaleY: fx.scale,
-        tintColor: fx.tintColor,
-      });
+    // 2. Ground Break 8 jagged crack lines in soot with signal glowing inside (fading over 600ms)
+    for (let i = 0; i < this.groundCracks.length; i++) {
+      const gc = this.groundCracks[i];
+      if (!gc.active) continue;
+      const ratio = gc.life / gc.maxLife;
+
+      for (let a = 0; a < gc.arms.length; a++) {
+        const arm = gc.arms[a];
+        for (let s = 0; s < arm.length - 1; s++) {
+          const p0 = arm[s];
+          const p1 = arm[s + 1];
+          // Soot outer crack
+          drawPixelLine(ctx, p0.x - camX, p0.y - camY, p1.x - camX, p1.y - camY, PALETTE.soot, 3);
+          // Signal glowing inside the cracks for first 400ms, then bone/slag
+          if (ratio > 0.35 || Math.floor(gc.life * 24) % 2 === 0) {
+            drawPixelLine(
+              ctx,
+              p0.x - camX,
+              p0.y - camY,
+              p1.x - camX,
+              p1.y - camY,
+              ratio > 0.45 ? PALETTE.signal : PALETTE.bone,
+              1
+            );
+          }
+        }
+      }
     }
   }
 
+  // Drawn above entities
   draw(ctx, camera) {
-    // Air-layer skill and combat effect strips
-    for (let i = 0; i < this.fxList.length; i++) {
-      const fx = this.fxList[i];
-      if (!fx.active || fx.layer === 'ground') continue;
-      const pos = camera.worldToScreen(fx.x, fx.y);
-      assets.drawSprite(ctx, fx.assetId, fx.frame, pos.x, pos.y, {
-        flipX: fx.flipX,
-        scaleX: fx.scale,
-        scaleY: fx.scale,
-        tintColor: fx.tintColor,
-      });
+    const camX = camera.renderX;
+    const camY = camera.renderY;
+
+    // 1. Tumbling 8-angle junk debris parts (bounce with ground shade, blink out at end)
+    for (let i = 0; i < this.debris.length; i++) {
+      const d = this.debris[i];
+      if (!d.active) continue;
+      // Blink on twos in final 0.25s
+      if (d.life < 0.25 && Math.floor(d.life * 24) % 2 === 0) continue;
+
+      const sx = Math.round(d.x - camX);
+      const sy = Math.round(d.y - camY);
+      if (sx < -20 || sx > camera.width + 20 || sy < -20 || sy > camera.height + 20) continue;
+
+      // Ground shade underneath airborne debris
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(sx - 2, sy + 2, 4, 2);
+
+      const frames = spriteRegistry.debrisParts[d.partType] || spriteRegistry.debrisParts.canLid;
+      if (frames && frames.length === 8) {
+        const dir8 = angleTo8Dir(d.angle);
+        const img = frames[dir8];
+        ctx.drawImage(
+          img,
+          Math.round(sx - img.width / 2),
+          Math.round(sy - d.z - img.height / 2)
+        );
+      }
     }
 
-    // Crisp pixel damage numbers
-    ctx.textAlign = 'center';
-    for (let i = 0; i < this.texts.length; i++) {
-      const t = this.texts[i];
-      if (!t.active) continue;
-      const pos = camera.worldToScreen(t.x, t.y);
-      const sx = Math.round(pos.x);
-      const sy = Math.round(pos.y);
-      ctx.font = t.isCrit
-        ? 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace'
-        : 'bold 7px ui-monospace, SFMono-Regular, Menlo, monospace';
-      ctx.fillStyle = PALETTE.soot;
-      ctx.fillText(t.text, sx + 1, sy + 1);
-      ctx.fillStyle = t.color;
-      ctx.fillText(t.text, sx, sy);
+    // 2. Particles: 24fps stepped dust puffs, lifted rocks with ground shades, Bresenham rings, split halves
+    for (let i = 0; i < this.particles.length; i++) {
+      const p = this.particles[i];
+      if (!p.active) continue;
+      // Quantize progress to 24fps steps
+      const totalSteps = Math.max(1, Math.round(p.maxLife * 24));
+      const curStep = Math.floor((1 - p.life / p.maxLife) * totalSteps);
+      const stepProgress = curStep / totalSteps;
+
+      const sx = Math.round(p.x - camX);
+      const sy = Math.round(p.y - camY);
+
+      if (p.kind === 'ring') {
+        const r = Math.max(2, Math.round(4 + (p.ringMaxRadius - 4) * stepProgress));
+        // 2px thick Bresenham ring: signal outer, bone inner + fake dithered glow rings
+        drawBresenhamCircle(ctx, sx, sy, r, p.color, 1.0);
+        if (r > 3) {
+          drawBresenhamCircle(ctx, sx, sy, r - 1, p.color2 || PALETTE.bone, 1.0);
+        }
+        drawDitheredGlowRings(ctx, sx, sy, r, p.color);
+      } else if (p.kind === 'crossFlash') {
+        // 2-frame white cross-cut flash on Lunge hit
+        const arm = p.size;
+        drawPixelLine(ctx, sx - arm, sy - arm, sx + arm, sy + arm, PALETTE.bone, 2);
+        drawPixelLine(ctx, sx - arm, sy + arm, sx + arm, sy - arm, PALETTE.bone, 2);
+      } else if (p.kind === 'rock') {
+        // Ground shade stays on ground while rock lifts and falls
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(sx - 1, sy + 1, p.size, 2);
+        const ry = Math.round(sy - p.z);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(sx - 1, ry - 1, p.size, p.size);
+        ctx.fillStyle = p.color2; // top-left highlight pixel
+        ctx.fillRect(sx - 1, ry - 1, 1, 1);
+      } else if (p.kind === 'dust') {
+        // 3 sizes of integer pixel dust puffs (color shifts bone -> slag, dithered at end)
+        const r = Math.max(1, p.size * 2 - Math.floor(stepProgress * p.size));
+        const col = stepProgress < 0.45 ? PALETTE.bone : PALETTE.slag;
+        ctx.fillStyle = col;
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (dx * dx + dy * dy <= r * r) {
+              if (stepProgress < 0.7 || passDither(sx + dx, sy + dy, 0.5)) {
+                ctx.fillRect(sx + dx, sy + dy, 1, 1);
+              }
+            }
+          }
+        }
+      } else if (p.kind === 'splitHalf' && p.splitCanvas) {
+        // Enemy sprite split along its horizontal cut line sliding apart after Seven Cuts
+        const w = p.splitCanvas.width;
+        const h = p.splitCanvas.height;
+        const halfH = Math.floor(h / 2);
+        if (p.splitClipSide < 0) {
+          ctx.drawImage(
+            p.splitCanvas,
+            0,
+            0,
+            w,
+            halfH,
+            Math.round(sx - w / 2),
+            Math.round(sy - h / 2),
+            w,
+            halfH
+          );
+        } else {
+          ctx.drawImage(
+            p.splitCanvas,
+            0,
+            halfH,
+            w,
+            h - halfH,
+            Math.round(sx - w / 2),
+            Math.round(sy - h / 2 + halfH),
+            w,
+            h - halfH
+          );
+        }
+      } else {
+        // Square pixel particle (trails bone -> rust -> gone, zero alpha)
+        if (sx < -10 || sx > camera.width + 10 || sy < -10 || sy > camera.height + 10) continue;
+        ctx.fillStyle = stepProgress < 0.5 ? p.color : p.color2;
+        ctx.fillRect(sx, sy, p.size, p.size);
+      }
     }
+
+    // 3. Slash Lines:
+    // - 'lunge': 1px signal slash line along path for 150ms, shrinking from BOTH ends
+    // - 'sevenCuts': full-length tapered white slash line at cut angle
+    for (let i = 0; i < this.slashes.length; i++) {
+      const s = this.slashes[i];
+      if (!s.active) continue;
+      const progress = 1 - Math.max(0, s.life / s.maxLife);
+
+      if (s.kind === 'lunge') {
+        // Shrink inward from both ends toward the midpoint
+        const trim = progress * 0.48;
+        const ax = s.x1 + (s.x2 - s.x1) * trim - camX;
+        const ay = s.y1 + (s.y2 - s.y1) * trim - camY;
+        const bx = s.x2 - (s.x2 - s.x1) * trim - camX;
+        const by = s.y2 - (s.y2 - s.y1) * trim - camY;
+        drawPixelLine(ctx, ax, ay, bx, by, s.color, 1);
+      } else {
+        // Tapered white slash line: 1px at tips, 3px in middle
+        const mx = (s.x1 + s.x2) * 0.5;
+        const my = (s.y1 + s.y2) * 0.5;
+        const q1x = (s.x1 + mx) * 0.5;
+        const q1y = (s.y1 + my) * 0.5;
+        const q2x = (s.x2 + mx) * 0.5;
+        const q2y = (s.y2 + my) * 0.5;
+        drawPixelLine(ctx, s.x1 - camX, s.y1 - camY, s.x2 - camX, s.y2 - camY, s.color, 1);
+        drawPixelLine(ctx, q1x - camX, q1y - camY, q2x - camX, q2y - camY, s.color, 3);
+      }
+    }
+
+    // 4. Crisp integer pixel damage numbers (no sub-pixel, no alpha)
+    ctx.save();
+    ctx.textAlign = 'center';
+    for (let i = 0; i < this.numbers.length; i++) {
+      const n = this.numbers[i];
+      if (!n.active) continue;
+      if (n.life < 0.16 && Math.floor(n.life * 24) % 2 === 0) continue;
+
+      const sx = Math.round(n.x - camX);
+      const sy = Math.round(n.y - camY);
+      if (sx < -30 || sx > camera.width + 30 || sy < -20 || sy > camera.height + 20) continue;
+
+      ctx.font = n.isCrit
+        ? 'bold 10px ui-monospace, SFMono-Regular, Menlo, monospace'
+        : 'bold 8px ui-monospace, SFMono-Regular, Menlo, monospace';
+      // 1px Soot outline
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillText(n.text, sx + 1, sy);
+      ctx.fillText(n.text, sx - 1, sy);
+      ctx.fillText(n.text, sx, sy + 1);
+      ctx.fillText(n.text, sx, sy - 1);
+      ctx.fillStyle = n.color;
+      ctx.fillText(n.text, sx, sy);
+    }
+    ctx.restore();
+  }
+
+  drawGroundDecals(ctx, camera) {
+    this.drawGroundLayer(ctx, camera);
+  }
+
+  drawPickups(ctx, camera) {
+    const camX = camera.renderX;
+    const camY = camera.renderY;
+    for (let i = 0; i < this.pickups.length; i++) {
+      const pk = this.pickups[i];
+      if (!pk.active) continue;
+      const sx = Math.round(pk.x - camX);
+      const sy = Math.round(pk.y - camY);
+      if (sx < -16 || sx > camera.width + 16 || sy < -16 || sy > camera.height + 16) continue;
+
+      if (pk.type === 'scrap') {
+        const scrapCanvas = spriteRegistry.getScrapVariant(pk.variant || 0);
+        if (scrapCanvas) {
+          ctx.drawImage(scrapCanvas, sx - 4, sy - 4);
+        } else {
+          ctx.fillStyle = PALETTE.verdigris;
+          ctx.fillRect(sx - 2, sy - 2, 4, 4);
+        }
+      } else if (pk.type === 'gold') {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(sx - 3, sy - 3, 6, 6);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(sx - 2, sy - 2, 4, 4);
+      } else if (pk.type === 'item') {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(sx - 4, sy - 4, 8, 8);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(sx - 3, sy - 3, 6, 6);
+      }
+    }
+  }
+
+  drawParticlesAndText(ctx, camera) {
+    this.draw(ctx, camera);
   }
 }
+
+export { ParticlePool as ParticleSystem };
+export default ParticlePool;

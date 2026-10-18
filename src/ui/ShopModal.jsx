@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import {
-  PALETTE,
   SHOP_ITEMS,
   SHOP_SELL_RATIO,
   GRADES,
   DIALOGUE,
 } from '../data/config.js';
-import { SenaPortrait, PixelIcon, getGradeColor } from './PixelWidgets.jsx';
+import { CharacterPortrait, PixelIcon, getGradeColor } from './PixelWidgets.jsx';
 
 const TABS = [
   { id: 'head', label: 'Head' },
@@ -18,9 +17,21 @@ const TABS = [
 function renderStatComparisons(candidateItem, equippedItem) {
   if (candidateItem.consumable) {
     return (
-      <div className="text-xs text-[#00F0FF] mt-1">
-        {candidateItem.healHp ? `+${candidateItem.healHp} HP on use` : ''}
-        {candidateItem.restoreStamina ? `+${candidateItem.restoreStamina} Stamina on use` : ''}
+      <div className="text-xs text-[#00F0FF] mt-1 space-y-0.5">
+        {candidateItem.healHp ? <div>+{candidateItem.healHp} HP on use</div> : null}
+        {candidateItem.restoreStamina ? (
+          <div>+{candidateItem.restoreStamina} Stamina on use</div>
+        ) : null}
+        {candidateItem.clearsStatuses ? (
+          <div className="text-[#4FD6A0]">
+            Clears: {candidateItem.clearsStatuses.join(', ').toUpperCase()}
+          </div>
+        ) : null}
+        {candidateItem.grantsBuffs ? (
+          <div className="text-[#FFC83D]">
+            Grants: {candidateItem.grantsBuffs.map((b) => `${b.id} (${b.duration}s)`).join(', ')}
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -86,11 +97,12 @@ function renderStatComparisons(candidateItem, equippedItem) {
 export function ShopModal({ engine, onClose }) {
   const [activeTab, setActiveTab] = useState('head');
   const [hoveredItemId, setHoveredItemId] = useState('weldingGoggles');
-  const [statusMsg, setStatusMsg] = useState(
-    DIALOGUE.umeGreetings[0]
-  );
+  const [statusMsg, setStatusMsg] = useState(DIALOGUE.umeGreetings[0]);
 
   const p = engine.player;
+  const cls = p.classConfig;
+  const accent = cls.accentColor;
+
   const tabItems = Object.values(SHOP_ITEMS).filter((it) => it.slot === activeTab);
   const inspectedItem = SHOP_ITEMS[hoveredItemId] || tabItems[0];
   const currentlyEquippedForSlot =
@@ -135,12 +147,12 @@ export function ShopModal({ engine, onClose }) {
             <div className="text-sm font-bold text-[#FFC83D] tabular-nums">
               GOLD: {p.gold} G
             </div>
-            <div className="text-xs text-[#00F0FF] font-bold">
-              SENA LV {p.level}
+            <div className="text-xs font-bold" style={{ color: accent }}>
+              {cls.characterName.toUpperCase()} LV {p.level}
             </div>
             <button
               onClick={onClose}
-              className="px-3 py-1.5 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3]"
+              className="px-3 py-1.5 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
             >
               [ESC / E] LEAVE
             </button>
@@ -159,7 +171,7 @@ export function ShopModal({ engine, onClose }) {
                   const first = Object.values(SHOP_ITEMS).find((i) => i.slot === t.id);
                   if (first) setHoveredItemId(first.id);
                 }}
-                className={`px-4 py-2 text-xs font-bold border-t border-x transition-colors ${
+                className={`px-4 py-2 text-xs font-bold border-t border-x transition-colors cursor-pointer ${
                   active
                     ? 'bg-[#161A20] border-[#00F0FF] text-[#00F0FF]'
                     : 'bg-[#0B0D10] border-[#3A3F47] text-[#9E9789] hover:text-[#D9D2C3]'
@@ -177,7 +189,7 @@ export function ShopModal({ engine, onClose }) {
           <div className="md:col-span-7 space-y-2.5">
             <div className="flex items-center justify-between text-[11px] text-[#9E9789] pb-1 border-b border-[#3A3F47]">
               <span>STOCK (GRADE UNLOCKS: SCRAP LV1 · SALVAGED LV8 · RELIC LV16)</span>
-              <span>ONE-CLICK BUY & EQUIP</span>
+              <span>ONE-CLICK BUY &amp; EQUIP</span>
             </div>
 
             {tabItems.map((item) => {
@@ -217,6 +229,11 @@ export function ShopModal({ engine, onClose }) {
                             · EQUIPPED
                           </span>
                         )}
+                        {item.consumable && (
+                          <span className="text-[10px] font-bold text-[#FFC83D]">
+                            · HELD: x{p.supplies[item.id] || 0}
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-[#9E9789] mt-0.5">{item.desc}</div>
                       {isLocked && (
@@ -236,7 +253,7 @@ export function ShopModal({ engine, onClose }) {
                       {isEquipped ? (
                         <button
                           onClick={() => handleSellItem(item.id, item.slot)}
-                          className="px-2.5 py-1 bg-[#161A20] border border-[#8B3A1E] hover:border-[#FF3B3B] text-[11px] font-bold text-[#D9D2C3] whitespace-nowrap"
+                          className="px-2.5 py-1 bg-[#161A20] border border-[#8B3A1E] hover:border-[#FF3B3B] text-[11px] font-bold text-[#D9D2C3] whitespace-nowrap cursor-pointer"
                         >
                           SELL ({sellVal}G)
                         </button>
@@ -244,13 +261,13 @@ export function ShopModal({ engine, onClose }) {
                         <>
                           <button
                             onClick={() => engine.equipFromInventory(item.id)}
-                            className="px-2.5 py-1 bg-[#1F4D4A] border border-[#00F0FF] text-[11px] font-bold text-[#00F0FF] whitespace-nowrap"
+                            className="px-2.5 py-1 bg-[#1F4D4A] border border-[#00F0FF] text-[11px] font-bold text-[#00F0FF] whitespace-nowrap cursor-pointer"
                           >
                             EQUIP OWNED
                           </button>
                           <button
                             onClick={() => handleSellItem(item.id)}
-                            className="px-2 py-1 bg-[#161A20] border border-[#3A3F47] hover:border-[#FF3B3B] text-[11px] text-[#9E9789] whitespace-nowrap"
+                            className="px-2 py-1 bg-[#161A20] border border-[#3A3F47] hover:border-[#FF3B3B] text-[11px] text-[#9E9789] whitespace-nowrap cursor-pointer"
                           >
                             SELL ({sellVal}G)
                           </button>
@@ -259,7 +276,7 @@ export function ShopModal({ engine, onClose }) {
                         <button
                           disabled={isLocked || !canAfford}
                           onClick={() => handleBuyAndEquip(item)}
-                          className={`px-3 py-1.5 text-xs font-bold border whitespace-nowrap ${
+                          className={`px-3 py-1.5 text-xs font-bold border whitespace-nowrap cursor-pointer ${
                             isLocked || !canAfford
                               ? 'bg-[#161A20] border-[#3A3F47] text-[#3A3F47] cursor-not-allowed'
                               : 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF] hover:bg-[#00F0FF] hover:text-[#0B0D10]'
@@ -272,7 +289,7 @@ export function ShopModal({ engine, onClose }) {
                       {item.consumable && (p.supplies[item.id] || 0) > 0 && (
                         <button
                           onClick={() => handleSellItem(item.id)}
-                          className="px-2 py-1.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#FF3B3B] text-[11px] text-[#D9D2C3] whitespace-nowrap"
+                          className="px-2 py-1.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#FF3B3B] text-[11px] text-[#D9D2C3] whitespace-nowrap cursor-pointer"
                         >
                           SELL 1 ({sellVal}G)
                         </button>
@@ -284,7 +301,7 @@ export function ShopModal({ engine, onClose }) {
             })}
           </div>
 
-          {/* Right 5 Cols: Comparison Tooltip & Sena Live Gear Preview */}
+          {/* Right 5 Cols: Comparison Tooltip & Character Live Gear Preview */}
           <div className="md:col-span-5 flex flex-col justify-between gap-4 bg-[#161A20] border border-[#3A3F47] p-4">
             {inspectedItem && (
               <div>
@@ -321,15 +338,20 @@ export function ShopModal({ engine, onClose }) {
               </div>
             )}
 
-            {/* Sena Portrait & Current Total Stats */}
+            {/* Character Portrait & Current Total Stats */}
             <div className="border-t border-[#3A3F47] pt-3 flex items-center gap-3">
-              <SenaPortrait
+              <CharacterPortrait
+                classId={p.classId}
                 expression="normal"
                 equipped={p.equipped}
+                stage={p.stage}
+                branch={p.branch}
                 size={64}
               />
               <div className="flex-1 text-xs space-y-1 tabular-nums">
-                <div className="font-bold text-[#00F0FF]">EQUIPPED STATS</div>
+                <div className="font-bold" style={{ color: accent }}>
+                  {p.getFullTitleLine()}
+                </div>
                 <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[#D9D2C3]">
                   <span>HP: {p.maxHp}</span>
                   <span>STAM: {p.maxStamina}</span>

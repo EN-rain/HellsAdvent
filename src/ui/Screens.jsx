@@ -1,123 +1,232 @@
-import React, { useEffect, useState } from 'react';
-import { DIALOGUE } from '../data/config.js';
-import { SenaPortrait } from './PixelWidgets.jsx';
+import React, { useEffect, useRef, useState } from 'react';
+import { PALETTE, DIALOGUE } from '../data/config.js';
+import { CLASSES, CLASS_ORDER } from '../data/classes.js';
+import { CharacterPortrait, PixelIcon } from './PixelWidgets.jsx';
+import { drawCharacterSelectCardArt } from '../game/Sprites.js';
 import { sound } from '../game/Audio.js';
-import { assets } from '../game/AssetLoader.js';
+
+/**
+ * Shared 480x270 Pixel-Art Parallax Wasteland Backdrop Canvas
+ */
+function ParallaxWastelandCanvas() {
+  const bgCanvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = bgCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let raf = null;
+    let t = 0;
+
+    const ash = Array.from({ length: 48 }, (_, i) => ({
+      x: (i * 47) % 480,
+      y: (i * 29) % 270,
+      vx: 10 + (i % 5) * 4,
+      vy: 4 + (i % 4) * 2,
+      size: i % 3 === 0 ? 2 : 1,
+    }));
+
+    const renderParallax = () => {
+      t += 0.016;
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.imageSmoothingEnabled = false;
+
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = '#141A1C';
+      ctx.fillRect(0, 75, w, 65);
+      ctx.fillStyle = '#2B1F1D';
+      ctx.fillRect(0, 140, w, 40);
+      ctx.fillStyle = '#4A2416';
+      ctx.fillRect(0, 180, w, 25);
+
+      ctx.fillStyle = PALETTE.rust;
+      for (let i = 0; i < 12; i++) {
+        const rx = Math.round(((i * 43 + t * 2) % (w + 30)) - 15);
+        const ry = Math.round(28 + Math.sin(i * 0.7) * 10);
+        ctx.fillRect(rx, ry, 6 + (i % 3) * 4, 2);
+      }
+
+      const offset1 = Math.round((t * 4) % 120);
+      for (let x = -120; x < w + 120; x += 60) {
+        const px = Math.round(x - offset1);
+        const towerH = 42 + ((Math.abs(Math.floor(x / 60)) * 23) % 38);
+        ctx.fillStyle = '#13171B';
+        ctx.fillRect(px, 185 - towerH, 26, towerH);
+        if (Math.abs(Math.floor(x / 60)) % 3 === 0) {
+          ctx.fillStyle = PALETTE.signal;
+          ctx.fillRect(px + 10, 185 - towerH + 6, 2, 2);
+        }
+      }
+
+      const offset2 = Math.round((t * 10) % 90);
+      ctx.fillStyle = '#1C2026';
+      ctx.fillRect(0, 182, w, 42);
+      for (let x = -90; x < w + 90; x += 45) {
+        const px = Math.round(x - offset2);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(px, 165, 32, 6);
+        ctx.fillRect(px + 12, 171, 6, 18);
+      }
+
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(0, 208, w, 62);
+
+      const sx = 355;
+      const sy = 178;
+      ctx.fillStyle = PALETTE.slag;
+      ctx.fillRect(sx - 14, sy + 6, 4, 24);
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillRect(sx - 11, sy + 6, 1, 24);
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(sx - 5, sy + 8, 10, 22);
+      ctx.fillStyle = PALETTE.rust;
+      ctx.fillRect(sx - 4, sy + 2, 9, 6);
+      for (let k = 0; k < 6; k++) {
+        const waveY = Math.round(Math.sin(t * 5 + k * 0.6) * 2);
+        ctx.fillStyle = k === 4 ? PALETTE.rust : PALETTE.bone;
+        ctx.fillRect(sx + 3 + k * 3, sy + 9 + waveY, 3, 2);
+      }
+
+      for (let i = 0; i < ash.length; i++) {
+        const a = ash[i];
+        a.x = (a.x + a.vx * 0.016) % w;
+        a.y = (a.y + a.vy * 0.016) % h;
+        ctx.fillStyle = i % 6 === 0 ? PALETTE.rust : PALETTE.bone;
+        ctx.fillRect(Math.round(a.x), Math.round(a.y), a.size, a.size);
+      }
+
+      raf = requestAnimationFrame(renderParallax);
+    };
+
+    raf = requestAnimationFrame(renderParallax);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <canvas
+      ref={bgCanvasRef}
+      width={480}
+      height={270}
+      className="pixelated absolute inset-0 w-full h-full object-cover pointer-events-none"
+    />
+  );
+}
+
+/**
+ * 96x96 Animated Portrait Card Canvas for Character Select Screen
+ * Plays idle animation normally, and cycles idle + short attack when hovered.
+ */
+function CharacterSelectCardPortrait({ classId, isHovered, accentColor }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let tick = 0;
+    const draw = () => {
+      drawCharacterSelectCardArt(canvas, classId, isHovered, tick);
+      tick++;
+    };
+    draw();
+    const id = window.setInterval(draw, 1000 / 12);
+    return () => window.clearInterval(id);
+  }, [classId, isHovered]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={96}
+      height={96}
+      style={{
+        width: 96,
+        height: 96,
+        borderColor: isHovered ? accentColor : '#3A3F47',
+      }}
+      className="pixelated block border-2 bg-[#0B0D10] shrink-0"
+    />
+  );
+}
 
 /**
  * Main Menu / Title Screen
- * - Uses /assets/title_key_art.png (1920x1080 wide pixel-art scene: Sena on a collapsed overpass,
- *   scarf blowing, Kettle's boiler glow far below, burnt sky).
- * - Uses /assets/title_logo.png ("GRAVEL SKY" transparent PNG in chunky rust & bone stencil pixel letters).
- * - Displays manifest asset preloader progress bar before starting.
  */
 export function TitleScreen({ engine, onStart, onOpenGallery }) {
   const [showOptions, setShowOptions] = useState(false);
-  const [assetStatus, setAssetStatus] = useState(() => ({
-    loaded: assets.loaded,
-    progress: assets.progress,
-    loadedCount: assets.loadedCount,
-    totalToLoad: assets.totalToLoad,
-  }));
-
-  useEffect(() => {
-    assets.preloadAll();
-    const unsub = assets.subscribe((st) => setAssetStatus(st));
-    return () => unsub();
-  }, []);
-
-  const hasSavedProgress =
-    engine.player.level > 1 ||
-    engine.player.gold !== 95 ||
-    Object.values(engine.spawner.defeatedBosses || {}).some(Boolean);
+  const [showControls, setShowControls] = useState(false);
 
   return (
-    <div className="fixed inset-0 z-30 flex flex-col justify-between p-8 text-[#D9D2C3] overflow-hidden bg-[#0B0D10]">
-      {/* 1920x1080 Pixel-Art Title Key Art Background (/assets/title_key_art.png) */}
-      <img
-        src="/assets/title_key_art.png"
-        alt="GRAVEL SKY Title Key Art"
-        className="pixelated pointer-events-none absolute inset-0 w-full h-full object-cover"
-      />
-      <div className="pointer-events-none absolute inset-0 bg-[#0B0D10]/35" />
+    <div className="fixed inset-0 z-30 flex flex-col justify-between bg-[#0B0D10] p-8 select-none">
+      <ParallaxWastelandCanvas />
 
-      {/* Top Status Strip */}
-      <div className="relative z-10 flex items-center justify-between text-xs text-[#D9D2C3]/80">
-        <span className="px-2 py-1 bg-[#0B0D10]/90 border border-[#3A3F47]">
-          ASSET PIPELINE • 48-COLOR PALETTE • 480x270 INTEGER BUFFER
-        </span>
-        <span className="px-2 py-1 bg-[#0B0D10]/90 border border-[#3A3F47]">
-          F11 FULLSCREEN • WASD + MOUSE
-        </span>
+      <div className="relative z-10 flex items-center justify-between text-xs text-[#9E9789]">
+        <span>YEARS AFTER THE SKY CAME DOWN IN PIECES</span>
+        <span>SENA IBUKI · ROOK MATSUDA · INES CALLOWAY</span>
       </div>
 
-      {/* Center-Left Main Menu Card */}
-      <div className="relative z-10 my-auto max-w-xl bg-[#0B0D10]/92 border-2 border-[#3A3F47] p-6 shadow-2xl">
-        <div className="flex items-center gap-4 mb-4">
-          <SenaPortrait
-            expression="determined"
-            equipped={engine.player.equipped}
-            size={72}
+      <div className="relative z-10 my-auto max-w-2xl">
+        <svg
+          viewBox="0 0 560 110"
+          className="w-full max-w-xl h-auto block"
+          aria-label="GRAVEL SKY"
+        >
+          <rect
+            x="0"
+            y="12"
+            width="520"
+            height="72"
+            fill="#0B0D10"
+            stroke="#3A3F47"
+            strokeWidth="3"
           />
-          <div>
-            <div className="text-xs font-bold tracking-[0.25em] text-[#00F0FF] uppercase">
-              SALVAGE RUNNER • RAILCUT
-            </div>
-            {/* Transparent PNG Title Logo (/assets/title_logo.png) */}
-            <img
-              src="/assets/title_logo.png"
-              alt="GRAVEL SKY"
-              width={320}
-              height={56}
-              className="pixelated block my-1"
-            />
-            <div className="text-xs text-[#FFC83D] mt-0.5">
-              {DIALOGUE.titleTagline}
-            </div>
-          </div>
-        </div>
+          <line x1="0" y1="84" x2="545" y2="84" stroke="#00F0FF" strokeWidth="4" />
+          <polygon points="520,12 548,12 520,84" fill="#8B3A1E" />
+          <text
+            x="22"
+            y="65"
+            fill="#D9D2C3"
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            fontWeight="900"
+            fontSize="58"
+            letterSpacing="6"
+          >
+            GRAVEL SKY
+          </text>
+          <text
+            x="24"
+            y="104"
+            fill="#00F0FF"
+            fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+            fontWeight="700"
+            fontSize="13"
+            letterSpacing="4"
+          >
+            RUST · ASH · DEAD WATER · THREE TRADES
+          </text>
+        </svg>
 
-        <p className="text-xs text-[#D9D2C3]/85 leading-relaxed mb-5 border-l-2 border-[#8B3A1E] pl-3">
-          Kettle&apos;s boiler still burns. Outside the wire: Slab Town, Route 9, Lye
-          Marsh, and the Copper Flats. Four heavy bosses hold the scrap routes.
+        <p className="mt-4 text-sm text-[#D9D2C3]/90 max-w-lg leading-relaxed bg-[#0B0D10] border border-[#3A3F47] p-3.5">
+          Kettle&apos;s boiler is still burning. Pick your trade—Railcut melee, Springgun ranged, or Magnetist coil—and clear Slab Town, Route 9, Lye Marsh, and the Copper Flats.
         </p>
 
-        {/* Manifest Preloader Progress Bar */}
-        {!assetStatus.loaded && (
-          <div className="mb-4 p-2.5 bg-[#0B0D10] border border-[#00F0FF]">
-            <div className="flex justify-between text-[11px] font-bold text-[#00F0FF] mb-1">
-              <span>PRELOADING MANIFEST ASSETS...</span>
-              <span>
-                {assetStatus.loadedCount}/{assetStatus.totalToLoad} (
-                {Math.round(assetStatus.progress * 100)}%)
-              </span>
-            </div>
-            <div className="w-full h-2.5 bg-[#3A3F47]">
-              <div
-                className="h-full bg-[#00F0FF] transition-all duration-75"
-                style={{ width: `${Math.round(assetStatus.progress * 100)}%` }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* MAIN MENU BUTTONS: START & OPTIONS */}
-        <div className="flex flex-col gap-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#00F0FF] mb-0.5">
-            MAIN MENU
+        <div className="mt-6 w-72 bg-[#0B0D10] border-2 border-[#3A3F47] p-4 space-y-2.5">
+          <div className="flex items-center justify-between border-b border-[#3A3F47] pb-2 text-[11px] font-bold tracking-widest text-[#9E9789]">
+            <span>MAIN MENU</span>
+            <span className="text-[#00F0FF]">PRESS ENTER</span>
           </div>
 
           <button
-            onClick={onStart}
-            disabled={!assetStatus.loaded}
-            className="w-full flex items-center justify-between px-5 py-3 bg-[#00F0FF] hover:bg-[#00F0FF]/85 disabled:opacity-50 text-[#0B0D10] font-bold text-sm tracking-wider uppercase cursor-pointer border-2 border-[#D9D2C3] transition-colors"
+            onClick={() => {
+              sound.playUiClick();
+              onStart();
+            }}
+            className="w-full px-5 py-3 bg-[#00F0FF] text-[#0B0D10] font-bold text-sm tracking-widest border-2 border-[#00F0FF] hover:bg-[#D9D2C3] hover:border-[#D9D2C3] transition-colors flex items-center justify-between cursor-pointer"
           >
             <span>START</span>
-            <span className="text-xs font-bold">
-              {hasSavedProgress
-                ? `LV.${engine.player.level} • ${engine.player.gold}G [ENTER]`
-                : 'NEW RUN [ENTER]'}
-            </span>
+            <span className="text-xs font-bold">[ENTER]</span>
           </button>
 
           <button
@@ -125,109 +234,479 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
               sound.playUiClick();
               setShowOptions(true);
             }}
-            className="w-full flex items-center justify-between px-5 py-2.5 bg-[#1F4D4A]/40 hover:bg-[#1F4D4A]/80 border-2 border-[#00F0FF]/60 text-[#D9D2C3] font-bold text-sm tracking-wider uppercase cursor-pointer transition-colors"
+            className="w-full px-5 py-3 bg-[#161A20] text-[#D9D2C3] font-bold text-sm tracking-widest border-2 border-[#3A3F47] hover:border-[#00F0FF] hover:text-[#00F0FF] transition-colors flex items-center justify-between cursor-pointer"
           >
             <span>OPTIONS</span>
-            <span className="text-[11px] text-[#00F0FF]">
-              AUDIO • DISPLAY • CONTROLS • DATA
-            </span>
+            <span className="text-xs text-[#9E9789]">CFG</span>
           </button>
 
           {onOpenGallery && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  sound.playUiClick();
-                  onOpenGallery();
-                }}
-                className="flex-1 flex items-center justify-between px-4 py-2 bg-[#0B0D10] hover:bg-[#3A3F47] border border-[#3A3F47] text-[#FFC83D] font-bold text-xs tracking-wider uppercase cursor-pointer transition-colors"
-              >
-                <span>SPRITE GALLERY</span>
-                <span className="text-[10px] text-[#D9D2C3]/80">1X • 6X • SILHOUETTE</span>
-              </button>
-              <a
-                href="/assets/contact-sheet.html"
-                target="_blank"
-                rel="noreferrer"
-                className="px-3 py-2 bg-[#0B0D10] hover:bg-[#3A3F47] border border-[#3A3F47] text-[#00F0FF] font-bold text-xs tracking-wider uppercase flex items-center"
-              >
-                CONTACT SHEET
-              </a>
-            </div>
+            <button
+              onClick={() => {
+                sound.playUiClick();
+                onOpenGallery();
+              }}
+              className="w-full px-5 py-2.5 bg-[#0B0D10] text-[#FFC83D] font-bold text-xs tracking-wider border border-[#3A3F47] hover:border-[#FFC83D] transition-colors flex items-center justify-between cursor-pointer"
+            >
+              <span>SPRITE GALLERY</span>
+              <span>?gallery</span>
+            </button>
           )}
+
+          <button
+            onClick={() => {
+              sound.playUiClick();
+              setShowControls(true);
+            }}
+            className="w-full px-5 py-2 bg-[#0B0D10] text-[#9E9789] font-bold text-xs tracking-wider border border-[#3A3F47] hover:border-[#00F0FF] hover:text-[#D9D2C3] transition-colors flex items-center justify-between cursor-pointer"
+          >
+            <span>CONTROLS MANUAL</span>
+            <span>[?]</span>
+          </button>
         </div>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="relative z-10 flex items-center justify-between text-xs text-[#D9D2C3]/60">
-        <span>SENA IBUKI • KETTLE SALVAGE</span>
-        <span>PRESS [ENTER] TO START</span>
+      <div className="relative z-10 flex items-center justify-between border-t border-[#3A3F47] pt-3 text-xs text-[#D9D2C3]/80">
+        <span>
+          WASD Move · Mouse Aim · LMB Attack · SPACE Dodge · 1/2/3 Skills · R Ultimate · E Interact · I Gear · K Skill Tree · ESC Pause
+        </span>
+        <span className="text-[#FFC83D]">F11 FULLSCREEN</span>
       </div>
 
       {showOptions && (
         <OptionsModal
           engine={engine}
-          onClose={() => {
-            sound.playUiClick();
+          onClose={() => setShowOptions(false)}
+          onOpenControls={() => {
             setShowOptions(false);
+            setShowControls(true);
           }}
         />
       )}
+
+      {showControls && <ControlsModal onClose={() => setShowControls(false)} />}
     </div>
   );
 }
 
 /**
- * Options Modal (Audio Volume, Mute Toggle, Scanline Filter, Fullscreen, Controls Reference, & Save Reset)
+ * 3-Save-Slot Selection Screen
+ * Allows continuing an existing character run or starting a new character in any of the 3 save slots.
  */
-export function OptionsModal({ engine, onClose }) {
-  const [muted, setMuted] = useState(sound.muted);
-  const [volume, setVolume] = useState(Math.round((sound.masterVolume ?? 0.35) * 100));
-  const [scanlines, setScanlines] = useState(engine.scanlinesEnabled);
+export function SaveSlotScreen({ engine, onBack }) {
+  const [, setRefresh] = useState(0);
+  const [confirmDeleteSlot, setConfirmDeleteSlot] = useState(null);
+  const slots = engine.getSaveSlotsSummary();
+
+  return (
+    <div className="fixed inset-0 z-30 flex flex-col justify-between bg-[#0B0D10] p-8 select-none">
+      <ParallaxWastelandCanvas />
+
+      <div className="relative z-10 flex items-center justify-between border-b border-[#3A3F47] pb-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-wider text-[#00F0FF]">
+            SELECT SAVE LEDGER (3 SLOTS)
+          </h2>
+          <p className="text-xs text-[#9E9789]">
+            Each save slot locks to one character class for the entire run. Starting a different class uses a new slot.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            sound.playUiClick();
+            onBack();
+          }}
+          className="px-4 py-2 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
+        >
+          [ESC] BACK TO TITLE
+        </button>
+      </div>
+
+      <div className="relative z-10 my-auto grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl w-full mx-auto">
+        {slots.map((slot) => {
+          const accent = slot.accentColor || PALETTE.signal;
+          return (
+            <div
+              key={slot.slotIndex}
+              className="bg-[#0B0D10]/95 border-2 p-5 flex flex-col justify-between gap-5"
+              style={{ borderColor: slot.exists ? accent : '#3A3F47' }}
+            >
+              <div>
+                <div className="flex items-center justify-between border-b border-[#3A3F47] pb-2 mb-4">
+                  <span className="text-xs font-bold tracking-widest text-[#9E9789]">
+                    SAVE SLOT 0{slot.slotIndex + 1}
+                  </span>
+                  <span
+                    className="text-xs font-bold uppercase"
+                    style={{ color: slot.exists ? accent : '#9E9789' }}
+                  >
+                    {slot.exists ? `${slot.className} RUN` : 'EMPTY LEDGER'}
+                  </span>
+                </div>
+
+                {slot.exists ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <CharacterPortrait
+                        classId={slot.classId}
+                        expression="normal"
+                        equipped={slot.equipped}
+                        stage={slot.stage}
+                        branch={null}
+                        size={72}
+                      />
+                      <div>
+                        <div className="text-base font-bold text-[#D9D2C3]">
+                          {slot.characterName}
+                        </div>
+                        <div
+                          className="text-xs font-bold mt-0.5"
+                          style={{ color: accent }}
+                        >
+                          {slot.title}, {slot.stageName}
+                        </div>
+                        <div className="text-xs text-[#FFC83D] font-bold mt-1 tabular-nums">
+                          Level {slot.level} · {slot.gold} G
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-10 text-center space-y-2 border border-dashed border-[#3A3F47] bg-[#161A20]/50">
+                    <div className="text-sm font-bold text-[#D9D2C3]">
+                      UNSTAMPED TRADE LEDGER
+                    </div>
+                    <p className="text-xs text-[#9E9789] px-4">
+                      Start a new run as Sena Ibuki (Melee), Rook Matsuda (Ranged), or Ines Calloway (Mage).
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                {slot.exists ? (
+                  <>
+                    <button
+                      onClick={() => engine.selectSlot(slot.slotIndex)}
+                      className="w-full py-3 font-bold text-xs tracking-wider text-[#0B0D10] cursor-pointer"
+                      style={{ backgroundColor: accent }}
+                    >
+                      CONTINUE RUN (SLOT 0{slot.slotIndex + 1})
+                    </button>
+
+                    {confirmDeleteSlot === slot.slotIndex ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            engine.deleteSaveSlot(slot.slotIndex);
+                            setConfirmDeleteSlot(null);
+                            setRefresh((r) => r + 1);
+                          }}
+                          className="flex-1 py-2 bg-[#FF3B3B] text-[#0B0D10] font-bold text-xs cursor-pointer"
+                        >
+                          CONFIRM WIPE
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteSlot(null)}
+                          className="flex-1 py-2 bg-[#161A20] border border-[#3A3F47] text-[#D9D2C3] font-bold text-xs cursor-pointer"
+                        >
+                          CANCEL
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteSlot(slot.slotIndex)}
+                        className="w-full py-2 bg-[#161A20] border border-[#8B3A1E] hover:border-[#FF3B3B] text-xs font-bold text-[#9E9789] hover:text-[#FF3B3B] cursor-pointer"
+                      >
+                        WIPE SLOT &amp; PICK NEW CLASS
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button
+                    onClick={() => engine.selectSlot(slot.slotIndex)}
+                    className="w-full py-3 bg-[#00F0FF] hover:bg-[#D9D2C3] text-[#0B0D10] font-bold text-xs tracking-widest cursor-pointer"
+                  >
+                    CHOOSE CHARACTER →
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="relative z-10 text-center text-xs text-[#9E9789]">
+        Progress saves automatically every 30s to your active slot.
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Character Select Screen
+ * Three tall cards side by side on a soot background with a slow parallax wasteland behind them.
+ * Each card shows a 96x96 portrait, character name, class, one-line pitch, stat bars, and 3 starting skills with icons.
+ * Hover plays the idle animation and a short attack. Click selects, then a confirm box asks:
+ * "This is your character until you start a new save. Begin?" with Begin and Back.
+ */
+export function CharacterSelectScreen({ engine, onBack }) {
+  const [hoveredClassId, setHoveredClassId] = useState(null);
+  const [confirmClassId, setConfirmClassId] = useState(null);
+
+  const statMaxes = {
+    hp: 130,
+    stamina: 65,
+    atk: 14,
+    def: 7,
+    speed: 145,
+  };
+
+  const selectedCls = confirmClassId ? CLASSES[confirmClassId] : null;
+
+  return (
+    <div className="fixed inset-0 z-30 flex flex-col justify-between bg-[#0B0D10] p-6 select-none overflow-y-auto">
+      <ParallaxWastelandCanvas />
+
+      {/* Top Bar */}
+      <div className="relative z-10 flex items-center justify-between border-b border-[#3A3F47] pb-3">
+        <div>
+          <h2 className="text-lg font-bold tracking-wider text-[#D9D2C3]">
+            SELECT YOUR RUNNER · SLOT 0{engine.activeSlotIndex + 1}
+          </h2>
+          <p className="text-xs text-[#9E9789]">
+            Hover a card to preview combat stance. Click to lock your character for this save slot.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            sound.playUiClick();
+            onBack();
+          }}
+          className="px-4 py-2 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
+        >
+          [ESC] BACK TO SLOTS
+        </button>
+      </div>
+
+      {/* Three Tall Cards Side by Side */}
+      <div className="relative z-10 my-auto grid grid-cols-1 lg:grid-cols-3 gap-5 max-w-6xl w-full mx-auto py-3">
+        {CLASS_ORDER.map((classId) => {
+          const cls = CLASSES[classId];
+          const accent = cls.accentColor;
+          const isHovered = hoveredClassId === classId;
+          const b = cls.baseStats;
+
+          const statRows = [
+            { label: 'HP', val: b.hp, pct: (b.hp / statMaxes.hp) * 100 },
+            { label: 'STAM', val: b.stamina, pct: (b.stamina / statMaxes.stamina) * 100 },
+            { label: 'ATK', val: b.atk, pct: (b.atk / statMaxes.atk) * 100 },
+            { label: 'DEF', val: b.def, pct: (b.def / statMaxes.def) * 100 },
+            { label: 'SPD', val: b.speed, pct: (b.speed / statMaxes.speed) * 100 },
+          ];
+
+          return (
+            <div
+              key={classId}
+              onMouseEnter={() => setHoveredClassId(classId)}
+              onMouseLeave={() => setHoveredClassId(null)}
+              onClick={() => {
+                sound.playUiClick();
+                setConfirmClassId(classId);
+              }}
+              className="bg-[#0B0D10]/95 border-2 p-4 flex flex-col justify-between gap-3.5 transition-colors cursor-pointer"
+              style={{
+                borderColor: isHovered ? accent : '#3A3F47',
+              }}
+            >
+              <div className="space-y-3">
+                {/* Top Header: 96x96 Animated Portrait + Name, Class, Titles */}
+                <div className="flex items-start gap-3.5">
+                  <CharacterSelectCardPortrait
+                    classId={classId}
+                    isHovered={isHovered}
+                    accentColor={accent}
+                  />
+                  <div className="space-y-1">
+                    <div
+                      className="text-[10px] font-bold tracking-widest uppercase px-1.5 py-0.5 bg-[#161A20] border inline-block"
+                      style={{ borderColor: accent, color: accent }}
+                    >
+                      {cls.className} · {cls.titles.hand}
+                    </div>
+                    <h3 className="text-base font-bold text-[#D9D2C3] tracking-wide">
+                      {cls.characterName}
+                    </h3>
+                    <div className="text-[11px] text-[#9E9789]">
+                      Weapon: <strong className="text-[#D9D2C3]">{cls.weaponName}</strong>
+                    </div>
+                    <div className="text-[10px] text-[#9E9789]">
+                      Promotions:{' '}
+                      <span style={{ color: accent }}>
+                        {Object.values(cls.branches)
+                          .map((br) => `${br.journeymanTitle} → ${br.masterTitle}`)
+                          .join(' / ')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* One-Line Pitch */}
+                <p
+                  className="text-xs text-[#D9D2C3] bg-[#161A20] border-l-2 px-3 py-2 leading-relaxed"
+                  style={{ borderColor: accent }}
+                >
+                  {cls.pitch}
+                </p>
+
+                {/* Stat Bars (HP, Stamina, ATK, DEF, Speed) */}
+                <div className="space-y-1.5 bg-[#161A20] border border-[#3A3F47] p-2.5">
+                  <div className="text-[10px] font-bold text-[#9E9789] uppercase tracking-wider">
+                    BASE ATTRIBUTES
+                  </div>
+                  {statRows.map((st) => (
+                    <div key={st.label} className="flex items-center gap-2 text-[11px] tabular-nums">
+                      <span className="w-10 font-bold text-[#9E9789]">{st.label}</span>
+                      <div className="flex-1 h-2 bg-[#0B0D10] border border-[#3A3F47]">
+                        <div
+                          className="h-full"
+                          style={{
+                            width: `${Math.min(100, st.pct)}%`,
+                            backgroundColor: accent,
+                          }}
+                        />
+                      </div>
+                      <span className="w-8 text-right font-bold text-[#D9D2C3]">
+                        {st.val}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Class Mechanic + 3 Starting Skills with Icons */}
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: accent }}>
+                    MECHANIC: {cls.mechanic.name}
+                  </div>
+                  <p className="text-[11px] text-[#9E9789] leading-snug">
+                    {cls.mechanic.desc}
+                  </p>
+
+                  <div className="pt-1 space-y-1.5">
+                    <div className="text-[10px] font-bold text-[#9E9789] uppercase tracking-wider">
+                      STARTING SKILLS (1 / 2 / 3) &amp; ULTIMATE (R)
+                    </div>
+                    {cls.skillOrder.map((skId) => {
+                      const sk = cls.skills[skId];
+                      return (
+                        <div
+                          key={skId}
+                          className="flex items-center gap-2.5 bg-[#161A20] border border-[#3A3F47] p-1.5"
+                        >
+                          <PixelIcon itemId={sk.icon} size={24} />
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-[#D9D2C3]">
+                              [{sk.hotkey}] {sk.name}
+                            </div>
+                            <div className="text-[10px] text-[#9E9789] truncate">
+                              {sk.desc}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  sound.playUiClick();
+                  setConfirmClassId(classId);
+                }}
+                className="w-full py-2.5 font-bold text-xs tracking-widest uppercase border-2 transition-colors cursor-pointer"
+                style={{
+                  borderColor: accent,
+                  backgroundColor: isHovered ? accent : '#161A20',
+                  color: isHovered ? '#0B0D10' : accent,
+                }}
+              >
+                SELECT {cls.characterName.toUpperCase()}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Confirmation Modal */}
+      {selectedCls && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0B0D10]/90 p-6">
+          <div
+            className="w-full max-w-md bg-[#0B0D10] border-2 p-6 space-y-4 text-center"
+            style={{ borderColor: selectedCls.accentColor }}
+          >
+            <div className="flex justify-center">
+              <CharacterPortrait
+                classId={selectedCls.id}
+                expression="normal"
+                size={72}
+              />
+            </div>
+            <div>
+              <div
+                className="text-xs font-bold uppercase tracking-widest"
+                style={{ color: selectedCls.accentColor }}
+              >
+                {selectedCls.characterName} · {selectedCls.className} ({selectedCls.titles.hand})
+              </div>
+              <p className="text-sm font-bold text-[#D9D2C3] mt-2 leading-relaxed">
+                This is your character until you start a new save. Begin?
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => {
+                  sound.playHarlowStamp();
+                  engine.startNewCharacterInSlot(engine.activeSlotIndex, selectedCls.id);
+                }}
+                className="flex-1 py-3 font-bold text-xs tracking-widest text-[#0B0D10] cursor-pointer"
+                style={{ backgroundColor: selectedCls.accentColor }}
+              >
+                BEGIN
+              </button>
+              <button
+                onClick={() => {
+                  sound.playUiClick();
+                  setConfirmClassId(null);
+                }}
+                className="flex-1 py-3 bg-[#161A20] border border-[#3A3F47] hover:border-[#D9D2C3] font-bold text-xs tracking-widest text-[#D9D2C3] cursor-pointer"
+              >
+                BACK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function OptionsModal({ engine, onClose, onOpenControls }) {
+  const [, setRefresh] = useState(0);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [volumePct, setVolumePct] = useState(() =>
+    Math.round((sound.masterVolume / 0.7) * 100)
+  );
 
-  const controls = [
-    ['WASD / Arrows', 'Move Sena'],
-    ['Mouse Cursor', 'Aim attacks & skills'],
-    ['Left Click (Hold/Tap)', '3-Hit Railcut Combo'],
-    ['SPACE', 'Dodge Step (0.25s invulnerable, 1.2s CD)'],
-    ['1', 'Skill 1: Lunge (Dash cut)'],
-    ['2', 'Skill 2: Ground Break (AoE stun)'],
-    ['3', 'Skill 3: Rail Spike (Piercing iron)'],
-    ['R', 'Ultimate: Seven Cuts (100% charge)'],
-    ['Q / F', 'Use Boiled Gauze / Sugar Tin'],
-    ['E', "Open Ume's Counter (in Kettle camp)"],
-    ['I / K / ESC', 'Gear & Stats / Skills / Pause'],
-  ];
-
-  const handleToggleMute = () => {
-    const next = sound.toggleMute();
-    setMuted(next);
+  const forceUpdate = () => {
     engine.saveProgress();
     engine.notifyUi();
+    setRefresh((v) => v + 1);
   };
 
-  const handleVolumeChange = (e) => {
-    const val = Number(e.target.value);
-    setVolume(val);
-    sound.masterVolume = val / 100;
-    if (val > 0 && sound.muted) {
-      sound.setMuted(false);
-      setMuted(false);
-    }
-    sound.playUiClick();
-    engine.notifyUi();
-  };
-
-  const handleToggleScanlines = () => {
-    engine.scanlinesEnabled = !engine.scanlinesEnabled;
-    setScanlines(engine.scanlinesEnabled);
-    sound.playUiClick();
-    engine.saveProgress();
-    engine.notifyUi();
-  };
-
-  const handleToggleFullscreen = () => {
+  const toggleFullscreen = () => {
     sound.playUiClick();
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen?.().catch(() => {});
@@ -236,265 +715,411 @@ export function OptionsModal({ engine, onClose }) {
     }
   };
 
+  const handleVolumeChange = (e) => {
+    const val = Number(e.target.value);
+    setVolumePct(val);
+    sound.masterVolume = (val / 100) * 0.7;
+    if (val === 0) {
+      sound.setMuted(true);
+    } else if (sound.muted) {
+      sound.setMuted(false);
+    }
+    sound.playUiClick();
+    forceUpdate();
+  };
+
   return (
-    <div
-      data-hud-interactive="true"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-[#0B0D10]/85 p-4 text-[#D9D2C3]"
-    >
-      <div className="w-full max-w-2xl bg-[#0B0D10] border-2 border-[#00F0FF] p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between border-b-2 border-[#3A3F47] pb-3 mb-4">
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0B0D10]/90 p-6">
+      <div className="w-full max-w-lg bg-[#0B0D10] border-2 border-[#00F0FF] p-6 space-y-4">
+        <div className="flex items-center justify-between border-b border-[#3A3F47] pb-3">
           <div>
-            <div className="text-base font-bold text-[#00F0FF] tracking-wider uppercase">
-              OPTIONS &amp; CONTROLS
-            </div>
-            <div className="text-xs text-[#D9D2C3]/70">
-              Audio synth, display filter, keybindings, and save file
-            </div>
+            <h3 className="text-base font-bold text-[#00F0FF] tracking-wider">
+              OPTIONS &amp; CONFIGURATION
+            </h3>
+            <p className="text-xs text-[#9E9789] mt-0.5">
+              Audio, display, and save file controls.
+            </p>
           </div>
           <button
-            onClick={onClose}
-            className="px-3 py-1 bg-[#3A3F47] hover:bg-[#8B3A1E] text-xs font-bold cursor-pointer"
+            onClick={() => {
+              sound.playUiClick();
+              onClose();
+            }}
+            className="px-3 py-1.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
           >
-            CLOSE [ESC]
+            CLOSE
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-          <div className="border border-[#3A3F47] bg-[#3A3F47]/15 p-3 flex flex-col justify-between gap-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-[#FFC83D] uppercase">
-                Web Audio Synth
-              </span>
-              <button
-                onClick={handleToggleMute}
-                className={`px-2.5 py-1 text-xs font-bold border cursor-pointer ${
-                  muted
-                    ? 'bg-[#8B3A1E]/40 border-[#FF3B3B] text-[#FF3B3B]'
-                    : 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF]'
-                }`}
-              >
-                {muted ? 'MUTED' : 'ACTIVE'}
-              </button>
-            </div>
-            <div className="mt-1">
-              <div className="flex justify-between text-[11px] text-[#D9D2C3]/80 mb-1">
-                <span>Master Volume</span>
-                <span className="font-bold text-[#00F0FF]">{volume}%</span>
+        <div className="space-y-3 text-xs">
+          <div className="flex items-center justify-between bg-[#161A20] border border-[#3A3F47] p-3">
+            <div>
+              <div className="font-bold text-[#D9D2C3]">WEB AUDIO SYNTHESIZER</div>
+              <div className="text-[11px] text-[#9E9789]">
+                Procedural sound effects for combat and menus
               </div>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={volume}
-                onChange={handleVolumeChange}
-                className="w-full accent-[#00F0FF] cursor-pointer"
-              />
             </div>
-          </div>
-
-          <div className="border border-[#3A3F47] bg-[#3A3F47]/15 p-3 flex flex-col justify-between gap-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs font-bold text-[#FFC83D] uppercase">
-                  CRT Scanlines
-                </div>
-                <div className="text-[10px] text-[#D9D2C3]/70">
-                  Subtle horizontal raster lines
-                </div>
-              </div>
-              <button
-                onClick={handleToggleScanlines}
-                className={`px-2.5 py-1 text-xs font-bold border cursor-pointer ${
-                  scanlines
-                    ? 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF]'
-                    : 'bg-[#0B0D10] border-[#3A3F47] text-[#D9D2C3]/70'
-                }`}
-              >
-                {scanlines ? 'ON' : 'OFF'}
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-[#3A3F47]/60">
-              <div>
-                <div className="text-xs font-bold text-[#D9D2C3] uppercase">
-                  Window Mode
-                </div>
-                <div className="text-[10px] text-[#D9D2C3]/70">
-                  Shortcut: [F11]
-                </div>
-              </div>
-              <button
-                onClick={handleToggleFullscreen}
-                className="px-2.5 py-1 bg-[#3A3F47] hover:bg-[#00F0FF] hover:text-[#0B0D10] text-xs font-bold cursor-pointer"
-              >
-                FULLSCREEN
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="mb-4">
-          <div className="text-xs font-bold uppercase tracking-wider text-[#00F0FF] mb-2">
-            KEYBOARD &amp; MOUSE CONTROLS
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-            {controls.map(([k, desc]) => (
-              <div
-                key={k}
-                className="flex items-center justify-between border border-[#3A3F47] bg-[#3A3F47]/10 px-2.5 py-1.5 text-xs"
-              >
-                <span className="font-bold text-[#FFC83D]">{k}</span>
-                <span className="text-[#D9D2C3]/90 text-right">{desc}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-3 border-t border-[#3A3F47]">
-          {!confirmReset ? (
             <button
-              onClick={() => setConfirmReset(true)}
-              className="px-3 py-1.5 bg-[#0B0D10] hover:bg-[#8B3A1E]/40 border border-[#8B3A1E] text-[#FF3B3B] text-xs font-bold cursor-pointer"
+              onClick={() => {
+                sound.toggleMute();
+                sound.playUiClick();
+                forceUpdate();
+              }}
+              className={`px-3.5 py-1.5 font-bold border cursor-pointer ${
+                !sound.muted
+                  ? 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF]'
+                  : 'bg-[#0B0D10] border-[#3A3F47] text-[#9E9789]'
+              }`}
             >
-              CLEAR SAVE DATA
+              {sound.muted ? 'MUTED' : 'ENABLED'}
             </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-[#FF3B3B] font-bold">
-                Wipe all level &amp; gear progress?
-              </span>
-              <button
-                onClick={() => {
-                  engine.resetSaveData();
-                  setConfirmReset(false);
-                }}
-                className="px-2.5 py-1 bg-[#FF3B3B] text-[#0B0D10] text-xs font-bold cursor-pointer"
-              >
-                CONFIRM WIPE
-              </button>
-              <button
-                onClick={() => setConfirmReset(false)}
-                className="px-2.5 py-1 bg-[#3A3F47] text-[#D9D2C3] text-xs cursor-pointer"
-              >
-                CANCEL
-              </button>
+          </div>
+
+          <div className="bg-[#161A20] border border-[#3A3F47] p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-[#D9D2C3]">MASTER VOLUME</span>
+              <span className="font-bold text-[#00F0FF] tabular-nums">{volumePct}%</span>
             </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={volumePct}
+              onChange={handleVolumeChange}
+              className="w-full accent-[#00F0FF] cursor-pointer"
+            />
+          </div>
+
+          <div className="flex items-center justify-between bg-[#161A20] border border-[#3A3F47] p-3">
+            <div>
+              <div className="font-bold text-[#D9D2C3]">CRT SCANLINE OVERLAY</div>
+              <div className="text-[11px] text-[#9E9789]">
+                Toggle horizontal monitor scanlines across viewport
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                engine.scanlinesEnabled = !engine.scanlinesEnabled;
+                sound.playUiClick();
+                forceUpdate();
+              }}
+              className={`px-3.5 py-1.5 font-bold border cursor-pointer ${
+                engine.scanlinesEnabled
+                  ? 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF]'
+                  : 'bg-[#0B0D10] border-[#3A3F47] text-[#9E9789]'
+              }`}
+            >
+              {engine.scanlinesEnabled ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between bg-[#161A20] border border-[#3A3F47] p-3">
+            <div>
+              <div className="font-bold text-[#D9D2C3]">REDUCE FLASHES</div>
+              <div className="text-[11px] text-[#9E9789]">
+                Replaces white screen flashes with bone tint; caps flashes to max 3/sec
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                engine.settings.reduceFlashes = !engine.settings.reduceFlashes;
+                sound.playUiClick();
+                forceUpdate();
+              }}
+              className={`px-3.5 py-1.5 font-bold border cursor-pointer ${
+                engine.settings.reduceFlashes
+                  ? 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF]'
+                  : 'bg-[#0B0D10] border-[#3A3F47] text-[#9E9789]'
+              }`}
+            >
+              {engine.settings.reduceFlashes ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between bg-[#161A20] border border-[#3A3F47] p-3">
+            <div>
+              <div className="font-bold text-[#D9D2C3]">SHORT ULTIMATES</div>
+              <div className="text-[11px] text-[#9E9789]">
+                Cuts cut-in duration to 120ms and compresses cinematic steps by 30%
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                engine.settings.shortUltimates = !engine.settings.shortUltimates;
+                sound.playUiClick();
+                forceUpdate();
+              }}
+              className={`px-3.5 py-1.5 font-bold border cursor-pointer ${
+                engine.settings.shortUltimates
+                  ? 'bg-[#1F4D4A] border-[#00F0FF] text-[#00F0FF]'
+                  : 'bg-[#0B0D10] border-[#3A3F47] text-[#9E9789]'
+              }`}
+            >
+              {engine.settings.shortUltimates ? 'ON' : 'OFF'}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between bg-[#161A20] border border-[#3A3F47] p-3">
+            <div>
+              <div className="font-bold text-[#D9D2C3]">DISPLAY MODE</div>
+              <div className="text-[11px] text-[#9E9789]">
+                Toggle fullscreen window [F11]
+              </div>
+            </div>
+            <button
+              onClick={toggleFullscreen}
+              className="px-3.5 py-1.5 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] font-bold text-[#D9D2C3] cursor-pointer"
+            >
+              TOGGLE FULLSCREEN
+            </button>
+          </div>
+
+          {onOpenControls && (
+            <button
+              onClick={() => {
+                sound.playUiClick();
+                onOpenControls();
+              }}
+              className="w-full py-2.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] font-bold text-[#D9D2C3] cursor-pointer"
+            >
+              VIEW KEYBOARD &amp; MOUSE CONTROLS
+            </button>
           )}
 
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 bg-[#00F0FF] text-[#0B0D10] text-xs font-bold uppercase cursor-pointer"
-          >
-            DONE
-          </button>
+          <div className="pt-2 border-t border-[#3A3F47] flex items-center justify-between">
+            <span className="text-[11px] text-[#9E9789]">
+              Slot 0{engine.activeSlotIndex + 1}: {engine.player.getFullTitleLine()} · Lv {engine.player.level}
+            </span>
+            {!confirmReset ? (
+              <button
+                onClick={() => setConfirmReset(true)}
+                className="px-3 py-1.5 bg-[#0B0D10] border border-[#8B3A1E] hover:border-[#FF3B3B] text-[11px] font-bold text-[#FF3B3B] cursor-pointer"
+              >
+                RESET ACTIVE SLOT
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    engine.resetSaveData();
+                    setConfirmReset(false);
+                    forceUpdate();
+                  }}
+                  className="px-3 py-1 bg-[#FF3B3B] text-[#0B0D10] font-bold text-[11px] cursor-pointer"
+                >
+                  CONFIRM WIPE
+                </button>
+                <button
+                  onClick={() => setConfirmReset(false)}
+                  className="px-2.5 py-1 bg-[#161A20] border border-[#3A3F47] text-[#D9D2C3] text-[11px] cursor-pointer"
+                >
+                  CANCEL
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-/**
- * Pause Menu [ESC]
- */
-export function PauseMenu({ engine, onResume, onOpenGallery }) {
-  const [showOptions, setShowOptions] = useState(false);
+export function ControlsModal({ onClose }) {
+  const rows = [
+    ['WASD / Arrows', 'Move your Runner across the wasteland'],
+    ['Mouse Cursor', 'Aim basic attacks, projectiles, and skills'],
+    ['Left Click (LMB)', 'Basic Attack (Railcut 3-hit combo / Springgun bolts / Magnetist scrap throw)'],
+    ['Right Click / Key V', 'Rook: Manual Active Reload · Sena (Anvil): Toggle Guard Stance'],
+    ['SPACE', 'Dodge Roll (0.25s invulnerable, 1.2s cooldown)'],
+    ['Keys 1 / 2 / 3', 'Class Active Skills 1, 2, and 3'],
+    ['Key R', 'Class Ultimate (Seven Cuts / Ten Count / Scrapfall)'],
+    ['Keys Q / F / Z / X / C', 'Quick-use Gauze Roll, Sugar Tin, Lye Wash, Hot Stew, Stim Stick'],
+    ['Key E', 'Talk to Ume (Pawn Counter) or Harlow (Trade Register Promotions)'],
+    ['Key I', 'Open Runner Pack & Equipment'],
+    ['Key K', 'Open 3-Tier Class Skill Tree & Promotions'],
+    ['ESC / F11', 'Pause Menu / Toggle Fullscreen'],
+  ];
 
   return (
-    <div
-      data-hud-interactive="true"
-      className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/85 p-4 text-[#D9D2C3]"
-    >
-      <div className="w-full max-w-md bg-[#0B0D10] border-2 border-[#3A3F47] p-5 shadow-2xl">
-        <div className="text-lg font-bold tracking-widest text-[#00F0FF] uppercase mb-1">
-          PAUSED
-        </div>
-        <div className="text-xs text-[#D9D2C3]/70 mb-4">
-          Progress saves automatically every 30 seconds and at Kettle camp.
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0B0D10]/90 p-6">
+      <div className="w-full max-w-2xl bg-[#0B0D10] border-2 border-[#00F0FF] p-6">
+        <div className="flex items-center justify-between border-b border-[#3A3F47] pb-3 mb-4">
+          <h3 className="text-base font-bold text-[#00F0FF] tracking-wider">
+            CONTROLS &amp; FIELD MANUAL
+          </h3>
+          <button
+            onClick={onClose}
+            className="px-3 py-1 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
+          >
+            CLOSE
+          </button>
         </div>
 
-        <div className="flex flex-col gap-2.5">
+        <div className="space-y-2 text-xs">
+          {rows.map(([key, desc]) => (
+            <div
+              key={key}
+              className="flex items-center justify-between border-b border-[#161A20] py-1.5 gap-4"
+            >
+              <span className="font-bold text-[#FFC83D] shrink-0">{key}</span>
+              <span className="text-[#D9D2C3] text-right">{desc}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function PauseMenu({ engine, onResume, onOpenGallery }) {
+  const [showOptions, setShowOptions] = useState(false);
+  const [showControls, setShowControls] = useState(false);
+  const [savedNotice, setSavedNotice] = useState(false);
+  const p = engine.player;
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/85 p-6">
+      <div className="w-full max-w-md bg-[#0B0D10] border-2 border-[#3A3F47] p-6 space-y-4">
+        <div className="border-b border-[#3A3F47] pb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold tracking-wider text-[#D9D2C3]">
+              PAUSED
+            </h2>
+            <p className="text-xs text-[#9E9789]">
+              {p.getFullTitleLine()} · Slot 0{engine.activeSlotIndex + 1}
+            </p>
+          </div>
+          <CharacterPortrait
+            classId={p.classId}
+            expression="normal"
+            equipped={p.equipped}
+            stage={p.stage}
+            branch={p.branch}
+            size={48}
+          />
+        </div>
+
+        <div className="space-y-2.5">
           <button
             onClick={onResume}
-            className="w-full py-2.5 bg-[#00F0FF] hover:bg-[#00F0FF]/85 text-[#0B0D10] font-bold text-xs uppercase tracking-wider cursor-pointer"
+            className="w-full py-2.5 bg-[#00F0FF] text-[#0B0D10] font-bold text-xs tracking-wider hover:bg-[#D9D2C3] cursor-pointer"
           >
             RESUME [ESC]
           </button>
 
           <button
             onClick={() => setShowOptions(true)}
-            className="w-full py-2 bg-[#1F4D4A]/40 hover:bg-[#1F4D4A]/80 border border-[#00F0FF]/60 text-xs font-bold uppercase cursor-pointer"
+            className="w-full py-2.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
           >
-            OPTIONS &amp; CONTROLS
+            OPTIONS
           </button>
 
           {onOpenGallery && (
             <button
               onClick={onOpenGallery}
-              className="w-full py-2 bg-[#0B0D10] hover:bg-[#3A3F47] border border-[#FFC83D]/60 text-[#FFC83D] text-xs font-bold uppercase cursor-pointer"
+              className="w-full py-2.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#FFC83D] text-xs font-bold text-[#FFC83D] cursor-pointer"
             >
-              SPRITE &amp; SILHOUETTE GALLERY
+              SPRITE &amp; SILHOUETTE GALLERY (?gallery)
             </button>
           )}
+
+          <button
+            onClick={() => {
+              engine.scanlinesEnabled = !engine.scanlinesEnabled;
+              engine.saveProgress();
+              engine.notifyUi();
+            }}
+            className="w-full py-2.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
+          >
+            SCANLINE OVERLAY: {engine.scanlinesEnabled ? 'ON' : 'OFF'}
+          </button>
+
+          <button
+            onClick={() => setShowControls(true)}
+            className="w-full py-2.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
+          >
+            CONTROLS SCREEN
+          </button>
+
+          <button
+            onClick={() => {
+              engine.saveProgress();
+              setSavedNotice(true);
+              setTimeout(() => setSavedNotice(false), 1800);
+            }}
+            className="w-full py-2.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#FFC83D] cursor-pointer"
+          >
+            {savedNotice ? 'PROGRESS SAVED' : 'SAVE PROGRESS NOW'}
+          </button>
+
+          <button
+            onClick={() => {
+              engine.saveProgress();
+              engine.setUiState('slotSelect');
+            }}
+            className="w-full py-2.5 bg-[#161A20] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
+          >
+            SWITCH SAVE SLOT / NEW CHARACTER
+          </button>
 
           <button
             onClick={() => {
               engine.saveProgress();
               engine.setUiState('title');
             }}
-            className="w-full py-2 bg-[#8B3A1E]/40 hover:bg-[#8B3A1E] border border-[#8B3A1E] text-xs font-bold uppercase cursor-pointer mt-2"
+            className="w-full py-2.5 bg-[#0B0D10] border border-[#8B3A1E] hover:border-[#FF3B3B] text-xs font-bold text-[#9E9789] hover:text-[#D9D2C3] cursor-pointer"
           >
-            SAVE &amp; RETURN TO MAIN MENU
+            RETURN TO MAIN MENU
           </button>
         </div>
       </div>
 
       {showOptions && (
-        <OptionsModal engine={engine} onClose={() => setShowOptions(false)} />
+        <OptionsModal
+          engine={engine}
+          onClose={() => setShowOptions(false)}
+          onOpenControls={() => {
+            setShowOptions(false);
+            setShowControls(true);
+          }}
+        />
       )}
+
+      {showControls && <ControlsModal onClose={() => setShowControls(false)} />}
     </div>
   );
 }
 
-/**
- * Death Screen
- */
 export function DeathScreen({ engine }) {
+  const p = engine.player;
   return (
-    <div
-      data-hud-interactive="true"
-      className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/90 p-4 text-[#D9D2C3]"
-    >
-      <div className="w-full max-w-md bg-[#0B0D10] border-2 border-[#FF3B3B] p-6 text-center shadow-2xl">
-        <div className="flex justify-center mb-3">
-          <SenaPortrait
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/90 p-6">
+      <div className="w-full max-w-md bg-[#0B0D10] border-2 border-[#FF3B3B] p-6 text-center space-y-4">
+        <div className="flex justify-center">
+          <CharacterPortrait
+            classId={p.classId}
             expression="hurt"
-            equipped={engine.player.equipped}
+            equipped={p.equipped}
+            stage={p.stage}
+            branch={p.branch}
             size={64}
           />
         </div>
-        <div className="text-xl font-bold tracking-[0.2em] text-[#FF3B3B] uppercase mb-1">
-          {DIALOGUE.deathHeader}
+        <h2 className="text-xl font-bold tracking-widest text-[#FF3B3B]">
+          DOWN IN THE ASH
+        </h2>
+        <p className="text-xs text-[#D9D2C3] leading-relaxed">
+          {DIALOGUE.deathMessage}
+        </p>
+        <div className="py-2 bg-[#161A20] border border-[#3A3F47] text-xs font-bold text-[#FFC83D] tabular-nums">
+          HAUL FEE LOST: -{engine.lastGoldLost} GOLD (10%)
         </div>
-        <p className="text-xs text-[#D9D2C3]/85 mb-4">{DIALOGUE.deathSub}</p>
-
-        <div className="bg-[#3A3F47]/20 border border-[#3A3F47] p-3 mb-5 text-xs">
-          <div className="flex justify-between mb-1">
-            <span>Haul Fee (10% Gold):</span>
-            <span className="text-[#FF3B3B] font-bold">
-              -{engine.lastGoldLost}G
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span>Level &amp; Equipment:</span>
-            <span className="text-[#00F0FF] font-bold">KEPT</span>
-          </div>
-        </div>
-
         <button
           onClick={() => engine.respawnAfterDeath()}
-          className="w-full py-3 bg-[#FF3B3B] hover:bg-[#FF3B3B]/85 text-[#0B0D10] font-bold text-sm uppercase tracking-wider cursor-pointer"
+          className="w-full py-3 bg-[#00F0FF] text-[#0B0D10] font-bold text-xs tracking-widest hover:bg-[#D9D2C3] cursor-pointer"
         >
-          WAKE AT KETTLE FIRE [ENTER]
+          WAKE UP AT KETTLE [ENTER]
         </button>
       </div>
     </div>

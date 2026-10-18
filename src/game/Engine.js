@@ -1,130 +1,255 @@
 /**
- * GRAVEL SKY — Core Game Engine (480x270 Offscreen Integer Buffer + Fixed-Timestep Loop)
- * - Renders the entire world to an offscreen canvas at 480x270, then scales by
- *   whole-number factors only (letterboxing the remainder with soot #0B0D10).
- * - Maps mouse coordinates accurately through the letterboxed integer viewport.
+ * GRAVEL SKY — Core Fixed-Timestep Game Engine
+ * - Renders the entire game to an offscreen canvas at 480x270 (INTERNAL_WIDTH x INTERNAL_HEIGHT),
+ *   then scales by whole-number factors only (letterboxing the remainder) with image-rendering: pixelated.
+ * - Supports 3 Playable Classes (Sena, Rook, Ines), 3 Save Slots, Harlow's Trade Register promotions,
+ *   Status Effects & Buffs, and 10Hz HUD snapshot synchronization.
  */
 
 import {
   PALETTE,
   WORLD_CONFIG,
-  SKILLS_CONFIG,
   SHOP_ITEMS,
   SHOP_SELL_RATIO,
-  GRADES,
+  XP_CURVE,
+  ENEMIES_CONFIG,
+  NPC,
 } from '../data/config.js';
-import { Player } from './Player.js';
-import { World } from './World.js';
+import { CLASSES, getCharacterTitle, getStageName } from '../data/classes.js';
 import { Camera } from './Camera.js';
+import { World } from './World.js';
+import { Player } from './Player.js';
 import { Spawner } from './Spawner.js';
 import { ProjectilePool } from './Projectile.js';
-import { ParticlePool } from './Particles.js';
+import { ParticleSystem } from './Particles.js';
 import { sound } from './Audio.js';
-import { assets } from './AssetLoader.js';
+import { spriteRegistry, drawPixelText } from './Sprites.js';
 
-const SAVE_KEY = 'gravel_sky_save_v1';
+const SAVE_SLOT_PREFIX = 'gravel_sky_save_slot_';
+const LEGACY_SAVE_KEY = 'gravel_sky_save_v1';
+
 export const INTERNAL_WIDTH = 480;
 export const INTERNAL_HEIGHT = 270;
 
 export class GameEngine {
-  constructor() {
-    this.canvas = null;
-    this.ctx = null;
-    this.renderQueue = [];
+  constructor(onUiUpdate) {
+    this.onUiUpdate = onUiUpdate;
 
-    // 480x270 offscreen pixel buffer
-    this.offscreen =
-      typeof document !== 'undefined' ? document.createElement('canvas') : null;
-    this.offCtx = null;
-    if (this.offscreen) {
-      this.offscreen.width = INTERNAL_WIDTH;
-      this.offscreen.height = INTERNAL_HEIGHT;
-      this.offCtx = this.offscreen.getContext('2d', {
-        alpha: false,
-        willReadFrequently: true,
-      });
-      this.offCtx.imageSmoothingEnabled = false;
-    }
+    // Pre-bake all procedural pixel-art sprites before first frame
+    spriteRegistry.init();
 
-    // Whole-number scale & letterbox offsets
-    this.scaleFactor = 2;
+    // Offscreen 480x270 low-res pixel buffer
+    this.offscreenCanvas = document.createElement('canvas');
+    this.offscreenCanvas.width = INTERNAL_WIDTH;
+    this.offscreenCanvas.height = INTERNAL_HEIGHT;
+    this.offscreenCtx = this.offscreenCanvas.getContext('2d');
+    this.offscreenCtx.imageSmoothingEnabled = false;
+
+    this.displayScale = 2;
     this.letterboxX = 0;
     this.letterboxY = 0;
 
-    this.running = false;
-    this.rafId = null;
+    this.camera = new Camera(INTERNAL_WIDTH, INTERNAL_HEIGHT);
+    this.world = new World();
+    this.player = new Player('sena');
+    this.projectiles = new ProjectilePool(80);
+    this.particles = new ParticleSystem();
+    this.spawner = new Spawner(this.world);
 
+    // UI states: 'title' | 'slotSelect' | 'charSelect' | 'playing' | 'shop' | 'inventory' | 'skills' | 'harlow' | 'pause' | 'death'
     this.uiState = 'title';
-    this.scanlinesEnabled = true;
+    this.activeSlotIndex = 0;
+    this.scanlinesEnabled = false;
+    this.settings = {
+      reduceFlashes: false,
+      shortUltimates: false,
+    };
     this.lastGoldLost = 0;
 
-    // Core simulation objects (Camera operates in 480x270 internal resolution)
-    this.world = new World();
-    this.camera = new Camera(INTERNAL_WIDTH, INTERNAL_HEIGHT);
-    this.player = new Player();
-    this.spawner = new Spawner();
-    this.projectiles = new ProjectilePool(64);
-    this.particles = new ParticlePool(180, 40, 32);
+    // Active Boss Name Card banner timer
+    this.bossNameCard = null;
+    this.seenBossesInSession = new Set();
 
-    this.fixedStep = 1 / 60;
-    this.accumulator = 0;
-    this.lastFrameTime = 0;
-    this.hitStopTimer = 0;
-
-    this.input = {
-      keys: {},
-      mouseX: 240,
-      mouseY: 135,
-      worldMouseX: WORLD_CONFIG.kettleCenter.x + 80,
-      worldMouseY: WORLD_CONFIG.kettleCenter.y,
+    // Input state
+    this.keys = {
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+      KeyW: false,
+      KeyS: false,
+      KeyA: false,
+      KeyD: false,
+      ArrowUp: false,
+      ArrowDown: false,
+      ArrowLeft: false,
+      ArrowRight: false,
       mouseDown: false,
+      rightMouseDown: false,
+      worldMouseX: this.player.x + 40,
+      worldMouseY: this.player.y,
     };
+    this.keys.keys = this.keys;
+    this.mouseScreenX = INTERNAL_WIDTH / 2;
+    this.mouseScreenY = INTERNAL_HEIGHT / 2;
 
-    this.uiListeners = new Set();
+    // Loop timing
+    this.running = false;
+    this.rafId = null;
+    this.lastFrameTime = 0;
+    this.accumulator = 0;
+    this.fixedDt = 1 / 60;
+
+    // 10Hz HUD tick & 30s auto-save timer
+    this.hudTickTimer = 0;
     this.autoSaveTimer = 0;
 
-    this._bindWindowEvents();
-    this.loadProgress();
-    if (typeof window !== 'undefined') {
-      assets.preloadAll();
+    this._migrateLegacySaveIfNeeded();
+    this.loadProgress(0);
+  }
+
+  _migrateLegacySaveIfNeeded() {
+    try {
+      const existingSlot0 = localStorage.getItem(`${SAVE_SLOT_PREFIX}0`);
+      const legacy = localStorage.getItem(LEGACY_SAVE_KEY);
+      if (!existingSlot0 && legacy) {
+        localStorage.setItem(`${SAVE_SLOT_PREFIX}0`, legacy);
+      }
+    } catch {
+      // Ignore storage errors
     }
   }
 
-  subscribeUi(listener) {
-    this.uiListeners.add(listener);
-    return () => this.uiListeners.delete(listener);
+  getSlotKey(slotIndex = this.activeSlotIndex) {
+    return `${SAVE_SLOT_PREFIX}${slotIndex}`;
   }
 
-  notifyUi() {
-    for (const fn of this.uiListeners) {
-      fn(this.uiState);
+  getSaveSlotsSummary() {
+    const slots = [];
+    for (let i = 0; i < 3; i++) {
+      let raw = null;
+      try {
+        raw = localStorage.getItem(this.getSlotKey(i));
+      } catch {
+        raw = null;
+      }
+
+      if (!raw) {
+        slots.push({
+          slotIndex: i,
+          exists: false,
+        });
+        continue;
+      }
+
+      try {
+        const data = JSON.parse(raw);
+        const p = data.player || {};
+        const classId = p.classId && CLASSES[p.classId] ? p.classId : 'sena';
+        const cls = CLASSES[classId];
+        const stage = p.stage || 1;
+        const branch = p.branch || null;
+        const title = getCharacterTitle(classId, stage, branch);
+        const stageName = getStageName(stage);
+
+        slots.push({
+          slotIndex: i,
+          exists: true,
+          classId,
+          characterName: cls.characterName,
+          className: cls.className,
+          accentColor: cls.accentColor,
+          title,
+          stage,
+          stageName,
+          level: p.level || 1,
+          gold: p.gold ?? 35,
+          equipped: p.equipped || {},
+          timestamp: data.timestamp || Date.now(),
+        });
+      } catch {
+        slots.push({
+          slotIndex: i,
+          exists: false,
+        });
+      }
+    }
+    return slots;
+  }
+
+  selectSlot(slotIndex) {
+    this.activeSlotIndex = slotIndex;
+    const summaries = this.getSaveSlotsSummary();
+    const slot = summaries[slotIndex];
+    if (slot && slot.exists) {
+      this.loadProgress(slotIndex);
+      this.setUiState('playing');
+    } else {
+      this.setUiState('charSelect');
     }
   }
 
-  setUiState(nextState) {
-    if (this.uiState === nextState) return;
-    this.uiState = nextState;
-    this.input.keys = {};
-    this.input.mouseDown = false;
-    sound.playUiClick();
+  startNewCharacterInSlot(slotIndex, classId) {
+    this.activeSlotIndex = slotIndex;
+    this.player = new Player(classId);
+    this.spawner = new Spawner(this.world);
+    if (this.projectiles && typeof this.projectiles.clear === 'function') {
+      this.projectiles.clear();
+    }
+    if (this.particles && typeof this.particles.clear === 'function') {
+      this.particles.clear();
+    }
+    this.camera.snapTo(this.player.x, this.player.y, this.world.size);
+    this.saveProgress(slotIndex);
+    this.setUiState('playing');
+  }
+
+  deleteSaveSlot(slotIndex) {
+    try {
+      localStorage.removeItem(this.getSlotKey(slotIndex));
+    } catch {
+      // Ignore
+    }
     this.notifyUi();
   }
 
   attachCanvas(canvas) {
     this.canvas = canvas;
-    if (!canvas) return;
-    this.ctx = canvas.getContext('2d', { alpha: false });
+    this.ctx = canvas.getContext('2d');
     this.ctx.imageSmoothingEnabled = false;
     this.handleResize();
-
-    if (!this.running) {
-      this.running = true;
-      this.lastFrameTime = performance.now();
-      this.rafId = requestAnimationFrame((t) => this._loop(t));
-    }
+    this.camera.snapTo(this.player.x, this.player.y, this.world.size);
   }
 
-  detachCanvas() {
+  handleResize() {
+    if (!this.canvas) return;
+    const parent = this.canvas.parentElement;
+    const w = parent ? parent.clientWidth : window.innerWidth;
+    const h = parent ? parent.clientHeight : window.innerHeight;
+    this.canvas.width = w;
+    this.canvas.height = h;
+    if (this.ctx) {
+      this.ctx.imageSmoothingEnabled = false;
+    }
+
+    const scaleX = Math.floor(w / INTERNAL_WIDTH);
+    const scaleY = Math.floor(h / INTERNAL_HEIGHT);
+    this.displayScale = Math.max(1, Math.min(scaleX, scaleY));
+
+    const scaledW = INTERNAL_WIDTH * this.displayScale;
+    const scaledH = INTERNAL_HEIGHT * this.displayScale;
+    this.letterboxX = Math.floor((w - scaledW) / 2);
+    this.letterboxY = Math.floor((h - scaledH) / 2);
+  }
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    this.lastFrameTime = performance.now();
+    this.rafId = requestAnimationFrame((t) => this.loop(t));
+  }
+
+  stop() {
     this.running = false;
     if (this.rafId) {
       cancelAnimationFrame(this.rafId);
@@ -132,107 +257,568 @@ export class GameEngine {
     }
   }
 
-  handleResize() {
-    if (!this.canvas) return;
-    const w = window.innerWidth || 1280;
-    const h = window.innerHeight || 720;
-    this.canvas.width = w;
-    this.canvas.height = h;
-    if (this.ctx) {
-      this.ctx.imageSmoothingEnabled = false;
+  setUiState(nextState) {
+    sound.playUiClick();
+    this.uiState = nextState;
+    this.keys.mouseDown = false;
+    this.keys.rightMouseDown = false;
+    if (nextState !== 'playing') {
+      this.keys.up = false;
+      this.keys.down = false;
+      this.keys.left = false;
+      this.keys.right = false;
+      this.keys.KeyW = false;
+      this.keys.KeyS = false;
+      this.keys.KeyA = false;
+      this.keys.KeyD = false;
+      this.keys.ArrowUp = false;
+      this.keys.ArrowDown = false;
+      this.keys.ArrowLeft = false;
+      this.keys.ArrowRight = false;
+    }
+    this.notifyUi();
+  }
+
+  loop(timestamp) {
+    if (!this.running) return;
+    const frameDelta = Math.min(0.1, (timestamp - this.lastFrameTime) / 1000);
+    this.lastFrameTime = timestamp;
+
+    const isSimulationActive = this.uiState === 'playing';
+
+    if (isSimulationActive) {
+      this.accumulator += frameDelta;
+      while (this.accumulator >= this.fixedDt) {
+        this.fixedUpdate(this.fixedDt);
+        this.accumulator -= this.fixedDt;
+      }
+    } else {
+      this.world.update(frameDelta, this.player);
     }
 
-    // Whole-number integer scale factor only (letterbox the remainder)
-    const scaleX = Math.floor(w / INTERNAL_WIDTH);
-    const scaleY = Math.floor(h / INTERNAL_HEIGHT);
-    this.scaleFactor = Math.max(1, Math.min(scaleX, scaleY));
+    this.render();
 
-    const scaledW = INTERNAL_WIDTH * this.scaleFactor;
-    const scaledH = INTERNAL_HEIGHT * this.scaleFactor;
-    this.letterboxX = Math.floor((w - scaledW) / 2);
-    this.letterboxY = Math.floor((h - scaledH) / 2);
+    this.hudTickTimer += frameDelta;
+    if (this.hudTickTimer >= 0.1) {
+      this.hudTickTimer = 0;
+      this.notifyUi();
+    }
 
-    this.camera.resize(INTERNAL_WIDTH, INTERNAL_HEIGHT);
-    this.camera.snapTo(this.player.x, this.player.y);
+    if (isSimulationActive) {
+      this.autoSaveTimer += frameDelta;
+      if (this.autoSaveTimer >= 30) {
+        this.autoSaveTimer = 0;
+        this.saveProgress();
+      }
+    }
+
+    this.rafId = requestAnimationFrame((t) => this.loop(t));
   }
 
-  _clientToInternal(clientX, clientY) {
-    const ix = Math.floor((clientX - this.letterboxX) / this.scaleFactor);
-    const iy = Math.floor((clientY - this.letterboxY) / this.scaleFactor);
-    return {
-      x: Math.max(0, Math.min(INTERNAL_WIDTH - 1, ix)),
-      y: Math.max(0, Math.min(INTERNAL_HEIGHT - 1, iy)),
-    };
+  fixedUpdate(dt) {
+    this.keys.worldMouseX = this.camera.x + this.mouseScreenX;
+    this.keys.worldMouseY = this.camera.y + this.mouseScreenY;
+
+    this.world.update(dt, this.player);
+
+    // Hit-stop freezes world simulation while keeping camera shake active
+    if (this.particles.updateHitStop(dt)) {
+      this.camera.follow(this.player.x, this.player.y, this.world.size, dt);
+      return;
+    }
+
+    const timeStopped = this.player.isTimeStopped();
+
+    this.player.update(
+      dt,
+      this.keys,
+      this.spawner,
+      this.projectiles,
+      this.particles,
+      this.camera,
+      this.world,
+      (dur) => this.particles.triggerHitStop(dur)
+    );
+
+    // Check player death
+    if (this.player.dead && this.player.deathAnimTimer <= 0 && this.uiState === 'playing') {
+      this.lastGoldLost = this.player.applyDeathPenalty();
+      this.saveProgress();
+      this.uiState = 'death';
+      this.notifyUi();
+      return;
+    }
+
+    this.projectiles.update(
+      dt,
+      this.world,
+      this.player,
+      this.spawner,
+      this.particles,
+      this.camera,
+      timeStopped
+    );
+
+    this.spawner.update(
+      dt,
+      this.player,
+      this.projectiles,
+      this.particles,
+      this.camera,
+      this.world,
+      timeStopped
+    );
+
+    if (this.spawner.activeBoss) {
+      const b = this.spawner.activeBoss;
+      if (!this.seenBossesInSession.has(b.id)) {
+        this.seenBossesInSession.add(b.id);
+        this.bossNameCard = {
+          name: b.name,
+          subtitle: b.subtitle,
+          timer: 3.5,
+        };
+      }
+    }
+    if (this.bossNameCard) {
+      this.bossNameCard.timer -= dt;
+      if (this.bossNameCard.timer <= 0) {
+        this.bossNameCard = null;
+      }
+    }
+
+    this.particles.update(dt, this.player, this.world);
+    this.camera.follow(this.player.x, this.player.y, this.world.size, dt);
   }
 
-  startHitStop(duration = 0.05) {
-    this.hitStopTimer = Math.max(this.hitStopTimer, duration);
+  render() {
+    if (!this.ctx || !this.canvas) return;
+
+    const octx = this.offscreenCtx;
+    octx.imageSmoothingEnabled = false;
+    octx.fillStyle = PALETTE.soot;
+    octx.fillRect(0, 0, INTERNAL_WIDTH, INTERNAL_HEIGHT);
+
+    // 1. World terrain chunks, Kettle camp, Ume, Harlow, Boss arena markers
+    this.world.draw(octx, this.camera, this.spawner);
+
+    // 2. Ground decals (scorches, slashes, footprints, puddle rings, tripwires, craters)
+    this.particles.drawGroundDecals(octx, this.camera);
+
+    // 3. Loot & grounded scrap pickups
+    this.particles.drawPickups(octx, this.camera);
+
+    // 4. Ume & Harlow interaction prompts when near
+    if (this.uiState === 'playing') {
+      if (this.isPlayerNearUme()) {
+        const ux = Math.round(WORLD_CONFIG.umePosition.x - this.camera.renderX);
+        const uy = Math.round(WORLD_CONFIG.umePosition.y - this.camera.renderY - 22);
+        octx.fillStyle = PALETTE.soot;
+        octx.fillRect(ux - 22, uy - 6, 44, 9);
+        octx.fillStyle = PALETTE.signal;
+        octx.fillRect(ux - 22, uy - 6, 44, 1);
+        drawPixelText(octx, 'E SHOP', ux, uy - 4, PALETTE.signal, 'center');
+      }
+      if (this.isPlayerNearHarlow()) {
+        const hx = Math.round(WORLD_CONFIG.harlowPosition.x - this.camera.renderX);
+        const hy = Math.round(WORLD_CONFIG.harlowPosition.y - this.camera.renderY - 22);
+        const canPromo = this.player.canPromoteToJourneyman() || this.player.canPromoteToMaster();
+        const col = canPromo ? PALETTE.brass : PALETTE.bone;
+        octx.fillStyle = PALETTE.soot;
+        octx.fillRect(hx - 28, hy - 6, 56, 9);
+        octx.fillStyle = col;
+        octx.fillRect(hx - 28, hy - 6, 56, 1);
+        drawPixelText(
+          octx,
+          canPromo ? 'E PROMOTE' : 'E HARLOW',
+          hx,
+          hy - 4,
+          col,
+          'center'
+        );
+      }
+    }
+
+    // 5. Y-Sorted Entities (Player + Enemies)
+    const renderList = [];
+    for (let i = 0; i < this.spawner.enemies.length; i++) {
+      const e = this.spawner.enemies[i];
+      if (!e.dead && this.camera.isVisible(e.x, e.y, e.radius + 48)) {
+        renderList.push({ y: e.y, type: 'enemy', entity: e });
+      }
+    }
+    renderList.push({ y: this.player.y, type: 'player', entity: this.player });
+    renderList.sort((a, b) => a.y - b.y);
+
+    for (let i = 0; i < renderList.length; i++) {
+      const item = renderList[i];
+      if (item.type === 'enemy') {
+        item.entity.draw(octx, this.camera);
+      } else {
+        item.entity.draw(octx, this.camera, this.particles);
+      }
+    }
+
+    // 6. Projectiles (8-angle Rail Spikes, Rook Bolts, Ines Scrap, Enemy Bolts)
+    this.projectiles.draw(octx, this.camera);
+
+    // 7. Particles, Slash Arcs, Ground Shockwaves, Floating Damage Numbers
+    this.particles.drawParticlesAndText(octx, this.camera);
+
+    // 7.5. Ultimates World Overlays (Rook aim line, Ines levitating scrap, Sena slashes & split corpses)
+    if (this.player.ultimates) {
+      if (typeof this.player.ultimates.drawWorldOverlay === 'function') {
+        this.player.ultimates.drawWorldOverlay(octx, this.camera, this.player);
+      } else if (typeof this.player.ultimates.drawWorldEffects === 'function') {
+        this.player.ultimates.drawWorldEffects(octx, this.camera, this.player);
+      }
+    }
+
+    // 8. Atmospheric Ash Motes, Vignette, & Ultimate 2-Tone World Drop
+    this.world.drawAtmosphereAndVignette(octx, this.camera, this.player);
+
+    // 9. Ultimates Screen Overlays (Letterbox bars, Speed lines cut-in, code-drawn Pixel Title Cards, Flashes/Bone Tints, Accessibility notice)
+    if (this.player.ultimates) {
+      this.player.ultimates.drawScreenOverlay(
+        octx,
+        INTERNAL_WIDTH,
+        INTERNAL_HEIGHT,
+        this.player,
+        this.settings
+      );
+    } else {
+      const cutInTimer = this.player.getCutInTimer();
+      if (cutInTimer > 0) {
+        const cutIn = spriteRegistry.getCutIn(this.player.classId);
+        if (cutIn) {
+          const cw = 64 * 3;
+          const ch = 16 * 3;
+          const cx = Math.round((INTERNAL_WIDTH - cw) / 2);
+          const cy = 36;
+          octx.fillStyle = PALETTE.soot;
+          octx.fillRect(0, cy - 2, INTERNAL_WIDTH, ch + 4);
+          octx.fillStyle = this.player.classConfig.accentColor || PALETTE.signal;
+          octx.fillRect(0, cy - 2, INTERNAL_WIDTH, 1);
+          octx.fillRect(0, cy + ch + 1, INTERNAL_WIDTH, 1);
+          octx.drawImage(cutIn, 0, 0, 64, 16, cx, cy, cw, ch);
+        }
+      }
+    }
+
+    // 10. Blit 480x270 offscreen canvas to main display canvas at integer scale
+    const ctx = this.ctx;
+    const dispW = this.canvas.width;
+    const dispH = this.canvas.height;
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = PALETTE.soot;
+    ctx.fillRect(0, 0, dispW, dispH);
+
+    const scaledW = INTERNAL_WIDTH * this.displayScale;
+    const scaledH = INTERNAL_HEIGHT * this.displayScale;
+    ctx.drawImage(
+      this.offscreenCanvas,
+      0,
+      0,
+      INTERNAL_WIDTH,
+      INTERNAL_HEIGHT,
+      this.letterboxX,
+      this.letterboxY,
+      scaledW,
+      scaledH
+    );
   }
 
-  startGameFromTitle() {
-    sound.init();
-    sound.playLevelUp();
-    this.camera.snapTo(this.player.x, this.player.y);
-    this.setUiState('playing');
+  isPlayerNearUme() {
+    const dx = this.player.x - WORLD_CONFIG.umePosition.x;
+    const dy = this.player.y - WORLD_CONFIG.umePosition.y;
+    return Math.hypot(dx, dy) <= 95;
   }
 
-  respawnAfterDeath() {
-    this.lastGoldLost = this.player.respawnAtKettle();
-    this.spawner.clearNonBossEnemies();
-    this.camera.snapTo(this.player.x, this.player.y);
-    this.saveProgress();
-    this.setUiState('playing');
+  isPlayerNearHarlow() {
+    const dx = this.player.x - WORLD_CONFIG.harlowPosition.x;
+    const dy = this.player.y - WORLD_CONFIG.harlowPosition.y;
+    return Math.hypot(dx, dy) <= 95;
   }
 
-  // --- SHOP, INVENTORY, & SKILL UPGRADE ACTIONS ---
+  // --- INPUT HANDLERS ---
+  onKeyDown(e) {
+    if (e.code === 'F11') {
+      e.preventDefault();
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+      return;
+    }
 
-  upgradeSkill(skillId) {
-    const cfg = SKILLS_CONFIG[skillId];
-    if (!cfg || this.player.skillPoints <= 0) return false;
-    const currentLvl = this.player.skills[skillId] || 1;
-    if (currentLvl >= cfg.maxLevel) return false;
+    if (this.uiState === 'title') {
+      if (e.code === 'Enter' || e.code === 'Space') {
+        this.setUiState('slotSelect');
+      }
+      return;
+    }
 
-    this.player.skillPoints -= 1;
-    this.player.skills[skillId] = currentLvl + 1;
-    this.player.recalculateStats(false);
-    sound.playLevelUp();
-    this.saveProgress();
-    this.notifyUi();
-    return true;
+    if (this.uiState === 'death') {
+      if (e.code === 'Enter' || e.code === 'Space') {
+        this.respawnAfterDeath();
+      }
+      return;
+    }
+
+    if (e.code === 'Escape') {
+      if (this.uiState === 'playing') {
+        this.setUiState('pause');
+      } else if (
+        this.uiState === 'shop' ||
+        this.uiState === 'inventory' ||
+        this.uiState === 'skills' ||
+        this.uiState === 'harlow' ||
+        this.uiState === 'pause'
+      ) {
+        this.setUiState('playing');
+      } else if (this.uiState === 'charSelect') {
+        this.setUiState('slotSelect');
+      } else if (this.uiState === 'slotSelect') {
+        this.setUiState('title');
+      }
+      return;
+    }
+
+    if (e.code === 'KeyI') {
+      if (this.uiState === 'playing') this.setUiState('inventory');
+      else if (this.uiState === 'inventory') this.setUiState('playing');
+      return;
+    }
+
+    if (e.code === 'KeyK') {
+      if (this.uiState === 'playing') this.setUiState('skills');
+      else if (this.uiState === 'skills') this.setUiState('playing');
+      return;
+    }
+
+    if (e.code === 'KeyE') {
+      if (this.uiState === 'playing') {
+        if (this.isPlayerNearUme()) {
+          this.setUiState('shop');
+          return;
+        }
+        if (this.isPlayerNearHarlow()) {
+          this.setUiState('harlow');
+          return;
+        }
+      } else if (this.uiState === 'shop' || this.uiState === 'harlow') {
+        this.setUiState('playing');
+        return;
+      }
+    }
+
+    if (this.uiState !== 'playing') return;
+
+    this.keys[e.code] = true;
+
+    switch (e.code) {
+      case 'KeyW':
+      case 'ArrowUp':
+        this.keys.up = true;
+        break;
+      case 'KeyS':
+      case 'ArrowDown':
+        this.keys.down = true;
+        break;
+      case 'KeyA':
+      case 'ArrowLeft':
+        this.keys.left = true;
+        break;
+      case 'KeyD':
+      case 'ArrowRight':
+        this.keys.right = true;
+        break;
+      case 'Space': {
+        e.preventDefault();
+        let dx = 0;
+        let dy = 0;
+        if (this.keys.up) dy -= 1;
+        if (this.keys.down) dy += 1;
+        if (this.keys.left) dx -= 1;
+        if (this.keys.right) dx += 1;
+        if (dx === 0 && dy === 0) {
+          dx = this.keys.worldMouseX - this.player.x;
+          dy = this.keys.worldMouseY - this.player.y;
+        }
+        this.player.tryDodge(dx, dy, this.particles);
+        break;
+      }
+      case 'Digit1':
+        this.player.useSkillByIndex(
+          0,
+          this.keys.worldMouseX,
+          this.keys.worldMouseY,
+          this.spawner,
+          this.projectiles,
+          this.particles,
+          this.camera,
+          this.world
+        );
+        break;
+      case 'Digit2':
+        this.player.useSkillByIndex(
+          1,
+          this.keys.worldMouseX,
+          this.keys.worldMouseY,
+          this.spawner,
+          this.projectiles,
+          this.particles,
+          this.camera,
+          this.world
+        );
+        break;
+      case 'Digit3':
+        this.player.useSkillByIndex(
+          2,
+          this.keys.worldMouseX,
+          this.keys.worldMouseY,
+          this.spawner,
+          this.projectiles,
+          this.particles,
+          this.camera,
+          this.world
+        );
+        break;
+      case 'KeyR':
+        this.player.useUltimate(
+          this.keys.worldMouseX,
+          this.keys.worldMouseY,
+          this.spawner,
+          this.projectiles,
+          this.particles,
+          this.camera,
+          this.world,
+          this.settings
+        );
+        break;
+      case 'KeyV':
+      case 'ShiftLeft':
+      case 'ShiftRight':
+        if (this.player.classId === 'rook') {
+          this.player.tryManualReload(this.particles);
+        } else if (this.player.classId === 'sena') {
+          this.player.toggleGuardStance(this.particles);
+        }
+        break;
+      case 'KeyQ':
+        this.player.useSupply('gauzeRoll', this.particles);
+        break;
+      case 'KeyF':
+        this.player.useSupply('sugarTin', this.particles);
+        break;
+      case 'KeyZ':
+      case 'Digit4':
+        this.player.useSupply('lyeWash', this.particles);
+        break;
+      case 'KeyX':
+      case 'Digit5':
+        this.player.useSupply('hotStew', this.particles);
+        break;
+      case 'KeyC':
+      case 'Digit6':
+        this.player.useSupply('stimStick', this.particles);
+        break;
+      default:
+        break;
+    }
   }
 
+  onKeyUp(e) {
+    this.keys[e.code] = false;
+
+    switch (e.code) {
+      case 'KeyW':
+      case 'ArrowUp':
+        this.keys.up = false;
+        break;
+      case 'KeyS':
+      case 'ArrowDown':
+        this.keys.down = false;
+        break;
+      case 'KeyA':
+      case 'ArrowLeft':
+        this.keys.left = false;
+        break;
+      case 'KeyD':
+      case 'ArrowRight':
+        this.keys.right = false;
+        break;
+      default:
+        break;
+    }
+  }
+
+  onMouseMove(e) {
+    if (!this.canvas) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const rawX = e.clientX - rect.left - this.letterboxX;
+    const rawY = e.clientY - rect.top - this.letterboxY;
+    this.mouseScreenX = Math.max(0, Math.min(INTERNAL_WIDTH, rawX / this.displayScale));
+    this.mouseScreenY = Math.max(0, Math.min(INTERNAL_HEIGHT, rawY / this.displayScale));
+    this.keys.worldMouseX = this.camera.x + this.mouseScreenX;
+    this.keys.worldMouseY = this.camera.y + this.mouseScreenY;
+  }
+
+  onMouseDown(e) {
+    if (this.uiState !== 'playing') return;
+    if (e.button === 0) {
+      this.keys.mouseDown = true;
+    } else if (e.button === 2) {
+      this.keys.rightMouseDown = true;
+      // Right-click convenience: Rook manual reload or Sena Anvil Guard toggle
+      if (this.player.classId === 'rook') {
+        this.player.tryManualReload(this.particles);
+      } else if (this.player.classId === 'sena') {
+        this.player.toggleGuardStance(this.particles);
+      }
+    }
+  }
+
+  onMouseUp(e) {
+    if (e.button === 0) {
+      this.keys.mouseDown = false;
+    } else if (e.button === 2) {
+      this.keys.rightMouseDown = false;
+    }
+  }
+
+  // --- SHOP, SKILLS, & PROMOTION ACTIONS ---
   buyAndEquipItem(itemId) {
     const item = SHOP_ITEMS[itemId];
-    if (!item) return { ok: false, reason: 'Invalid item.' };
+    if (!item) return { ok: false, reason: 'Unknown item.' };
 
-    const gradeCfg = GRADES[item.grade];
-    if (gradeCfg && this.player.level < gradeCfg.unlockLevel) {
-      return { ok: false, reason: `Requires Level ${gradeCfg.unlockLevel}.` };
+    const p = this.player;
+    const gradeOrder = { Scrap: 1, Salvaged: 8, Relic: 16 };
+    const reqLv = gradeOrder[item.grade] || 1;
+    if (p.level < reqLv) {
+      return { ok: false, reason: `Requires Level ${reqLv}.` };
+    }
+    if (p.gold < item.price) {
+      return { ok: false, reason: 'Not enough Gold.' };
     }
 
-    if (this.player.gold < item.price) {
-      return { ok: false, reason: 'Not enough gold.' };
-    }
-
-    this.player.gold -= item.price;
+    p.gold -= item.price;
+    sound.playBuySell();
 
     if (item.consumable) {
-      this.player.supplies[itemId] = (this.player.supplies[itemId] || 0) + 1;
+      p.supplies[item.id] = (p.supplies[item.id] || 0) + 1;
     } else {
-      const prevEquipped = this.player.equipped[item.slot];
-      if (
-        prevEquipped &&
-        prevEquipped !== itemId &&
-        !this.player.ownedEquipment.includes(prevEquipped)
-      ) {
-        this.player.ownedEquipment.push(prevEquipped);
+      const prevEquipped = p.equipped[item.slot];
+      if (prevEquipped && prevEquipped !== item.id && !p.ownedEquipment.includes(prevEquipped)) {
+        p.ownedEquipment.push(prevEquipped);
       }
-      this.player.ownedEquipment = this.player.ownedEquipment.filter((id) => id !== itemId);
-      this.player.equipped[item.slot] = itemId;
-      this.player.recalculateStats(false);
+      p.equipped[item.slot] = item.id;
+      p.ownedEquipment = p.ownedEquipment.filter((id) => id !== item.id);
+      p.recalcStats();
+      p.refreshEquipmentSprites();
     }
 
-    sound.playCoin();
     this.saveProgress();
     this.notifyUi();
     return { ok: true };
@@ -240,604 +826,311 @@ export class GameEngine {
 
   equipFromInventory(itemId) {
     const item = SHOP_ITEMS[itemId];
-    if (!item || item.consumable) return false;
+    if (!item || item.consumable) return;
+    const p = this.player;
+    const idx = p.ownedEquipment.indexOf(itemId);
+    if (idx === -1) return;
 
-    const prevEquipped = this.player.equipped[item.slot];
-    this.player.ownedEquipment = this.player.ownedEquipment.filter((id) => id !== itemId);
-    if (prevEquipped && prevEquipped !== itemId) {
-      this.player.ownedEquipment.push(prevEquipped);
+    const prev = p.equipped[item.slot];
+    p.ownedEquipment.splice(idx, 1);
+    if (prev) {
+      p.ownedEquipment.push(prev);
     }
-    this.player.equipped[item.slot] = itemId;
-    this.player.recalculateStats(false);
+    p.equipped[item.slot] = itemId;
+    p.recalcStats();
+    p.refreshEquipmentSprites();
     sound.playUiClick();
     this.saveProgress();
     this.notifyUi();
-    return true;
   }
 
   unequipSlot(slot) {
-    const current = this.player.equipped[slot];
-    if (!current) return false;
-    this.player.equipped[slot] = null;
-    if (!this.player.ownedEquipment.includes(current)) {
-      this.player.ownedEquipment.push(current);
-    }
-    this.player.recalculateStats(false);
+    const p = this.player;
+    const cur = p.equipped[slot];
+    if (!cur) return;
+    p.equipped[slot] = null;
+    p.ownedEquipment.push(cur);
+    p.recalcStats();
+    p.refreshEquipmentSprites();
     sound.playUiClick();
     this.saveProgress();
     this.notifyUi();
-    return true;
   }
 
   sellItem(itemId, fromEquippedSlot = null) {
     const item = SHOP_ITEMS[itemId];
     if (!item) return false;
+    const p = this.player;
     const sellPrice = Math.max(1, Math.floor(item.price * SHOP_SELL_RATIO));
 
     if (item.consumable) {
-      if (!this.player.supplies[itemId] || this.player.supplies[itemId] <= 0) return false;
-      this.player.supplies[itemId] -= 1;
-      this.player.gold += sellPrice;
-    } else if (fromEquippedSlot && this.player.equipped[fromEquippedSlot] === itemId) {
-      this.player.equipped[fromEquippedSlot] = null;
-      this.player.gold += sellPrice;
-      this.player.recalculateStats(false);
+      if ((p.supplies[itemId] || 0) <= 0) return false;
+      p.supplies[itemId] -= 1;
+      p.gold += sellPrice;
+    } else if (fromEquippedSlot) {
+      if (p.equipped[fromEquippedSlot] !== itemId) return false;
+      p.equipped[fromEquippedSlot] = null;
+      p.gold += sellPrice;
+      p.recalcStats();
+      p.refreshEquipmentSprites();
     } else {
-      const idx = this.player.ownedEquipment.indexOf(itemId);
+      const idx = p.ownedEquipment.indexOf(itemId);
       if (idx === -1) return false;
-      this.player.ownedEquipment.splice(idx, 1);
-      this.player.gold += sellPrice;
+      p.ownedEquipment.splice(idx, 1);
+      p.gold += sellPrice;
     }
 
-    sound.playCoin();
+    sound.playBuySell();
     this.saveProgress();
     this.notifyUi();
     return true;
   }
 
-  // --- SAVE & LOAD SYSTEM ---
-
-  serializeSave() {
-    return {
-      version: 1,
-      timestamp: Date.now(),
-      player: {
-        level: this.player.level,
-        xp: this.player.xp,
-        gold: this.player.gold,
-        skillPoints: this.player.skillPoints,
-        skills: { ...this.player.skills },
-        equipped: { ...this.player.equipped },
-        ownedEquipment: [...this.player.ownedEquipment],
-        supplies: { ...this.player.supplies },
-        hp: this.player.hp,
-        stamina: this.player.stamina,
-      },
-      defeatedBosses: { ...this.spawner.defeatedBosses },
-      settings: {
-        scanlinesEnabled: this.scanlinesEnabled,
-        muted: sound.muted,
-      },
-    };
-  }
-
-  applySaveData(data) {
-    if (!data || !data.player) return;
-    const p = data.player;
-    this.player.level = Math.max(1, Math.min(30, p.level || 1));
-    this.player.xp = Math.max(0, p.xp || 0);
-    this.player.gold = Math.max(0, p.gold ?? 95);
-    this.player.skillPoints = Math.max(0, p.skillPoints ?? 1);
-    if (p.skills) {
-      this.player.skills = {
-        lunge: Math.max(1, Math.min(5, p.skills.lunge || 1)),
-        groundBreak: Math.max(1, Math.min(5, p.skills.groundBreak || 1)),
-        railSpike: Math.max(1, Math.min(5, p.skills.railSpike || 1)),
-      };
-    }
-    if (p.equipped) {
-      this.player.equipped = {
-        head: p.equipped.head || null,
-        body: p.equipped.body || null,
-        legs: p.equipped.legs || null,
-      };
-    }
-    if (Array.isArray(p.ownedEquipment)) {
-      this.player.ownedEquipment = [...p.ownedEquipment];
-    }
-    if (p.supplies) {
-      this.player.supplies = {
-        gauzeRoll: p.supplies.gauzeRoll ?? 2,
-        sugarTin: p.supplies.sugarTin ?? 1,
-      };
-    }
-    this.player.recalculateStats(false);
-    if (typeof p.hp === 'number' && p.hp > 0) {
-      this.player.hp = Math.min(this.player.maxHp, p.hp);
-    } else {
-      this.player.hp = this.player.maxHp;
-    }
-
-    if (data.defeatedBosses) {
-      this.spawner.defeatedBosses = {
-        ...this.spawner.defeatedBosses,
-        ...data.defeatedBosses,
-      };
-    }
-    if (data.settings) {
-      if (typeof data.settings.scanlinesEnabled === 'boolean') {
-        this.scanlinesEnabled = data.settings.scanlinesEnabled;
-      }
-      if (typeof data.settings.muted === 'boolean') {
-        sound.setMuted(data.settings.muted);
-      }
+  upgradeSkill(skillId) {
+    if (this.player.upgradeSkill(skillId)) {
+      this.saveProgress();
+      this.notifyUi();
     }
   }
 
-  saveProgress() {
-    const payload = this.serializeSave();
-    if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.saveGame) {
-      window.electronAPI.saveGame(payload).catch(() => {});
+  upgradePassive(passiveId) {
+    if (this.player.upgradePassive(passiveId)) {
+      this.saveProgress();
+      this.notifyUi();
     }
-    try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
-    } catch (_err) {}
   }
 
-  async loadProgress() {
-    try {
-      if (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.loadGame) {
-        const electronData = await window.electronAPI.loadGame();
-        if (electronData) {
-          this.applySaveData(electronData);
-          this.notifyUi();
-          return;
-        }
-      }
-    } catch (_e) {}
-
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) {
-        this.applySaveData(JSON.parse(raw));
-        this.notifyUi();
-      }
-    } catch (_err) {}
+  unlockBranchNode(nodeId) {
+    if (this.player.unlockBranchNode(nodeId)) {
+      this.saveProgress();
+      this.notifyUi();
+    }
   }
 
-  resetSaveData() {
-    this.player = new Player();
-    this.spawner = new Spawner();
+  promoteToJourneyman(branchId) {
+    if (this.player.promoteToJourneyman(branchId)) {
+      this.particles.spawnFloatingText(
+        this.player.x,
+        this.player.y - 32,
+        `PROMOTED: ${this.player.getTitle().toUpperCase()}`,
+        PALETTE.brass
+      );
+      this.saveProgress();
+      this.notifyUi();
+      return true;
+    }
+    return false;
+  }
+
+  promoteToMaster() {
+    if (this.player.promoteToMaster()) {
+      this.particles.spawnFloatingText(
+        this.player.x,
+        this.player.y - 32,
+        `MASTER: ${this.player.getTitle().toUpperCase()}`,
+        PALETTE.brass
+      );
+      this.saveProgress();
+      this.notifyUi();
+      return true;
+    }
+    return false;
+  }
+
+  respawnAfterDeath() {
+    this.player.respawnAtKettle();
+    this.projectiles.clear();
+    this.camera.snapTo(this.player.x, this.player.y, this.world.size);
+    this.uiState = 'playing';
     this.saveProgress();
     this.notifyUi();
   }
 
-  // --- INPUT & WINDOW EVENT BINDINGS ---
+  // --- SAVE / LOAD SYSTEM (3 Save Slots + Electron IPC or localStorage fallback) ---
+  saveProgress(slotIndex = this.activeSlotIndex) {
+    const payload = {
+      version: 2,
+      slotIndex,
+      timestamp: Date.now(),
+      scanlinesEnabled: this.scanlinesEnabled,
+      settings: { ...this.settings },
+      player: this.player.toJSON(),
+      spawner: this.spawner.toJSON(),
+    };
 
-  _bindWindowEvents() {
-    if (typeof window === 'undefined') return;
-
-    window.addEventListener('resize', () => this.handleResize());
-    window.addEventListener('blur', () => {
-      this.input.keys = {};
-      this.input.mouseDown = false;
-    });
-    window.addEventListener('beforeunload', () => {
-      this.saveProgress();
-    });
-
-    window.addEventListener('mousemove', (e) => {
-      const pt = this._clientToInternal(e.clientX, e.clientY);
-      this.input.mouseX = pt.x;
-      this.input.mouseY = pt.y;
-      const worldPt = this.camera.screenToWorld(pt.x, pt.y);
-      this.input.worldMouseX = worldPt.x;
-      this.input.worldMouseY = worldPt.y;
-    });
-
-    window.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
-      if (this.uiState !== 'playing') return;
-      if (e.target && e.target.closest && e.target.closest('[data-hud-interactive="true"]')) {
-        return;
+    try {
+      if (window.electronAPI?.saveGame) {
+        window.electronAPI.saveGame(payload);
       }
-      sound.init();
-      this.input.mouseDown = true;
-      const pt = this._clientToInternal(e.clientX, e.clientY);
-      this.input.mouseX = pt.x;
-      this.input.mouseY = pt.y;
-      const worldPt = this.camera.screenToWorld(pt.x, pt.y);
-      this.input.worldMouseX = worldPt.x;
-      this.input.worldMouseY = worldPt.y;
-
-      this.player.tryBasicAttack(
-        this.input.worldMouseX,
-        this.input.worldMouseY,
-        this.spawner,
-        this.particles,
-        this.camera,
-        (dur) => this.startHitStop(dur)
-      );
-    });
-
-    window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) {
-        this.input.mouseDown = false;
-      }
-    });
-
-    window.addEventListener('keydown', (e) => {
-      const code = e.code;
-
-      if (code === 'F11') {
-        e.preventDefault();
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen?.().catch(() => {});
-        } else {
-          document.exitFullscreen?.().catch(() => {});
-        }
-        return;
-      }
-
-      if (this.uiState === 'title') {
-        if (code === 'Enter' || code === 'Space') {
-          e.preventDefault();
-          this.startGameFromTitle();
-        }
-        return;
-      }
-
-      if (this.uiState === 'death') {
-        if (code === 'Enter' || code === 'Space') {
-          e.preventDefault();
-          this.respawnAfterDeath();
-        }
-        return;
-      }
-
-      if (code === 'Escape') {
-        e.preventDefault();
-        if (this.uiState === 'playing') {
-          this.setUiState('pause');
-        } else {
-          this.setUiState('playing');
-        }
-        return;
-      }
-
-      if (code === 'KeyI') {
-        e.preventDefault();
-        this.setUiState(this.uiState === 'inventory' ? 'playing' : 'inventory');
-        return;
-      }
-
-      if (code === 'KeyK') {
-        e.preventDefault();
-        this.setUiState(this.uiState === 'skills' ? 'playing' : 'skills');
-        return;
-      }
-
-      if (code === 'KeyE') {
-        e.preventDefault();
-        if (this.uiState === 'shop') {
-          this.setUiState('playing');
-          return;
-        }
-        if (this.uiState === 'playing' && this.isPlayerNearUme()) {
-          this.setUiState('shop');
-          return;
-        }
-      }
-
-      if (this.uiState !== 'playing') return;
-
-      this.input.keys[code] = true;
-
-      if (code === 'Space') {
-        e.preventDefault();
-        let mx = 0;
-        let my = 0;
-        if (this.input.keys.KeyW || this.input.keys.ArrowUp) my -= 1;
-        if (this.input.keys.KeyS || this.input.keys.ArrowDown) my += 1;
-        if (this.input.keys.KeyA || this.input.keys.ArrowLeft) mx -= 1;
-        if (this.input.keys.KeyD || this.input.keys.ArrowRight) mx += 1;
-        this.player.tryDodge(
-          mx,
-          my,
-          this.input.worldMouseX,
-          this.input.worldMouseY,
-          this.particles
-        );
-      } else if (code === 'Digit1') {
-        this.player.trySkillLunge(
-          this.input.worldMouseX,
-          this.input.worldMouseY,
-          this.spawner,
-          this.particles,
-          this.camera,
-          (dur) => this.startHitStop(dur)
-        );
-      } else if (code === 'Digit2') {
-        this.player.trySkillGroundBreak(
-          this.spawner,
-          this.particles,
-          this.camera,
-          (dur) => this.startHitStop(dur)
-        );
-      } else if (code === 'Digit3') {
-        this.player.trySkillRailSpike(
-          this.input.worldMouseX,
-          this.input.worldMouseY,
-          this.projectiles,
-          this.particles,
-          this.camera
-        );
-      } else if (code === 'KeyR') {
-        this.player.tryUltimate(this.spawner, this.particles, this.camera);
-      } else if (code === 'KeyQ') {
-        this.player.useSupply('gauzeRoll', this.particles);
-      } else if (code === 'KeyF') {
-        this.player.useSupply('sugarTin', this.particles);
-      }
-    });
-
-    window.addEventListener('keyup', (e) => {
-      this.input.keys[e.code] = false;
-    });
-  }
-
-  isPlayerNearUme() {
-    const d = Math.hypot(
-      this.player.x - WORLD_CONFIG.umePosition.x,
-      this.player.y - WORLD_CONFIG.umePosition.y
-    );
-    return d <= 75;
-  }
-
-  // --- MAIN FIXED-TIMESTEP LOOP ---
-
-  _loop(now) {
-    if (!this.running) return;
-    const rawDt = Math.min(0.05, Math.max(0, (now - this.lastFrameTime) / 1000));
-    this.lastFrameTime = now;
-
-    this.autoSaveTimer += rawDt;
-    if (this.autoSaveTimer >= 30) {
-      this.autoSaveTimer = 0;
-      this.saveProgress();
+    } catch {
+      // Fallback
     }
 
-    if (this.uiState === 'playing' || this.uiState === 'death') {
-      if (this.hitStopTimer > 0) {
-        this.hitStopTimer = Math.max(0, this.hitStopTimer - rawDt);
-        this.camera.update(
-          rawDt,
-          this.player.x,
-          this.player.y,
-          this.input.worldMouseX,
-          this.input.worldMouseY
-        );
-      } else {
-        this.accumulator += rawDt;
-        while (this.accumulator >= this.fixedStep) {
-          this._fixedUpdate(this.fixedStep);
-          this.accumulator -= this.fixedStep;
-        }
-      }
-    } else if (this.uiState === 'title') {
-      this.world.update(rawDt);
-    }
-
-    this._render();
-    this.rafId = requestAnimationFrame((t) => this._loop(t));
-  }
-
-  _fixedUpdate(dt) {
-    const worldPt = this.camera.screenToWorld(this.input.mouseX, this.input.mouseY);
-    this.input.worldMouseX = worldPt.x;
-    this.input.worldMouseY = worldPt.y;
-
-    if (this.input.mouseDown && this.uiState === 'playing') {
-      this.player.tryBasicAttack(
-        this.input.worldMouseX,
-        this.input.worldMouseY,
-        this.spawner,
-        this.particles,
-        this.camera,
-        (dur) => this.startHitStop(dur)
-      );
-    }
-
-    this.world.update(dt);
-    this.player.update(
-      dt,
-      this.input,
-      this.spawner,
-      this.particles,
-      this.camera,
-      this.world,
-      (dur) => this.startHitStop(dur)
-    );
-    this.spawner.update(
-      dt,
-      this.player,
-      this.projectiles,
-      this.particles,
-      this.camera,
-      this.world
-    );
-    this.projectiles.update(
-      dt,
-      this.player,
-      this.spawner,
-      this.particles,
-      this.camera,
-      (dur) => this.startHitStop(dur)
-    );
-    this.particles.update(dt);
-    this.camera.update(
-      dt,
-      this.player.x,
-      this.player.y,
-      this.input.worldMouseX,
-      this.input.worldMouseY
-    );
-
-    if (this.player.dead && this.uiState === 'playing' && this.player.deathAnimTimer >= 1.05) {
-      this.lastGoldLost = Math.floor(this.player.gold * 0.1);
-      this.setUiState('death');
+    try {
+      localStorage.setItem(this.getSlotKey(slotIndex), JSON.stringify(payload));
+    } catch {
+      // Ignore quota errors
     }
   }
 
-  /**
-   * Renders the entire game to the 480x270 offscreen pixel buffer,
-   * then blits it to the display canvas scaled by a whole-number integer factor
-   * with soot letterboxing around the remainder.
-   */
-  _render() {
-    if (!this.ctx || !this.canvas || !this.offCtx) return;
-    const ctx = this.offCtx;
-
-    // 1. Chunk-streamed 16px tile ground + Boss arena rings
-    this.world.drawGround(ctx, this.camera);
-
-    // 2. Ground Break glowing cracks & shockwave rings
-    this.particles.drawGroundLayer(ctx, this.camera);
-
-    // 3. Telegraphed enemy/boss warning zones
-    this.spawner.drawTelegraphs(ctx, this.camera);
-
-    // 4. Y-Sorted Props, Ume, Enemies, Bosses, and Sena Ibuki
-    this.renderQueue.length = 0;
-    this.world.collectVisibleRenderables(this.camera, this.renderQueue);
-
-    for (let i = 0; i < this.spawner.enemies.length; i++) {
-      const e = this.spawner.enemies[i];
-      if (!this.camera.isVisible(e.x, e.y, e.radius + 80)) continue;
-      this.renderQueue.push({
-        y: e.y,
-        draw: (c) => e.draw(c, this.camera),
-      });
+  loadProgress(slotIndex = this.activeSlotIndex) {
+    this.activeSlotIndex = slotIndex;
+    let data = null;
+    try {
+      const raw = localStorage.getItem(this.getSlotKey(slotIndex));
+      if (raw) {
+        data = JSON.parse(raw);
+      }
+    } catch {
+      data = null;
     }
 
-    this.renderQueue.push({
-      y: this.player.y,
-      draw: (c) => this.player.draw(c, this.camera),
-    });
-
-    this.renderQueue.sort((a, b) => a.y - b.y);
-    for (let i = 0; i < this.renderQueue.length; i++) {
-      this.renderQueue[i].draw(ctx);
+    if (data) {
+      if (typeof data.scanlinesEnabled === 'boolean') {
+        this.scanlinesEnabled = data.scanlinesEnabled;
+      }
+      if (data.settings && typeof data.settings === 'object') {
+        this.settings = { ...this.settings, ...data.settings };
+      }
+      this.player.fromJSON(data.player);
+      this.spawner.fromJSON(data.spawner);
+      this.camera.snapTo(this.player.x, this.player.y, this.world.size);
+    } else {
+      this.player = new Player('sena');
+      this.spawner = new Spawner(this.world);
+      this.camera.snapTo(this.player.x, this.player.y, this.world.size);
     }
+  }
 
-    // 5. Projectiles (Rail Spikes, Acid, Spark Darts)
-    this.projectiles.draw(ctx, this.camera);
-
-    // 6. Skill Effect Strips & Damage Numbers
-    this.particles.draw(ctx, this.camera);
-
-    // 7. Atmospheric motes, Bayer-dithered dark vignette, or Seven Cuts 2-tone drop
-    this.world.drawAtmosphereAndVignette(ctx, this.camera, this.player);
-
-    // 8. Seven Cuts letterbox & 480x120 eye strip cut-in overlay
-    this.player.drawUltimateOverlay(ctx, INTERNAL_WIDTH, INTERNAL_HEIGHT);
-
-    // 10. Crisp pixel interaction prompt when near Ume in Kettle
-    if (this.uiState === 'playing' && this.isPlayerNearUme()) {
-      const pScreen = this.camera.worldToScreen(this.player.x, this.player.y);
-      const px = Math.round(pScreen.x);
-      const py = Math.round(pScreen.y - 28);
-      ctx.fillStyle = PALETTE.soot;
-      ctx.fillRect(px - 28, py - 9, 56, 11);
-      ctx.fillStyle = PALETTE.signal;
-      ctx.fillRect(px - 28, py - 9, 56, 1);
-      ctx.fillRect(px - 28, py + 1, 56, 1);
-      ctx.font = 'bold 7px ui-monospace, SFMono-Regular, Menlo, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText('[E] UME', px, py - 1);
+  resetSaveData(slotIndex = this.activeSlotIndex) {
+    try {
+      localStorage.removeItem(this.getSlotKey(slotIndex));
+    } catch {
+      // Ignore
     }
-
-    // Blit 480x270 offscreen canvas onto main display canvas with whole-number scaling
-    const mainCtx = this.ctx;
-    const cw = this.canvas.width;
-    const ch = this.canvas.height;
-    mainCtx.imageSmoothingEnabled = false;
-    mainCtx.fillStyle = PALETTE.soot;
-    mainCtx.fillRect(0, 0, cw, ch);
-
-    const destW = INTERNAL_WIDTH * this.scaleFactor;
-    const destH = INTERNAL_HEIGHT * this.scaleFactor;
-    mainCtx.drawImage(
-      this.offscreen,
-      0,
-      0,
-      INTERNAL_WIDTH,
-      INTERNAL_HEIGHT,
-      this.letterboxX,
-      this.letterboxY,
-      destW,
-      destH
-    );
+    this.player = new Player(this.player.classId || 'sena');
+    this.spawner = new Spawner(this.world);
+    if (this.projectiles && typeof this.projectiles.clear === 'function') {
+      this.projectiles.clear();
+    }
+    if (this.particles && typeof this.particles.clear === 'function') {
+      this.particles.clear();
+    }
+    this.camera.snapTo(this.player.x, this.player.y, this.world.size);
+    this.notifyUi();
   }
 
   getHudSnapshot() {
     const p = this.player;
-    const area = this.world.getAreaAt(p.x, p.y);
-    const activeBoss = this.spawner.getActiveBossNearPlayer(p);
-    const nearestObjective = this.spawner.getNearestUnbeatenBossObjective(p);
+    const area = this.world.getZoneAt(p.x, p.y);
+    const boss = this.spawner.activeBoss;
+    const nearestBoss = this.spawner.getNearestUnbeatenBoss(p.x, p.y);
+    const cls = p.classConfig;
+
+    const skillList = Array.isArray(cls.skills)
+      ? cls.skills
+      : (cls.skillOrder || []).map((id) => cls.skills[id]).filter(Boolean);
+
+    const activeSkillDefs = skillList.map((cfg, idx) => {
+      const lv = p.skills[cfg.id] || 1;
+      const stats = cfg.getStats ? cfg.getStats(lv, p.ownedNodes) : { cooldown: cfg.cooldown || 5 };
+      return {
+        id: cfg.id,
+        hotkey: String(idx + 1),
+        name: cfg.name,
+        icon: cfg.icon,
+        level: lv,
+        maxLevel: cfg.maxLevel || 5,
+        cd: p.cooldowns[`skill${idx + 1}`] ?? p.cooldowns[cfg.id] ?? 0,
+        maxCd: p.maxCooldowns[`skill${idx + 1}`] ?? stats.cooldown ?? 5,
+        cost: p.getSkillStaminaCost(cfg.id),
+      };
+    });
+
+    const activeUltDef = p.ultimates
+      ? p.ultimates.getActiveUltimateDef(p)
+      : cls.ultimate;
+    const maxChargeNeeded =
+      activeUltDef?.chargeNeeded || (p.hasNode('nineCuts') ? 85 : 100);
 
     return {
+      uiState: this.uiState,
+      activeSlotIndex: this.activeSlotIndex,
+      scanlinesEnabled: this.scanlinesEnabled,
+      settings: { ...this.settings },
+      classId: p.classId,
+      characterName: cls.characterName,
+      className: cls.className,
+      classTitle: p.getTitle(),
+      stage: p.stage,
+      stageName: p.getStageLabel(),
+      fullTitleLine: p.getFullTitleLine(),
+      accentColor: cls.accentColor,
+      weaponName: cls.weaponName,
+      branch: p.branch,
+      unlockedNodes: [...p.unlockedNodes],
+      passives: { ...p.passives },
       hp: Math.ceil(p.hp),
       maxHp: p.maxHp,
       stamina: Math.floor(p.stamina),
       maxStamina: p.maxStamina,
-      xp: Math.floor(p.xp),
-      xpToNext: p.xpToNext,
       level: p.level,
+      xp: p.xp,
+      xpToNext: p.level >= 20 ? XP_CURVE[20] : XP_CURVE[p.level + 1],
       gold: p.gold,
-      skillPoints: p.skillPoints,
       atk: p.atk,
       def: p.def,
       speed: p.speed,
       critChance: p.critChance,
+      skillPoints: p.skillPoints,
+      skills: { ...p.skills },
+      activeSkillDefs,
+      cooldowns: { ...p.cooldowns },
+      maxCooldowns: { ...p.maxCooldowns },
+      ultimateCharge: Math.floor(p.ultimateCharge),
+      ultimateChargeNeeded: maxChargeNeeded,
+      ultimateDef: activeUltDef,
+      invalidUltShake: p.ultimates ? p.ultimates.invalidShakeTimer > 0 : false,
+      ultReadyFlash: p.ultimates ? p.ultimates.readyFlashTimer > 0 : false,
+      equipped: { ...p.equipped },
+      ownedEquipment: [...p.ownedEquipment],
+      supplies: { ...p.supplies },
+      portraitExpression: p.getPortraitExpression(),
+      classMechanic:
+        p.classBehavior && typeof p.classBehavior.getHudMechanicState === 'function'
+          ? p.classBehavior.getHudMechanicState()
+          : (typeof p.getHudMechanicState === 'function' ? p.getHudMechanicState() : null),
+      statuses: p.status.getHudStatusList(),
+      areaName: area.name,
+      areaSubtitle: area.subtitle,
+      stormActive: this.world.stormTimer > 0,
+      nearUme: this.isPlayerNearUme(),
+      nearHarlow: this.isPlayerNearHarlow(),
+      canPromoteJourneyman: p.canPromoteToJourneyman(),
+      canPromoteMaster: p.canPromoteToMaster(),
       x: Math.round(p.x),
       y: Math.round(p.y),
-      portraitExpression: p.getPortraitExpression(),
-      equipped: { ...p.equipped },
-      supplies: { ...p.supplies },
-      skills: { ...p.skills },
-      cooldowns: {
-        lunge: p.cooldowns.lunge,
-        groundBreak: p.cooldowns.groundBreak,
-        railSpike: p.cooldowns.railSpike,
-        dodge: p.cooldowns.dodge,
-      },
-      maxCooldowns: { ...p.maxCooldowns },
-      ultimateCharge: p.ultimateCharge,
-      ultimateActive: p.ultimateActive,
-      areaName: area ? area.name : 'Kettle',
-      areaSubtitle: area ? area.subtitle : '',
-      isSafeZone: area ? !!area.safe : false,
-      nearUme: this.isPlayerNearUme(),
-      stormActive: this.world.stormFactor > 0.35,
-      activeBoss: activeBoss
+      defeatedBosses: { ...this.spawner.defeatedBosses },
+      objective: nearestBoss,
+      activeBoss: boss
         ? {
-            id: activeBoss.id,
-            name: activeBoss.name,
-            subtitle: activeBoss.subtitle,
-            hp: Math.ceil(activeBoss.hp),
-            maxHp: activeBoss.maxHp,
-            phase: activeBoss.phase,
+            id: boss.id,
+            name: boss.name,
+            subtitle: boss.subtitle,
+            hp: Math.ceil(boss.hp),
+            maxHp: boss.maxHp,
+            phase: boss.phase,
+            staggerPct: Math.round(boss.status.stagger),
+            staggered: boss.status.has('staggered'),
           }
         : null,
-      bossNameCard: this.spawner.bossNameCard
-        ? { ...this.spawner.bossNameCard }
-        : null,
-      objective: nearestObjective,
-      defeatedBosses: { ...this.spawner.defeatedBosses },
+      bossNameCard: this.bossNameCard ? { ...this.bossNameCard } : null,
     };
   }
-}
 
-export const gameEngine = new GameEngine();
-export default gameEngine;
+  notifyUi() {
+    if (this.onUiUpdate) {
+      this.onUiUpdate(this.getHudSnapshot());
+    }
+  }
+}

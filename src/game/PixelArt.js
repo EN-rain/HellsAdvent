@@ -27,10 +27,13 @@ export const MATERIAL_RAMPS = {
   signal: ['#1F4D4A', '#007A87', '#00C4D4', '#00F0FF'],
   blood: ['#24171D', '#7A1C1C', '#C92A2A', '#FF3B3B'],
   bone: ['#1F4D4A', '#7E7A6E', '#B8B1A2', '#D9D2C3'],
+  verdigris: ['#0B0D10', '#1B5E4B', '#32A37B', '#4FD6A0'],
+  lye: ['#142927', '#5E6E28', '#98A644', '#C9D26B'],
+  olive: ['#0B0D10', '#253024', '#404F3B', '#687A5E'],
 };
 
 // 4x4 Bayer matrix for zero-alpha dithered afterimages & fake glow rings
-export const BAYER_4X4 = [
+const BAYER_4X4 = [
   [0, 8, 2, 10],
   [12, 4, 14, 6],
   [3, 11, 1, 9],

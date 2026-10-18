@@ -319,7 +319,344 @@ function this_drawAttackBlade(g, anim, frameIdx, cx, topY, coatMat) {
   }
 }
 
-export function bakePlayerSprites(equipped = {}) {
+export function applyPromotionOverlayToGrid(g, classId, stage = 1, branch = null, anim = 'idle', frameIdx = 0) {
+  if (stage < 2 || !branch) return g;
+  if (anim === 'death' || anim === 'dodge') return g;
+
+  const cx = 23;
+  const topY = 11 + (anim === 'idle' && (frameIdx === 1 || frameIdx === 2) ? 1 : 0);
+
+  if (classId === 'sena') {
+    if (branch === 'cutter') {
+      // Journeyman (Cutter): longer re-ground rail edge + red cloth bound on hilt
+      g.rect(cx - 10, topY + 19, 4, 3, 'blood', 2); // Red cloth bound on hilt
+      g.line(cx + 8, topY + 5, cx + 13, topY + 1, 'signal', 3, 2); // Extended re-ground edge
+      if (stage >= 3) {
+        // Master (Flenser): leather butcher's apron + second short blade on hip
+        g.shadedRect(cx - 4, topY + 11, 8, 11, 'rust'); // Butcher's apron
+        g.line(cx - 7, topY + 18, cx + 2, topY + 22, 'steel', 3, 2); // Second short hip blade
+        g.set(cx - 7, topY + 18, 'brass', 3);
+      }
+    } else if (branch === 'anvil') {
+      // Journeyman (Anvil): welded plate pauldron on left shoulder + road-sign buckler on left forearm
+      g.shadedRect(cx - 7, topY + 7, 5, 5, 'steel'); // Left shoulder plate pauldron
+      g.shadedRect(cx - 8, topY + 13, 5, 6, 'brass'); // Road-sign buckler on left forearm
+      g.set(cx - 6, topY + 15, 'coat', 0);
+      if (stage >= 3) {
+        // Master (Girder): full riveted boiler chest plate
+        g.shadedRect(cx - 5, topY + 9, 10, 10, 'steel');
+        g.set(cx - 3, topY + 11, 'brass', 3);
+        g.set(cx + 3, topY + 11, 'brass', 3);
+        g.set(cx - 3, topY + 16, 'brass', 3);
+        g.set(cx + 3, topY + 16, 'brass', 3);
+      }
+    }
+  } else if (classId === 'rook') {
+    if (branch === 'longhand') {
+      // Journeyman (Longhand): longer barrel + bottle-lens scope
+      g.rect(cx + 12, topY + 11, 7, 2, 'steel', 3); // Extended barrel
+      g.rect(cx + 6, topY + 9, 4, 2, 'signal', 3); // Bottle-lens scope
+      if (stage >= 3) {
+        // Master (Surveyor): surveyor's tripod strapped to back + bigger brass monocle
+        g.line(cx - 7, topY + 5, cx - 10, topY + 23, 'brass', 2, 2);
+        g.line(cx - 5, topY + 5, cx - 8, topY + 24, 'steel', 2, 1);
+        g.rect(cx + 1, topY + 2, 4, 4, 'brass', 3); // Bigger monocle
+      }
+    } else if (branch === 'wirehand') {
+      // Journeyman (Wirehand): spools of wire on belt + trap satchel
+      g.circle(cx - 4, topY + 19, 2, 'brass', 3); // Wire spool
+      g.shadedRect(cx - 7, topY + 16, 4, 5, 'bone'); // Trap satchel
+      if (stage >= 3) {
+        // Master (Minelayer): bandolier of cans with fuses across chest
+        g.rect(cx - 3, topY + 10, 3, 3, 'rust', 3);
+        g.rect(cx, topY + 13, 3, 3, 'rust', 3);
+        g.set(cx - 2, topY + 9, 'brass', 3);
+        g.set(cx + 1, topY + 12, 'brass', 3);
+      }
+    }
+  } else if (classId === 'ines') {
+    if (branch === 'binder') {
+      // Journeyman (Binder): heavier alternator coil + second horseshoe magnet on back
+      g.shadedRect(cx - 9, topY + 6, 5, 12, 'brass');
+      g.rect(cx - 10, topY + 4, 4, 3, 'verdigris', 3); // Second magnet tip
+      if (stage >= 3) {
+        // Master (Crane): hoist hook on a short chain from the shoulder
+        g.line(cx + 4, topY + 7, cx + 8, topY + 15, 'steel', 3, 1);
+        g.rect(cx + 7, topY + 15, 3, 4, 'brass', 3);
+      }
+    } else if (branch === 'slinger') {
+      // Journeyman (Slinger): bag of loose scrap on hip + leather sling band on forearm
+      g.shadedRect(cx - 6, topY + 17, 5, 5, 'rust');
+      g.rect(cx + 2, topY + 12, 4, 2, 'rust', 3);
+      if (stage >= 3) {
+        // Master (Wrecker): chunk of heavy chain wrapped around shoulders
+        g.line(cx - 6, topY + 8, cx + 5, topY + 11, 'steel', 3, 2);
+        g.line(cx - 5, topY + 12, cx + 4, topY + 9, 'steel', 2, 2);
+      }
+    }
+  }
+
+  return g;
+}
+
+/**
+ * ROOK MATSUDA — RANGED (48x48 canvas, lanky courier ~31px tall)
+ * - Tilted flat cap with a cracked bike reflector sewn on the brim
+ * - Salvaged rangefinder monocle strapped over the left eye with a brass rim
+ * - Olive-drab road coat tied at the waist, canvas bandolier of rail bolts across the chest
+ * - Mismatched fingerless gloves (one canvas, one leather)
+ * - Weapon: The Springgun (rebuilt nail-gun crossbow with a car leaf spring as the bow)
+ */
+export function buildRookFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
+  const g = new PixelGrid(48, 48);
+  const coatMat =
+    equipped.body === 'plateCoat'
+      ? 'rust'
+      : equipped.body === 'riotJacket'
+      ? 'bog'
+      : 'olive';
+  const legsMat =
+    equipped.legs === 'hydraulicShins'
+      ? 'brass'
+      : equipped.legs === 'courierLeggings'
+      ? 'bog'
+      : 'coat';
+
+  if (anim === 'dodge') {
+    const cx = 24;
+    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 8, coatMat, 2);
+    g.rect(cx - 4, cy - 5, 7, 3, 'brass', 3);
+    g.line(cx - 7, cy + 4, cx + 7, cy - 4, 'steel', 3, 2);
+    return g;
+  }
+
+  if (anim === 'death') {
+    g.shadedRect(12, 34, 18, 6, coatMat);
+    g.shadedRect(27, 35, 6, 5, 'olive');
+    g.rect(31, 35, 2, 2, 'brass', 3);
+    g.line(14, 32, 26, 30, 'steel', 2, 2);
+    return g;
+  }
+
+  let bobY = 0;
+  let torsoLeanX = 0;
+  let leftFootX = 0;
+  let rightFootX = 0;
+  let leftFootY = 0;
+  let rightFootY = 0;
+
+  if (anim === 'idle') {
+    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
+  } else if (anim === 'run') {
+    bobY = frameIdx % 3 === 1 ? -1 : 0;
+    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 2;
+    const strideX = [-4, -2, 1, 4, 2, -1][frameIdx % 6];
+    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
+    leftFootX = strideX;
+    rightFootX = -strideX;
+    leftFootY = strideY;
+    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
+  } else if (anim === 'hurt') {
+    torsoLeanX = -2;
+    bobY = 1;
+  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    // Recoil kick on shot frame
+    torsoLeanX = frameIdx === 1 ? -2 : 0;
+  }
+
+  const cx = 23 + torsoLeanX;
+  const topY = 10 + bobY;
+
+  // Legs & Tall Laced Boots
+  const legBaseY = topY + 21;
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 3, 6, 'bone');
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + 5 + leftFootY, 4, 5, legsMat);
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 3, 6, 'bone');
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + 5 + rightFootY, 4, 5, legsMat);
+
+  // Olive-drab road coat tied at waist
+  const coatY = topY + 8;
+  g.shadedRect(cx - 5, coatY, 10, 14, coatMat);
+  g.rect(cx - 5, coatY + 8, 10, 2, 'rust', 2); // Waist tie belt
+
+  // Canvas bandolier of rail bolts across chest
+  g.line(cx - 4, coatY + 1, cx + 4, coatY + 10, 'bone', 2, 2);
+  g.set(cx - 2, coatY + 3, 'brass', 3);
+  g.set(cx, coatY + 5, 'brass', 3);
+  g.set(cx + 2, coatY + 7, 'brass', 3);
+
+  // Head & Tilted Flat Cap with cracked bike reflector on brim
+  const headX = cx - 4;
+  const headY = topY;
+  g.shadedRect(headX, headY + 2, 8, 6, 'skin');
+
+  if (dir !== 'up') {
+    // Salvaged rangefinder monocle strapped over left eye with brass rim
+    const monoX = dir === 'down' ? headX + 1 : headX + 3;
+    g.rect(monoX, headY + 3, 3, 3, 'brass', 3);
+    g.set(monoX + 1, headY + 4, isUltimateEyes ? 'brass' : 'signal', 3);
+    if (dir === 'down') {
+      g.rect(headX + 5, headY + 4, 2, 2, 'coat', 0);
+    }
+  }
+
+  // Tilted flat cap + bike reflector on brim
+  g.shadedRect(headX - 1, headY - 1, 10, 4, 'olive');
+  g.rect(headX + 6, headY + 1, 4, 2, 'coat', 1); // Cap brim
+  g.rect(headX + 7, headY, 2, 2, 'rust', 3); // Cracked orange-red bike reflector
+
+  // Arms & The Springgun (rebuilt nail-gun crossbow with car leaf spring bow)
+  const gunX = cx + 2;
+  const gunY = topY + 10;
+  g.rect(gunX - 1, gunY, 4, 3, 'skin', 2);
+  g.rect(gunX + 1, gunY, 2, 3, 'bone', 2); // Canvas fingerless glove
+  // Springgun body
+  g.shadedRect(gunX + 2, gunY - 1, 11, 4, 'steel');
+  // Car leaf spring bow curved vertically at front of gun
+  g.line(gunX + 11, gunY - 5, gunX + 13, gunY + 6, 'rust', 3, 2);
+  g.line(gunX + 6, gunY - 4, gunX + 11, gunY - 5, 'bone', 2, 1); // Bowstring
+  g.line(gunX + 6, gunY + 5, gunX + 11, gunY + 6, 'bone', 2, 1);
+  // Loaded rail bolt & muzzle flash on attack
+  if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    if (frameIdx === 1 || frameIdx === 2) {
+      g.rect(gunX + 14, gunY - 1, 6, 3, 'brass', 3);
+      g.set(gunX + 20, gunY, 'bone', 3);
+    }
+  } else {
+    g.line(gunX + 8, gunY, gunX + 15, gunY, 'brass', 3, 1);
+  }
+
+  return g;
+}
+
+/**
+ * INES CALLOWAY — MAGE / MAGNETIST (48x48 canvas, stocky ~29px tall)
+ * - Grey streak in dark hair pulled into a tight bun
+ * - Thick safety goggles around her neck
+ * - Quilted jacket under a heavy canvas apron, tool ring on belt
+ * - Backpack frame carrying an old car alternator coil wrapped in copper wire with verdigris-green glowing tips
+ * - Thick welding gloves each with a large horseshoe magnet bound to the palm
+ */
+export function buildInesFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
+  const g = new PixelGrid(48, 48);
+  const coatMat =
+    equipped.body === 'plateCoat'
+      ? 'rust'
+      : equipped.body === 'riotJacket'
+      ? 'bog'
+      : 'steel';
+  const legsMat =
+    equipped.legs === 'hydraulicShins'
+      ? 'brass'
+      : equipped.legs === 'courierLeggings'
+      ? 'bog'
+      : 'coat';
+
+  if (anim === 'dodge') {
+    const cx = 24;
+    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 8, 'bone', 2);
+    g.circle(cx, cy, 5, 'verdigris', 3);
+    return g;
+  }
+
+  if (anim === 'death') {
+    g.shadedRect(12, 34, 17, 6, 'bone');
+    g.shadedRect(14, 31, 8, 5, 'rust'); // Alternator pack
+    g.rect(15, 30, 3, 2, 'verdigris', 3);
+    return g;
+  }
+
+  let bobY = 0;
+  let torsoLeanX = 0;
+  let leftFootX = 0;
+  let rightFootX = 0;
+  let leftFootY = 0;
+  let rightFootY = 0;
+
+  if (anim === 'idle') {
+    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
+  } else if (anim === 'run') {
+    bobY = frameIdx % 3 === 1 ? -1 : 0;
+    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 1;
+    const strideX = [-3, -1, 1, 3, 1, -1][frameIdx % 6];
+    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
+    leftFootX = strideX;
+    rightFootX = -strideX;
+    leftFootY = strideY;
+    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
+  } else if (anim === 'hurt') {
+    torsoLeanX = -2;
+    bobY = 1;
+  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    torsoLeanX = frameIdx === 1 || frameIdx === 2 ? 2 : 0;
+  }
+
+  const cx = 23 + torsoLeanX;
+  const topY = 12 + bobY;
+
+  // Backpack frame carrying old car alternator coil wrapped in copper wire with verdigris tips
+  const packX = dir === 'down' ? cx + 4 : cx - 9;
+  const packY = topY + 5;
+  g.shadedRect(packX, packY, 6, 12, 'steel');
+  g.shadedRect(packX + 1, packY + 2, 4, 7, 'rust'); // Copper wire coil
+  const tipStep = frameIdx % 2 === 0 ? 3 : 2;
+  g.rect(packX, packY - 2, 5, 3, 'verdigris', tipStep); // Glowing verdigris coil tips
+
+  // Legs & Boots
+  const legBaseY = topY + 20;
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 4, 5, 'coat');
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + 4 + leftFootY, 4, 4, legsMat);
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 4, 5, 'coat');
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + 4 + rightFootY, 4, 4, legsMat);
+
+  // Stocky quilted jacket under heavy canvas apron
+  const coatY = topY + 8;
+  g.shadedRect(cx - 5, coatY, 11, 12, coatMat);
+  g.shadedRect(cx - 4, coatY + 2, 9, 10, 'bone'); // Heavy canvas apron
+  g.circle(cx + 3, coatY + 9, 2, 'brass', 3); // Ring of tools on belt
+
+  // Thick safety goggles around neck
+  g.rect(cx - 4, topY + 7, 9, 2, 'brass', 2);
+  g.set(cx - 2, topY + 7, 'verdigris', 3);
+  g.set(cx + 2, topY + 7, 'verdigris', 3);
+
+  // Head & Dark Hair in tight bun with grey streak
+  const headX = cx - 4;
+  const headY = topY;
+  g.shadedRect(headX, headY + 1, 8, 6, 'skin');
+  if (dir !== 'up') {
+    const eyeX = dir === 'down' ? headX + 2 : headX + 4;
+    const eyeMat = isUltimateEyes ? 'verdigris' : 'coat';
+    const eyeStep = isUltimateEyes ? 3 : 0;
+    g.rect(eyeX, headY + 3, 2, 2, eyeMat, eyeStep);
+    g.set(eyeX, headY + 3, 'bone', 3);
+    if (dir === 'down') {
+      g.rect(eyeX + 4, headY + 3, 2, 2, eyeMat, eyeStep);
+      g.set(eyeX + 4, headY + 3, 'bone', 3);
+    }
+  }
+  // Dark hair + tight bun at back + grey streak
+  g.shadedRect(headX - 1, headY - 1, 9, 3, 'coat');
+  g.circle(headX - 2, headY + 1, 3, 'coat', 1); // Tight bun
+  g.line(headX, headY - 1, headX + 5, headY, 'bone', 3, 1); // Grey streak
+
+  // Thick welding gloves with large horseshoe magnet bound to palm
+  const armX = cx + (anim.startsWith('attack') && (frameIdx === 1 || frameIdx === 2) ? 6 : 3);
+  const armY = topY + 10;
+  g.shadedRect(armX, armY, 5, 4, 'bone'); // Thick welding glove
+  // Horseshoe magnet bound to palm (red/steel U-shape with verdigris pole tips)
+  g.rect(armX + 4, armY - 1, 4, 2, 'blood', 3);
+  g.rect(armX + 4, armY + 3, 4, 2, 'blood', 3);
+  g.rect(armX + 3, armY, 2, 4, 'steel', 2);
+  g.set(armX + 8, armY - 1, 'verdigris', 3);
+  g.set(armX + 8, armY + 4, 'verdigris', 3);
+
+  return g;
+}
+
+export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, branch = null) {
   const animDefs = {
     idle: 4,
     run: 6,
@@ -330,6 +667,13 @@ export function bakePlayerSprites(equipped = {}) {
     death: 5,
     dodge: 6,
   };
+
+  const accentColor =
+    classId === 'rook'
+      ? PALETTE.brass
+      : classId === 'ines'
+      ? PALETTE.verdigris
+      : PALETTE.signal;
 
   const directions = ['right', 'left', 'down', 'up'];
   const sheets = {};
@@ -355,7 +699,18 @@ export function bakePlayerSprites(equipped = {}) {
       for (const dir of directions) {
         const baseDir = dir === 'left' ? 'right' : dir;
         const mirrorX = dir === 'left';
-        const grid = buildSenaFrameGrid(anim, f, baseDir, equipped, false);
+        let grid;
+        if (classId === 'rook') {
+          grid = buildRookFrameGrid(anim, f, baseDir, equipped, false);
+        } else if (classId === 'ines') {
+          grid = buildInesFrameGrid(anim, f, baseDir, equipped, false);
+        } else {
+          grid = buildSenaFrameGrid(anim, f, baseDir, equipped, false);
+        }
+
+        // Composite Journeyman / Master promotion overlays over base frame
+        applyPromotionOverlayToGrid(grid, classId, stage, branch, anim, f);
+
         sheets[anim][dir].push(
           grid.bakeToCanvas({ selectiveOutline: true, topLeftHighlight: true, mirrorX })
         );
@@ -370,24 +725,23 @@ export function bakePlayerSprites(equipped = {}) {
           sheets[anim].silhouette.push(
             grid.bakeToCanvas({ solidColor: '#000000', mirrorX: false })
           );
-          // Pre-rendered Lunge dithered flat signal silhouettes (60%, 35%, 15% dither density, zero alpha)
           sheets[anim].dither60Right.push(
-            grid.bakeToCanvas({ solidColor: PALETTE.signal, ditherDensity: 0.6, mirrorX: false })
+            grid.bakeToCanvas({ solidColor: accentColor, ditherDensity: 0.6, mirrorX: false })
           );
           sheets[anim].dither35Right.push(
-            grid.bakeToCanvas({ solidColor: PALETTE.signal, ditherDensity: 0.35, mirrorX: false })
+            grid.bakeToCanvas({ solidColor: accentColor, ditherDensity: 0.35, mirrorX: false })
           );
           sheets[anim].dither15Right.push(
-            grid.bakeToCanvas({ solidColor: PALETTE.signal, ditherDensity: 0.15, mirrorX: false })
+            grid.bakeToCanvas({ solidColor: accentColor, ditherDensity: 0.15, mirrorX: false })
           );
           sheets[anim].dither60Left.push(
-            grid.bakeToCanvas({ solidColor: PALETTE.signal, ditherDensity: 0.6, mirrorX: true })
+            grid.bakeToCanvas({ solidColor: accentColor, ditherDensity: 0.6, mirrorX: true })
           );
           sheets[anim].dither35Left.push(
-            grid.bakeToCanvas({ solidColor: PALETTE.signal, ditherDensity: 0.35, mirrorX: true })
+            grid.bakeToCanvas({ solidColor: accentColor, ditherDensity: 0.35, mirrorX: true })
           );
           sheets[anim].dither15Left.push(
-            grid.bakeToCanvas({ solidColor: PALETTE.signal, ditherDensity: 0.15, mirrorX: true })
+            grid.bakeToCanvas({ solidColor: accentColor, ditherDensity: 0.15, mirrorX: true })
           );
         }
       }
@@ -753,8 +1107,11 @@ class SpriteRegistry {
   constructor() {
     this.enemies = {};
     this.railSpikeAngles = [];
+    this.rookBoltAngles = [];
+    this.scrapVariantAngles = []; // 8 scrap variants x 8 angles
     this.debrisParts = {};
     this.cutInCanvas = null;
+    this.cutInCanvases = {};
     this.initialized = false;
   }
 
@@ -810,19 +1167,15 @@ class SpriteRegistry {
         entry.tellRight.push(tellGrid.bakeToCanvas({ rimColor: baseRim, mirrorX: false }));
         entry.tellLeft.push(tellGrid.bakeToCanvas({ rimColor: baseRim, mirrorX: true }));
 
-        // Stunned enemies get a signal outline
         entry.stunRight.push(grid.bakeToCanvas({ rimColor: PALETTE.signal, mirrorX: false }));
         entry.stunLeft.push(grid.bakeToCanvas({ rimColor: PALETTE.signal, mirrorX: true }));
 
-        // Bosses get a brass rim flash at each phase change
         entry.brassRimRight.push(grid.bakeToCanvas({ rimColor: PALETTE.brass, mirrorX: false }));
         entry.brassRimLeft.push(grid.bakeToCanvas({ rimColor: PALETTE.brass, mirrorX: true }));
 
-        // 2-frame white silhouette flash on hit
         entry.whiteRight.push(grid.bakeToCanvas({ solidColor: PALETTE.bone, mirrorX: false }));
         entry.whiteLeft.push(grid.bakeToCanvas({ solidColor: PALETTE.bone, mirrorX: true }));
 
-        // Solid black silhouette for ?gallery acceptance verification
         entry.silhouette.push(grid.bakeToCanvas({ solidColor: '#000000', mirrorX: false }));
       }
 
@@ -835,6 +1188,66 @@ class SpriteRegistry {
     spikeGrid.line(10, 1, 15, 2, 'signal', 3, 2);
     spikeGrid.line(2, 2, 12, 2, 'bone', 3, 1);
     this.railSpikeAngles = bake8AngleFrames(spikeGrid, { selectiveOutline: true });
+
+    // Pre-render 8-angle Rook Springgun Bolt (14x5 brass-tipped rail bolt)
+    const boltGrid = new PixelGrid(14, 5);
+    boltGrid.shadedRect(0, 1, 10, 3, 'steel');
+    boltGrid.rect(9, 1, 5, 3, 'brass', 3);
+    boltGrid.set(13, 2, 'bone', 3);
+    this.rookBoltAngles = bake8AngleFrames(boltGrid, { selectiveOutline: true });
+
+    // Pre-render 8 Scrap Orbit variants at 12x12 with 8 angles each for Ines
+    const scrapDrawers = [
+      // 0: Hex Bolt
+      (g) => {
+        g.shadedRect(2, 4, 8, 4, 'steel');
+        g.shadedRect(2, 3, 3, 6, 'brass');
+      },
+      // 1: Hubcap
+      (g) => {
+        g.circle(6, 6, 4, 'steel', 3);
+        g.circle(6, 6, 2, 'verdigris', 3);
+      },
+      // 2: Toothed Gear
+      (g) => {
+        g.circle(6, 6, 4, 'brass', 2);
+        g.rect(5, 1, 2, 10, 'brass', 3);
+        g.rect(1, 5, 10, 2, 'brass', 3);
+        g.set(6, 6, 'coat', 0);
+      },
+      // 3: Pipe End
+      (g) => {
+        g.shadedRect(2, 3, 8, 6, 'rust');
+        g.shadedRect(8, 2, 2, 8, 'steel');
+      },
+      // 4: Copper Coil Ring
+      (g) => {
+        g.circle(6, 6, 4, 'rust', 3);
+        g.set(6, 3, 'verdigris', 3);
+      },
+      // 5: Wrench Head
+      (g) => {
+        g.shadedRect(2, 5, 6, 3, 'steel');
+        g.rect(7, 3, 3, 2, 'bone', 3);
+        g.rect(7, 7, 3, 2, 'bone', 3);
+      },
+      // 6: Rivet Plate
+      (g) => {
+        g.shadedRect(2, 2, 8, 8, 'steel');
+        g.set(4, 4, 'brass', 3);
+        g.set(7, 7, 'brass', 3);
+      },
+      // 7: Magnetized Shard
+      (g) => {
+        g.line(2, 8, 9, 3, 'steel', 3, 3);
+        g.set(9, 3, 'verdigris', 3);
+      },
+    ];
+    this.scrapVariantAngles = scrapDrawers.map((fn) => {
+      const sg = new PixelGrid(12, 12);
+      fn(sg);
+      return bake8AngleFrames(sg, { selectiveOutline: true });
+    });
 
     // Pre-render 8-angle junk debris parts per enemy type
     const makeDebris = (drawFn) => {
@@ -856,23 +1269,93 @@ class SpriteRegistry {
       shardRust: makeDebris((dg) => dg.shadedRect(2, 3, 5, 4, 'rust')),
     };
 
-    // Pre-render 64x16 Seven Cuts Anime Eye Cut-In Strip
-    this.cutInCanvas = document.createElement('canvas');
-    this.cutInCanvas.width = 64;
-    this.cutInCanvas.height = 16;
-    const cctx = this.cutInCanvas.getContext('2d');
+    this.boltAngles = this.rookBoltAngles;
+    this.scrapVariants = this.scrapVariantAngles.map((arr) => arr[0]);
+
+    // Pre-render 64x16 Ultimate Eye Cut-In Strips for Sena, Rook, and Ines
+    this.cutInCanvases.sena = this._buildCutIn('sena');
+    this.cutInCanvases.rook = this._buildCutIn('rook');
+    this.cutInCanvases.ines = this._buildCutIn('ines');
+    this.cutInCanvas = this.cutInCanvases.sena;
+
+    // Cache base class sprite sheets for Character Select card animations
+    this.baseClassSheets = {
+      sena: bakePlayerSprites({}, 'sena', 1, null),
+      rook: bakePlayerSprites({}, 'rook', 1, null),
+      ines: bakePlayerSprites({}, 'ines', 1, null),
+    };
+  }
+
+  getCutIn(classId = 'sena') {
+    return this.cutInCanvases?.[classId] || this.cutInCanvas;
+  }
+
+  getScrapVariant(index = 0) {
+    return this.scrapVariants?.[index % 8] || null;
+  }
+
+  _buildCutIn(classId) {
+    const c = document.createElement('canvas');
+    c.width = 64;
+    c.height = 16;
+    const cctx = c.getContext('2d');
     cctx.imageSmoothingEnabled = false;
     cctx.fillStyle = PALETTE.soot;
     cctx.fillRect(0, 0, 64, 16);
-    // Rust hair locks framing face
+
+    if (classId === 'rook') {
+      // Rook: Single eye behind the brass rangefinder monocle, brass flash
+      cctx.fillStyle = MATERIAL_RAMPS.olive[2];
+      cctx.fillRect(0, 0, 64, 4);
+      cctx.fillStyle = MATERIAL_RAMPS.skin[2];
+      cctx.fillRect(10, 4, 44, 10);
+      // Brass monocle ring over left side (x=18..32)
+      cctx.fillStyle = PALETTE.brass;
+      cctx.fillRect(17, 3, 14, 11);
+      cctx.fillStyle = PALETTE.soot;
+      cctx.fillRect(19, 5, 10, 7);
+      cctx.fillStyle = PALETTE.brass;
+      cctx.fillRect(21, 6, 6, 5);
+      cctx.fillStyle = '#FFFFFF';
+      cctx.fillRect(23, 7, 2, 2);
+      // Crosshair tick lines inside monocle
+      cctx.fillStyle = PALETTE.bone;
+      cctx.fillRect(15, 8, 18, 1);
+      // Right eye narrowed
+      cctx.fillStyle = PALETTE.soot;
+      cctx.fillRect(39, 7, 9, 2);
+      return c;
+    }
+
+    if (classId === 'ines') {
+      // Ines: Eyes behind safety goggles, verdigris magnetic light
+      cctx.fillStyle = PALETTE.soot;
+      cctx.fillRect(0, 0, 64, 16);
+      cctx.fillStyle = MATERIAL_RAMPS.skin[2];
+      cctx.fillRect(12, 3, 40, 11);
+      // Heavy safety goggle frames
+      cctx.fillStyle = MATERIAL_RAMPS.steel[2];
+      cctx.fillRect(15, 4, 34, 9);
+      cctx.fillStyle = PALETTE.soot;
+      cctx.fillRect(17, 5, 12, 7);
+      cctx.fillRect(35, 5, 12, 7);
+      // Verdigris glowing eyes inside goggles
+      cctx.fillStyle = PALETTE.verdigris;
+      cctx.fillRect(20, 6, 6, 5);
+      cctx.fillRect(38, 6, 6, 5);
+      cctx.fillStyle = '#FFFFFF';
+      cctx.fillRect(21, 7, 2, 2);
+      cctx.fillRect(39, 7, 2, 2);
+      return c;
+    }
+
+    // Default Sena: Rust hair locks framing face + Signal cyan eyes
     cctx.fillStyle = PALETTE.rust;
     cctx.fillRect(0, 0, 64, 3);
     cctx.fillRect(4, 3, 10, 13);
     cctx.fillRect(52, 3, 12, 13);
-    // Skin band across bridge of nose
     cctx.fillStyle = MATERIAL_RAMPS.skin[2];
     cctx.fillRect(14, 3, 38, 11);
-    // Intense eyes flashing Signal Cyan
     cctx.fillStyle = PALETTE.soot;
     cctx.fillRect(18, 5, 11, 2);
     cctx.fillRect(37, 5, 11, 2);
@@ -885,28 +1368,143 @@ class SpriteRegistry {
     cctx.fillStyle = '#FFFFFF';
     cctx.fillRect(23, 8, 2, 2);
     cctx.fillRect(42, 8, 2, 2);
+    return c;
   }
 }
 
 export const spriteRegistry = new SpriteRegistry();
 
 /**
- * 64x64 HUD / Character Panel Anime Portrait of Sena Ibuki
- * Asymmetric details: cracked welding goggles pushed up on forehead,
- * uneven rust hair with bent paper clip on left strand, 2x2 eyes with bone highlight
- * (flashing signal cyan only in ultimate), bone scarf with stenciled rust stripe.
+ * 64x64 Anime Portrait Renderer for Sena, Rook, and Ines
+ * Supports expressions: 'normal', 'hurt', 'determined', 'ultimate'
+ * Plus Journeyman (stage 2) and Master (stage 3) branch visual details.
  */
-export function drawSenaPortrait(canvas, expression = 'normal', equipped = {}) {
+export function drawCharacterPortrait(
+  canvas,
+  classId = 'sena',
+  expression = 'normal',
+  equipped = {},
+  stage = 1,
+  branch = null
+) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, 64, 64);
 
   const g = new PixelGrid(64, 64);
-  // Background soot
   g.rect(0, 0, 64, 64, 'coat', 0);
 
-  // Coat shoulders
+  const headOffX = expression === 'hurt' ? -2 : 0;
+
+  if (classId === 'rook') {
+    // ROOK MATSUDA PORTRAIT
+    g.shadedRect(10, 46, 44, 18, 'olive');
+    // Bandolier of rail bolts across chest
+    g.line(14, 47, 46, 62, 'bone', 2, 4);
+    g.rect(20, 50, 4, 4, 'brass', 3);
+    g.rect(28, 54, 4, 4, 'brass', 3);
+    g.rect(36, 58, 4, 4, 'brass', 3);
+
+    // Master Surveyor tripod on back OR Master Minelayer fused cans
+    if (stage >= 3 && branch === 'longhand') {
+      g.shadedRect(48, 12, 6, 36, 'brass');
+    } else if (stage >= 3 && branch === 'wirehand') {
+      g.shadedRect(14, 48, 8, 10, 'rust');
+      g.shadedRect(42, 48, 8, 10, 'rust');
+    }
+
+    // Neck & Face
+    g.shadedRect(20 + headOffX, 17, 24, 22, 'skin');
+    // Tired half-smile or hurt grimace
+    if (expression === 'hurt') {
+      g.rect(28 + headOffX, 34, 8, 2, 'coat', 0);
+    } else {
+      g.line(27 + headOffX, 34, 35 + headOffX, 33, 'coat', 0, 1);
+    }
+
+    // Left eye: Salvaged rangefinder monocle with brass rim
+    const monoSize = stage >= 3 && branch === 'longhand' ? 11 : 9;
+    g.shadedRect(20 + headOffX, 22, monoSize, monoSize, 'brass');
+    g.rect(
+      22 + headOffX,
+      24,
+      monoSize - 4,
+      monoSize - 4,
+      expression === 'ultimate' ? 'brass' : 'signal',
+      3
+    );
+    g.set(23 + headOffX, 25, 'bone', 3);
+
+    // Right eye
+    if (expression === 'hurt') {
+      g.line(35 + headOffX, 25, 40 + headOffX, 27, 'coat', 0, 2);
+    } else {
+      g.rect(35 + headOffX, 25, 5, 4, expression === 'ultimate' ? 'brass' : 'coat', expression === 'ultimate' ? 3 : 0);
+      g.set(36 + headOffX, 26, 'bone', 3);
+    }
+
+    // Tilted flat cap with cracked bike reflector sewn on brim
+    g.shadedRect(14 + headOffX, 7, 36, 11, 'olive');
+    g.shadedRect(18 + headOffX, 15, 30, 4, 'coat');
+    g.shadedRect(38 + headOffX, 10, 7, 5, 'rust'); // Cracked bike reflector
+    g.set(40 + headOffX, 12, 'brass', 3);
+
+    const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
+    ctx.drawImage(baked, 0, 0);
+    return;
+  }
+
+  if (classId === 'ines') {
+    // INES CALLOWAY PORTRAIT
+    // Alternator coil frame behind shoulders with verdigris tips
+    g.shadedRect(8, 18, 10, 32, 'steel');
+    g.shadedRect(46, 18, 10, 32, 'steel');
+    g.shadedRect(9, 14, 8, 6, 'verdigris');
+    g.shadedRect(47, 14, 8, 6, 'verdigris');
+
+    // Quilted jacket + Heavy canvas apron
+    g.shadedRect(10, 46, 44, 18, 'steel');
+    g.shadedRect(16, 48, 32, 16, 'bone');
+    if (stage >= 3 && branch === 'slinger') {
+      // Wrecker chain across shoulders
+      g.line(12, 48, 52, 54, 'steel', 3, 3);
+    } else if (stage >= 3 && branch === 'binder') {
+      // Crane hoist hook
+      g.shadedRect(45, 42, 7, 10, 'brass');
+    }
+
+    // Thick safety goggles around neck
+    g.shadedRect(18, 38, 28, 7, 'brass');
+    g.shadedRect(21, 39, 9, 5, 'verdigris');
+    g.shadedRect(34, 39, 9, 5, 'verdigris');
+
+    // Face
+    g.shadedRect(19 + headOffX, 17, 26, 20, 'skin');
+    if (expression === 'hurt') {
+      g.line(23 + headOffX, 25, 28 + headOffX, 27, 'coat', 0, 2);
+      g.line(35 + headOffX, 25, 40 + headOffX, 27, 'coat', 0, 2);
+    } else {
+      const eyeMat = expression === 'ultimate' ? 'verdigris' : 'coat';
+      const eyeStep = expression === 'ultimate' ? 3 : 0;
+      g.rect(23 + headOffX, 25, 5, 5, eyeMat, eyeStep);
+      g.rect(24 + headOffX, 26, 2, 2, 'bone', 3);
+      g.rect(36 + headOffX, 25, 5, 5, eyeMat, eyeStep);
+      g.rect(37 + headOffX, 26, 2, 2, 'bone', 3);
+    }
+    g.rect(29 + headOffX, 33, 6, 1, 'coat', 0);
+
+    // Dark hair pulled into tight bun with grey streak
+    g.circle(32 + headOffX, 7, 7, 'coat', 1); // Top bun
+    g.shadedRect(17 + headOffX, 9, 30, 9, 'coat');
+    g.line(20 + headOffX, 10, 34 + headOffX, 14, 'bone', 3, 2); // Grey streak
+
+    const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
+    ctx.drawImage(baked, 0, 0);
+    return;
+  }
+
+  // SENA IBUKI PORTRAIT
   const bodyMat =
     equipped.body === 'plateCoat'
       ? 'rust'
@@ -914,22 +1512,31 @@ export function drawSenaPortrait(canvas, expression = 'normal', equipped = {}) {
       ? 'bog'
       : 'coat';
   g.shadedRect(10, 47, 44, 17, bodyMat);
-  // Rust square patch on left shoulder
   g.rect(13, 50, 7, 6, 'rust', 2);
 
-  // Railcut flange hilt behind right shoulder (no glowing blade body)
+  if (stage >= 2 && branch === 'anvil') {
+    // Anvil welded shoulder pauldron
+    g.shadedRect(8, 44, 14, 12, 'steel');
+    if (stage >= 3) {
+      // Girder riveted chest plate
+      g.shadedRect(16, 48, 32, 16, 'steel');
+    }
+  } else if (stage >= 3 && branch === 'cutter') {
+    // Flenser leather butcher's apron
+    g.shadedRect(16, 48, 32, 16, 'rust');
+  }
+
+  // Railcut flange hilt behind right shoulder
   g.shadedRect(47, 12, 8, 36, 'steel');
-  g.rect(48, 16, 6, 8, 'bone', 1); // Dirty cloth wrap on hilt
+  g.rect(48, 16, 6, 8, stage >= 2 && branch === 'cutter' ? 'blood' : 'bone', 2);
 
   // Bone scarf around neck + stenciled rust stripe
   g.shadedRect(14, 36, 36, 14, 'scarf');
-  g.rect(18, 44, 28, 3, 'rust', 2); // Stenciled rust stripe
+  g.rect(18, 44, 28, 3, 'rust', 2);
 
   // Face
-  const headOffX = expression === 'hurt' ? -2 : 0;
   g.shadedRect(19 + headOffX, 16, 26, 20, 'skin');
 
-  // Eyes (2x2 scaled proportionally on 64x64 portrait, signal cyan ONLY during ultimate)
   if (expression === 'hurt') {
     g.line(22 + headOffX, 24, 28 + headOffX, 26, 'coat', 0, 2);
     g.line(28 + headOffX, 26, 22 + headOffX, 28, 'coat', 0, 2);
@@ -938,29 +1545,93 @@ export function drawSenaPortrait(canvas, expression = 'normal', equipped = {}) {
   } else {
     const eyeMat = expression === 'ultimate' ? 'signal' : 'coat';
     const eyeStep = expression === 'ultimate' ? 3 : 0;
-    // Left eye
     g.rect(23 + headOffX, 24, 5, 5, eyeMat, eyeStep);
-    g.rect(24 + headOffX, 25, 2, 2, 'bone', 3); // Bone highlight pixel
-    // Right eye
+    g.rect(24 + headOffX, 25, 2, 2, 'bone', 3);
     g.rect(36 + headOffX, 24, 5, 5, eyeMat, eyeStep);
     g.rect(37 + headOffX, 25, 2, 2, 'bone', 3);
   }
 
-  // Mouth
   g.rect(29 + headOffX, 32, 6, expression === 'hurt' ? 2 : 1, 'coat', 0);
 
-  // Short uneven rust-red hair
+  // Short uneven rust-red hair + paper clip
   g.shadedRect(15 + headOffX, 7, 34, 10, 'hair');
-  // Longer strand on left held by bent paper clip
   g.shadedRect(14 + headOffX, 15, 5, 19, 'hair');
-  g.rect(14 + headOffX, 23, 6, 2, 'steel', 3); // Bent paper clip
+  g.rect(14 + headOffX, 23, 6, 2, 'steel', 3);
 
   // Cracked welding goggles pushed up on forehead
   g.shadedRect(17 + headOffX, 9, 30, 7, 'steel');
   g.shadedRect(20 + headOffX, 10, 10, 5, 'brass');
   g.shadedRect(34 + headOffX, 10, 10, 5, 'brass');
-  g.line(22 + headOffX, 10, 27 + headOffX, 14, 'bone', 3, 1); // Cracked lens
+  g.line(22 + headOffX, 10, 27 + headOffX, 14, 'bone', 3, 1);
 
   const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
   ctx.drawImage(baked, 0, 0);
 }
+
+export function drawSenaPortrait(canvas, expression = 'normal', equipped = {}, classId = 'sena', stage = 1, branch = null) {
+  drawCharacterPortrait(canvas, classId, expression, equipped, stage, branch);
+}
+
+/**
+ * 96x96 Character Select Card Renderer
+ * Shows the 64x64 portrait on the left/backdrop and a live 2x (96x96) animated character sprite
+ * that plays idle normally and cycles idle + short attack when hovered.
+ */
+export function drawCharacterSelectCardArt(canvas, classId = 'sena', isHovered = false, tick = 0) {
+  if (!canvas) return;
+  spriteRegistry.init();
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = PALETTE.soot;
+  ctx.fillRect(0, 0, 96, 96);
+
+  // Subtle industrial grid backing
+  ctx.fillStyle = '#14181E';
+  ctx.fillRect(4, 72, 88, 20);
+  ctx.fillStyle = '#232830';
+  ctx.fillRect(4, 72, 88, 1);
+
+  const sheets = spriteRegistry.baseClassSheets?.[classId];
+  if (!sheets) return;
+
+  let animKey = 'idle';
+  let frameIdx = tick % 4;
+  if (isHovered) {
+    const cycle = tick % 12;
+    if (cycle < 4) {
+      animKey = 'idle';
+      frameIdx = cycle;
+    } else if (cycle < 8) {
+      animKey = 'attack1';
+      frameIdx = cycle - 4;
+    } else {
+      animKey = 'attack2';
+      frameIdx = cycle - 8;
+    }
+  }
+
+  const frames = sheets[animKey]?.right || sheets.idle.right;
+  const frameCanvas = frames[frameIdx % frames.length];
+  if (frameCanvas) {
+    // Draw 48x48 sprite at 2x integer scale (96x96)
+    ctx.drawImage(frameCanvas, 0, 0, 48, 48, 0, 0, 96, 96);
+  }
+}
+
+export function drawPixelText(ctx, text, x, y, color = PALETTE.bone, align = 'center') {
+  ctx.save();
+  ctx.font = 'bold 7px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+  ctx.textAlign = align;
+  ctx.textBaseline = 'top';
+  const ix = Math.round(x);
+  const iy = Math.round(y);
+  ctx.fillStyle = PALETTE.soot;
+  ctx.fillText(text, ix + 1, iy);
+  ctx.fillText(text, ix - 1, iy);
+  ctx.fillText(text, ix, iy + 1);
+  ctx.fillText(text, ix, iy - 1);
+  ctx.fillStyle = color;
+  ctx.fillText(text, ix, iy);
+  ctx.restore();
+}
+

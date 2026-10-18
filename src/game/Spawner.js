@@ -15,9 +15,11 @@ import { Enemy } from './Enemy.js';
 import { sound } from './Audio.js';
 
 export class Spawner {
-  constructor() {
+  constructor(world = null) {
+    this.world = world;
     // Pre-allocated enemy pool (up to 64 to accommodate packs + 4 bosses)
     this.pool = Array.from({ length: 64 }, () => new Enemy());
+    this.enemies = this.pool;
     this.spawnTimer = 0.6;
 
     // Spatial Hash Grid (250px cells over 6000x6000 world -> 24x24 cells)
@@ -47,6 +49,23 @@ export class Spawner {
 
     // Boss Name Card banner on arena entry / spawn
     this.bossNameCard = null; // { name, subtitle, timer }
+  }
+
+  clear() {
+    for (let i = 0; i < this.pool.length; i++) {
+      this.pool[i].active = false;
+      this.pool[i].dead = false;
+    }
+    this.activeBossInstances = {
+      theForeman: null,
+      bigAxle: null,
+      motherSump: null,
+      theLongDry: null,
+    };
+    this.bossNameCard = null;
+    if (this.grid && typeof this.grid.clear === 'function') {
+      this.grid.clear();
+    }
   }
 
   _getFreeEnemy() {
@@ -101,28 +120,6 @@ export class Spawner {
     return results;
   }
 
-  get enemies() {
-    return this.pool.filter((e) => e.active);
-  }
-
-  queryNearby(x, y, radius) {
-    return this.queryRadius(x, y, radius);
-  }
-
-  getEnemiesInRadius(x, y, radius) {
-    return this.queryRadius(x, y, radius).filter(
-      (e) => e.active && !e.dead && Math.hypot(e.x - x, e.y - y) <= radius
-    );
-  }
-
-  markBossDefeated(bossId, _bossName, particles) {
-    if (this._lastPlayerRef) {
-      this.onBossDefeated(bossId, this._lastPlayerRef, particles);
-    } else {
-      this.defeatedBosses[bossId] = true;
-    }
-  }
-
   _computeScaleMult(playerLevel, area) {
     if (!area || !area.levelBand) return 1.0;
     const [minLvl, maxLvl] = area.levelBand;
@@ -132,9 +129,41 @@ export class Spawner {
     return 1 + levelsAboveMin * SPAWNER_CONFIG.levelScalePerPlayerLevel;
   }
 
+  _isInsideKettle(wx, wy, world = null) {
+    const w = world || this.world;
+    if (w && typeof w.isInsideKettle === 'function') {
+      return w.isInsideKettle(wx, wy);
+    }
+    const dx = wx - WORLD_CONFIG.kettleCenter.x;
+    const dy = wy - WORLD_CONFIG.kettleCenter.y;
+    return dx * dx + dy * dy <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius;
+  }
+
+  _getAreaAt(wx, wy, world = null) {
+    const w = world || this.world;
+    if (w && typeof w.getAreaAt === 'function') {
+      return w.getAreaAt(wx, wy);
+    }
+    if (w && typeof w.getZoneAt === 'function') {
+      return w.getZoneAt(wx, wy);
+    }
+    const dx = wx - WORLD_CONFIG.kettleCenter.x;
+    const dy = wy - WORLD_CONFIG.kettleCenter.y;
+    const distSq = dx * dx + dy * dy;
+    if (distSq <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius) {
+      return WORLD_CONFIG.areas.kettle;
+    }
+    if (Math.abs(dy) >= Math.abs(dx)) {
+      return dy < 0 ? WORLD_CONFIG.areas.slabTown : WORLD_CONFIG.areas.copperFlats;
+    } else {
+      return dx < 0 ? WORLD_CONFIG.areas.route9 : WORLD_CONFIG.areas.lyeMarsh;
+    }
+  }
+
   _trySpawnWave(player, world) {
     const activeCount = this.getActiveCount();
     if (activeCount >= SPAWNER_CONFIG.maxActive) return;
+    const activeWorld = world || this.world;
 
     // Pick a random point 520-700px from the player, never inside Kettle
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -148,11 +177,11 @@ export class Spawner {
       if (sx < 80 || sx > WORLD_CONFIG.size - 80 || sy < 80 || sy > WORLD_CONFIG.size - 80) {
         continue;
       }
-      if (world.isInsideKettle(sx, sy)) {
+      if (this._isInsideKettle(sx, sy, activeWorld)) {
         continue;
       }
 
-      const area = world.getAreaAt(sx, sy);
+      const area = this._getAreaAt(sx, sy, activeWorld);
       if (!area || area.safe) continue;
 
       const scaleMult = this._computeScaleMult(player.level, area);
@@ -173,7 +202,7 @@ export class Spawner {
           if (!enemy) break;
           const ox = sx + (Math.random() - 0.5) * 56;
           const oy = sy + (Math.random() - 0.5) * 56;
-          if (!world.isInsideKettle(ox, oy)) {
+          if (!this._isInsideKettle(ox, oy, activeWorld)) {
             enemy.initFromConfig(cfg, ox, oy, scaleMult);
           }
         }
@@ -297,6 +326,7 @@ export class Spawner {
       }
     }
 
+    // If all 4 bosses have been beaten at least once, show the nearest active/respawning boss
     if (!nearest) {
       for (let i = 0; i < bosses.length; i++) {
         const b = bosses[i];
@@ -308,17 +338,19 @@ export class Spawner {
       }
     }
 
-    if (!nearest) return null;
-    const dx = nearest.boss.arenaCenter.x - player.x;
-    const dy = nearest.boss.arenaCenter.y - player.y;
-    const deg = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
-    const dirs = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
-    const dir = dirs[Math.round(deg / 45) % 8];
-    return {
-      name: nearest.boss.name,
-      direction: dir,
-      distance: Math.round(nearest.dist / 10),
-    };
+    return nearest;
+  }
+
+  getNearestUnbeatenBoss(x, y) {
+    const dummyPlayer = { x, y };
+    return this.getNearestUnbeatenBossObjective(dummyPlayer);
+  }
+
+  get activeBoss() {
+    for (const b of Object.values(this.activeBossInstances)) {
+      if (b && b.active && b.hp > 0) return b;
+    }
+    return null;
   }
 
   clearNonBossEnemies() {
@@ -329,8 +361,47 @@ export class Spawner {
     }
   }
 
-  update(dt, player, projectiles, particles, camera, world) {
-    this._lastPlayerRef = player;
+  toJSON() {
+    return {
+      defeatedBosses: { ...this.defeatedBosses },
+      bossRespawnTimers: { ...this.bossRespawnTimers },
+    };
+  }
+
+  fromJSON(data) {
+    if (!data) return;
+    if (data.defeatedBosses) {
+      this.defeatedBosses = { ...this.defeatedBosses, ...data.defeatedBosses };
+    }
+    if (data.bossRespawnTimers) {
+      this.bossRespawnTimers = { ...this.bossRespawnTimers, ...data.bossRespawnTimers };
+    }
+  }
+
+  update(dt, player, projectiles, particles, camera, worldOrTimeStopped, maybeTimeStopped = false) {
+    let world = null;
+    let timeStopped = false;
+
+    if (worldOrTimeStopped && typeof worldOrTimeStopped === 'object') {
+      world = worldOrTimeStopped;
+      timeStopped = !!maybeTimeStopped;
+    } else {
+      world = this.world;
+      timeStopped = typeof worldOrTimeStopped === 'boolean' ? worldOrTimeStopped : !!maybeTimeStopped;
+    }
+    if (!world) {
+      world = this.world;
+    }
+
+    if (!timeStopped && player && typeof player.isTimeStopped === 'function') {
+      timeStopped = player.isTimeStopped();
+    }
+
+    // "Time stop: during a freeze step, all game time stops (entities, projectiles, status timers, spawns)."
+    if (timeStopped) {
+      return;
+    }
+
     this._updateBosses(dt, player);
 
     // Every 1.2s, if fewer than 40 active, spawn outside Kettle
@@ -360,14 +431,14 @@ export class Spawner {
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
       if (!e.active) continue;
-      e.update(dt, player, projectiles, particles, camera, this, world);
+      e.update(dt, player, this, projectiles, particles, camera, world);
     }
   }
 
   drawTelegraphs(ctx, camera) {
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
-      if (e.active) e.drawTelegraphs(ctx, camera);
+      if (e.active) e.drawTelegraph(ctx, camera);
     }
   }
 
