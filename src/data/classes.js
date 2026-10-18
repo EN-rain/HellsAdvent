@@ -1099,10 +1099,672 @@ export const CLASSES = {
       },
     },
   },
+
+  // =========================================================================
+  // 4) KAELEN VOS — THERMO-LANCER (PYRO-ALCHEMIST / BOILER BRUISER)
+  // =========================================================================
+  kaelen: {
+    id: 'kaelen',
+    name: 'Kaelen Vos',
+    role: 'Thermo-Lancer',
+    accent: PALETTE.ember, // #FF5A26
+    accentName: 'ember',
+    pitch: 'Boiler-rigged chemical lancer who sweeps roaring naphtha cones and vents supercritical pressure.',
+    weaponName: 'Slag Igniter & Pressure Lance',
+    weaponDesc: 'A riveted boiler-pipe lance fed by twin dorsal tanks of pressurized naphtha and lye gas.',
+    titles: {
+      hand: 'Stoker',
+      journeyman: {
+        hellburner: 'Hellburner',
+        ironclad: 'Slagclad',
+      },
+      master: {
+        hellburner: 'Cremator',
+        ironclad: 'Furnace Lord',
+      },
+    },
+    baseStats: {
+      hp: 112,
+      stamina: 60,
+      atk: 11,
+      def: 5,
+      speed: 128,
+      critChance: 0.08,
+      critMult: 1.5,
+    },
+    perLevel: {
+      hp: 13,
+      stamina: 4,
+      atk: 2,
+      def: 1,
+    },
+    basicAttack: {
+      type: 'flameSweep',
+      fireRate: 2.6,
+      reach: 95,
+      arc: 1.55,
+      damageMult: 1.15,
+      pressureGain: 9,
+    },
+    mechanic: {
+      id: 'boilerPressure',
+      name: 'Boiler Pressure',
+      maxPressure: 100,
+      redZoneThreshold: 50,
+      redZoneDamageBonus: 0.25,
+      decayDelay: 3.5,
+      decayPerSec: 8,
+      ventCost: 40,
+      desc: 'Attacks build Boiler Pressure (0-100%). At 50%+ (Red Gauge), attacks deal +25% damage and ignite Burn. Reaching 100% triggers Overheated Surge (+40% ATK, twin fire waves). Press [V] at 40%+ to Steam Vent.',
+    },
+    skills: [
+      {
+        id: 'naphthaJet',
+        slot: 1,
+        hotkey: '1',
+        name: 'Naphtha Jet',
+        icon: 'naphthaJet',
+        maxLevel: 5,
+        costPerLevel: 1,
+        baseDamageMult: 1.75,
+        damagePerLevel: 0.20,
+        baseCooldown: 5.5,
+        cooldownPerLevel: -0.35,
+        staminaCost: 12,
+        dashDistance: 150,
+        pressureGain: 22,
+        desc: 'Rocket 150px forward on twin exhaust nozzles, leaving a blazing trail of naphtha pools and slamming with the lance for 175% ATK.',
+        getStats(lvl = 1, ownedNodes = []) {
+          const l = Math.max(1, Math.min(5, lvl));
+          const hasFlashpoint = ownedNodes.includes('flashpoint');
+          const cd = Math.max(1.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2));
+          return {
+            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
+            cooldown: hasFlashpoint ? +(cd * 0.7).toFixed(2) : cd,
+            staminaCost: this.staminaCost,
+            dashDistance: this.dashDistance,
+            pressureGain: this.pressureGain,
+          };
+        },
+        formatComparison(lvl, nextLvl, ownedNodes = []) {
+          const cur = this.getStats(lvl, ownedNodes);
+          const nxt = this.getStats(nextLvl, ownedNodes);
+          return [
+            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
+          ];
+        },
+      },
+      {
+        id: 'causticMortar',
+        slot: 2,
+        hotkey: '2',
+        name: 'Caustic Mortar',
+        icon: 'causticMortar',
+        maxLevel: 5,
+        costPerLevel: 1,
+        baseDamageMult: 1.90,
+        damagePerLevel: 0.20,
+        baseRadius: 110,
+        radiusPerLevel: 10,
+        baseCooldown: 7.5,
+        cooldownPerLevel: -0.3,
+        staminaCost: 15,
+        pressureGain: 25,
+        desc: 'Lob a pressurized lye-naphtha canister to the cursor that explodes in a 110px chemical fireball for 190% ATK, inflicting Burn + Corrode.',
+        getStats(lvl = 1, ownedNodes = []) {
+          const l = Math.max(1, Math.min(5, lvl));
+          const hasBackdraft = ownedNodes.includes('backdraft');
+          return {
+            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
+            radius: this.baseRadius + (l - 1) * this.radiusPerLevel + (hasBackdraft ? 25 : 0),
+            cooldown: Math.max(3.0, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            staminaCost: this.staminaCost,
+            pressureGain: this.pressureGain,
+          };
+        },
+        formatComparison(lvl, nextLvl, ownedNodes = []) {
+          const cur = this.getStats(lvl, ownedNodes);
+          const nxt = this.getStats(nextLvl, ownedNodes);
+          return [
+            `Blast Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Blast Radius: ${cur.radius}px -> ${nxt.radius}px`,
+          ];
+        },
+      },
+      {
+        id: 'ventNova',
+        slot: 3,
+        hotkey: '3',
+        name: 'Vent Supernova',
+        icon: 'ventNova',
+        maxLevel: 5,
+        costPerLevel: 1,
+        baseDamageMult: 2.50,
+        damagePerLevel: 0.25,
+        baseRadius: 140,
+        baseCooldown: 8.5,
+        cooldownPerLevel: -0.4,
+        staminaCost: 16,
+        desc: 'Pull the boiler release valve! Consumes up to 50% Pressure to detonate a 140px thermobaric nova (up to +60% bonus DMG), stunning for 1s and granting Slag Carapace (-25% DMG taken).',
+        getStats(lvl = 1, ownedNodes = []) {
+          const l = Math.max(1, Math.min(5, lvl));
+          const hasMeltdown = ownedNodes.includes('meltdown');
+          return {
+            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel + (hasMeltdown ? 0.50 : 0)).toFixed(2),
+            radius: this.baseRadius + (hasMeltdown ? 30 : 0),
+            cooldown: Math.max(3.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            staminaCost: this.staminaCost,
+          };
+        },
+        formatComparison(lvl, nextLvl, ownedNodes = []) {
+          const cur = this.getStats(lvl, ownedNodes);
+          const nxt = this.getStats(nextLvl, ownedNodes);
+          return [
+            `Nova Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
+          ];
+        },
+      },
+    ],
+    ultimate: {
+      id: 'solarKiln',
+      hotkey: 'R',
+      name: 'Solar Kiln',
+      icon: 'solarKiln',
+      totalDamageMult: 8.5,
+      radius: 280,
+      desc: 'Time freezes as Kaelen chains the battlefield in an 8-point fiery star, erupts 6 magma geysers, and detonates a supercritical Solar Kiln across 280px for 850% ATK + Burn & Corrode.',
+    },
+    passives: [
+      {
+        id: 'asbestosLining',
+        name: 'Asbestos Lining',
+        icon: 'asbestosLining',
+        maxLevel: 3,
+        costPerLevel: 1,
+        desc: '+3 DEF and +10% Burn/Flame damage per level.',
+        formatComparison(lvl, nextLvl) {
+          return [`DEF & Flame Bonus: +${lvl * 3} DEF / +${lvl * 10}% -> +${nextLvl * 3} DEF / +${nextLvl * 10}%`];
+        },
+      },
+      {
+        id: 'draftBellows',
+        name: 'Draft Bellows',
+        icon: 'draftBellows',
+        maxLevel: 3,
+        costPerLevel: 1,
+        desc: '+12% Stamina regen and +15% Pressure generation per level.',
+        formatComparison(lvl, nextLvl) {
+          return [`Stam Regen & Pressure: +${lvl * 12}% -> +${nextLvl * 12}%`];
+        },
+      },
+    ],
+    branches: {
+      hellburner: {
+        id: 'hellburner',
+        journeymanTitle: 'Hellburner',
+        masterTitle: 'Cremator',
+        roleTag: 'Pyromania',
+        summary: 'Superheated naphtha jets, faster Burn ticks, and cataclysmic solar furnace detonations.',
+        overlayDesc: {
+          journeyman: 'Twin brass pressure-relief chimneys + glowing ember fuel hoses.',
+          master: 'White-hot furnace core visor + twin-pronged plasma igniter lance.',
+        },
+        journeymanNodes: [
+          {
+            id: 'flashpoint',
+            name: 'Flashpoint',
+            icon: 'flashpoint',
+            tier: 2,
+            cost: 2,
+            desc: 'Naphtha Jet cooldown reduced by 30% and its fire pools deal +50% damage.',
+          },
+          {
+            id: 'thermiteCore',
+            name: 'Thermite Core',
+            icon: 'thermiteCore',
+            tier: 2,
+            cost: 2,
+            desc: 'Red Gauge activates at 35% Pressure instead of 50% and grants +35% bonus damage.',
+          },
+          {
+            id: 'backdraft',
+            name: 'Backdraft',
+            icon: 'backdraft',
+            tier: 2,
+            cost: 2,
+            desc: 'Caustic Mortar radius +25px and vacuum-pulls nearby enemies into the fireball.',
+          },
+        ],
+        masterNodes: [
+          {
+            id: 'meltdown',
+            name: 'Meltdown',
+            icon: 'meltdown',
+            tier: 3,
+            cost: 3,
+            desc: 'Vent Supernova deals +50% ATK, expands by +30px, and spawns 4 magma pools.',
+          },
+          {
+            id: 'whitePhosphor',
+            name: 'White Phosphor',
+            icon: 'whitePhosphor',
+            tier: 3,
+            cost: 3,
+            desc: 'At 50%+ Pressure, basic flame sweeps also inflict Corrode (-15% DEF) and launch a piercing slag wave.',
+          },
+          {
+            id: 'crimsonSun',
+            name: 'Crimson Sun',
+            icon: 'crimsonSun',
+            tier: 3,
+            cost: 3,
+            desc: 'Solar Kiln becomes Crimson Sun: 1150% total ATK across 320px with 8 orbital magma pillars.',
+          },
+        ],
+      },
+      ironclad: {
+        id: 'ironclad',
+        journeymanTitle: 'Slagclad',
+        masterTitle: 'Furnace Lord',
+        roleTag: 'Juggernaut',
+        summary: 'Turns Boiler Pressure into heavy armor, self-repairing steam vents, and tectonic magma slams.',
+        overlayDesc: {
+          journeyman: 'Riveted boiler-plate shoulder armor + heavy cast-iron pressure shield.',
+          master: 'Towering dreadnought furnace carapace with molten slag vents.',
+        },
+        journeymanNodes: [
+          {
+            id: 'pressurePlate',
+            name: 'Pressure Plating',
+            icon: 'pressurePlate',
+            tier: 2,
+            cost: 2,
+            desc: 'Gain +3 DEF for every 25% Boiler Pressure currently held.',
+          },
+          {
+            id: 'reliefValve',
+            name: 'Relief Valve',
+            icon: 'reliefValve',
+            tier: 2,
+            cost: 2,
+            desc: 'Steam Vent [V] and Vent Supernova heal 12% Max HP and cleanse all debuffs.',
+          },
+          {
+            id: 'slagWeld',
+            name: 'Slag Weld',
+            icon: 'slagWeld',
+            tier: 2,
+            cost: 2,
+            desc: 'Naphtha Jet grants Slag Carapace (-25% damage taken for 4s) on arrival.',
+          },
+        ],
+        masterNodes: [
+          {
+            id: 'boilerFortress',
+            name: 'Boiler Fortress',
+            icon: 'boilerFortress',
+            tier: 3,
+            cost: 3,
+            desc: 'Immune to knockback while above 40% Pressure, and taking a hit builds +12% Pressure.',
+          },
+          {
+            id: 'concussionRam',
+            name: 'Concussion Ram',
+            icon: 'concussionRam',
+            tier: 3,
+            cost: 3,
+            desc: 'Vent Supernova stun duration increases to 2.0s and applies Exposed (-20% DEF for 6s).',
+          },
+          {
+            id: 'hellboreEruption',
+            name: 'Hellbore Eruption',
+            icon: 'hellboreEruption',
+            tier: 3,
+            cost: 3,
+            desc: 'Solar Kiln erupts tectonic magma pillars and grants 6s of Molten Juggernaut (-45% DMG taken, +30% ATK, searing magma pulses).',
+          },
+        ],
+      },
+    },
+  },
+
+  // =========================================================================
+  // 5) VESPERA LOCKE — ARTIFICER (ARC-DRONE SUMMONER & TESLA CONDUIT)
+  // =========================================================================
+  vespera: {
+    id: 'vespera',
+    name: 'Vespera Locke',
+    role: 'Artificer (Summoner)',
+    accent: PALETTE.volt, // #C9F24B
+    accentName: 'volt',
+    pitch: 'Signal-tower artificer who commands autonomous Arc-Drones, laser-tether pylons, and chain lightning.',
+    weaponName: 'Relay Staff & Arc-Spire Drones',
+    weaponDesc: 'A copper-wound telegraph staff topped with a rotary capacitor that directs autonomous hovering drones.',
+    titles: {
+      hand: 'Tinker',
+      journeyman: {
+        overseer: 'Overseer',
+        conduit: 'Conduit',
+      },
+      master: {
+        overseer: 'Architect',
+        conduit: 'Stormcaller',
+      },
+    },
+    baseStats: {
+      hp: 88,
+      stamina: 85,
+      atk: 10,
+      def: 4,
+      speed: 136,
+      critChance: 0.10,
+      critMult: 1.5,
+    },
+    perLevel: {
+      hp: 10,
+      stamina: 5,
+      atk: 2,
+      def: 0.6,
+    },
+    basicAttack: {
+      type: 'chainLightning',
+      fireRate: 2.8,
+      range: 340,
+      damageMult: 1.05,
+      baseBounces: 2,
+      bounceFalloff: 0.75,
+    },
+    mechanic: {
+      id: 'droneSwarm',
+      name: 'Arc-Drone Squadron',
+      baseDrones: 3,
+      droneFireInterval: 0.85,
+      droneRange: 280,
+      droneDamageMult: 0.55,
+      maxPylonsBase: 2,
+      desc: 'Commands 3 autonomous hovering Arc-Drones that auto-fire at enemies within 280px. Basic attacks unleash Chain Lightning (jumps to 2 extra enemies) and command all Drones & Pylons to focus-fire.',
+    },
+    skills: [
+      {
+        id: 'deployPylon',
+        slot: 1,
+        hotkey: '1',
+        name: 'Tesla Pylon',
+        icon: 'deployPylon',
+        maxLevel: 5,
+        costPerLevel: 1,
+        baseDamageMult: 0.85,
+        damagePerLevel: 0.12,
+        baseDuration: 12.0,
+        radius: 155,
+        baseCooldown: 6.0,
+        cooldownPerLevel: -0.35,
+        staminaCost: 14,
+        desc: 'Deploy an autonomous Tesla Pylon at the cursor (12s, max 2). Zaps nearby foes for 85% ATK and forms a high-voltage laser tether with Vespera and other Pylons.',
+        getStats(lvl = 1, ownedNodes = []) {
+          const l = Math.max(1, Math.min(5, lvl));
+          const hasSiege = ownedNodes.includes('siegePylons');
+          return {
+            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel + (hasSiege ? 0.30 : 0)).toFixed(2),
+            duration: this.baseDuration + (hasSiege ? 6.0 : 0),
+            radius: this.radius,
+            cooldown: Math.max(2.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            staminaCost: this.staminaCost,
+          };
+        },
+        formatComparison(lvl, nextLvl, ownedNodes = []) {
+          const cur = this.getStats(lvl, ownedNodes);
+          const nxt = this.getStats(nextLvl, ownedNodes);
+          return [
+            `Pylon Zap: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
+          ];
+        },
+      },
+      {
+        id: 'seekerSwarm',
+        slot: 2,
+        hotkey: '2',
+        name: 'Seeker Swarm',
+        icon: 'seekerSwarm',
+        maxLevel: 5,
+        costPerLevel: 1,
+        baseDamageMult: 1.75,
+        damagePerLevel: 0.20,
+        seekers: 4,
+        baseCooldown: 8.0,
+        cooldownPerLevel: -0.4,
+        staminaCost: 16,
+        desc: 'Overdrive all Drones and Pylons to emit a 130px EMP shockwave (175% ATK + 1s Stun) while launching 4 homing Kamikaze Micro-Drones.',
+        getStats(lvl = 1, ownedNodes = []) {
+          const l = Math.max(1, Math.min(5, lvl));
+          const hasOverclock = ownedNodes.includes('overclockedSwarm');
+          return {
+            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
+            seekers: this.seekers + (hasOverclock ? 2 : 0),
+            cooldown: Math.max(3.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            staminaCost: this.staminaCost,
+          };
+        },
+        formatComparison(lvl, nextLvl, ownedNodes = []) {
+          const cur = this.getStats(lvl, ownedNodes);
+          const nxt = this.getStats(nextLvl, ownedNodes);
+          return [
+            `EMP & Seeker DMG: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
+          ];
+        },
+      },
+      {
+        id: 'phaseBlink',
+        slot: 3,
+        hotkey: '3',
+        name: 'Phase Blink',
+        icon: 'phaseBlink',
+        maxLevel: 5,
+        costPerLevel: 1,
+        baseDamageMult: 2.20,
+        damagePerLevel: 0.25,
+        blinkDistance: 170,
+        baseCooldown: 7.5,
+        cooldownPerLevel: -0.4,
+        staminaCost: 14,
+        desc: 'Teleport 170px in a flash of lightning (grants Arc Overcharge for 3.5s) and leave a Holo-Decoy behind that taunts foes before exploding for 220% ATK.',
+        getStats(lvl = 1, ownedNodes = []) {
+          const l = Math.max(1, Math.min(5, lvl));
+          const hasStatic = ownedNodes.includes('staticField');
+          const cd = Math.max(3.0, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2));
+          return {
+            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
+            cooldown: hasStatic ? +(cd * 0.65).toFixed(2) : cd,
+            staminaCost: this.staminaCost,
+            blinkDistance: this.blinkDistance,
+          };
+        },
+        formatComparison(lvl, nextLvl, ownedNodes = []) {
+          const cur = this.getStats(lvl, ownedNodes);
+          const nxt = this.getStats(nextLvl, ownedNodes);
+          return [
+            `Decoy Blast: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
+          ];
+        },
+      },
+    ],
+    ultimate: {
+      id: 'ionConvergence',
+      hotkey: 'R',
+      name: 'Ion Convergence',
+      icon: 'ionConvergence',
+      totalDamageMult: 9.0,
+      radius: 240,
+      desc: 'Drops 6 Dreadnought Relay Satellites in a hexagonal laser cage around the target area, then calls down a sky-splitting Orbital Ion Cannon for 900% ATK and a 2.0s Stun.',
+    },
+    passives: [
+      {
+        id: 'auxiliaryCore',
+        name: 'Auxiliary Core',
+        icon: 'auxiliaryCore',
+        maxLevel: 3,
+        costPerLevel: 1,
+        desc: '+10% Drone & Chain Lightning damage and +2 DEF per level.',
+        formatComparison(lvl, nextLvl) {
+          return [`Arc DMG & DEF: +${lvl * 10}% / +${lvl * 2} DEF -> +${nextLvl * 10}% / +${nextLvl * 2} DEF`];
+        },
+      },
+      {
+        id: 'copperWindings',
+        name: 'Copper Windings',
+        icon: 'copperWindings',
+        maxLevel: 3,
+        costPerLevel: 1,
+        desc: '+12% Stamina regen and +5 move speed per level.',
+        formatComparison(lvl, nextLvl) {
+          return [`Stam Regen & Speed: +${lvl * 12}% / +${lvl * 5} SPD -> +${nextLvl * 12}% / +${nextLvl * 5} SPD`];
+        },
+      },
+    ],
+    branches: {
+      overseer: {
+        id: 'overseer',
+        journeymanTitle: 'Overseer',
+        masterTitle: 'Architect',
+        roleTag: 'Summoner',
+        summary: 'Expands the autonomous Arc-Drone squadron, adds a 3rd Tesla Pylon, and weaves lethal laser grids.',
+        overlayDesc: {
+          journeyman: 'Dual dorsal drone-docking antennae + brass command gauntlet.',
+          master: 'Halo of hovering micro-relays + high-voltage capacitor cloak.',
+        },
+        journeymanNodes: [
+          {
+            id: 'extraChassis',
+            name: 'Extra Chassis',
+            icon: 'extraChassis',
+            tier: 2,
+            cost: 2,
+            desc: '+1 permanent Orbiting Arc-Drone (4 total) and +1 Max Tesla Pylon (3 total).',
+          },
+          {
+            id: 'teslaGrid',
+            name: 'Tesla Grid',
+            icon: 'teslaGrid',
+            tier: 2,
+            cost: 2,
+            desc: 'Laser tether beams between Pylons deal +60% damage and apply Slow 45%.',
+          },
+          {
+            id: 'repairProtocol',
+            name: 'Repair Protocol',
+            icon: 'repairProtocol',
+            tier: 2,
+            cost: 2,
+            desc: 'Drone and Pylon hits restore 1.5 Stamina, and kills heal Vespera for 2% Max HP.',
+          },
+        ],
+        masterNodes: [
+          {
+            id: 'overclockedSwarm',
+            name: 'Overclocked Swarm',
+            icon: 'overclockedSwarm',
+            tier: 3,
+            cost: 3,
+            desc: 'Orbiting Drones fire 40% faster, and Seeker Swarm launches 6 Micro-Drones instead of 4.',
+          },
+          {
+            id: 'siegePylons',
+            name: 'Siege Pylons',
+            icon: 'siegePylons',
+            tier: 3,
+            cost: 3,
+            desc: 'Tesla Pylons last 18s, deal +30% damage, and their zaps chain to 2 extra enemies.',
+          },
+          {
+            id: 'orbitalGrid',
+            name: 'Orbital Ion Grid',
+            icon: 'orbitalGrid',
+            tier: 3,
+            cost: 3,
+            desc: 'Ion Convergence deploys a persistent 8s hexagonal satellite cage that strikes 3 times for 1050% total ATK.',
+          },
+        ],
+      },
+      conduit: {
+        id: 'conduit',
+        journeymanTitle: 'Conduit',
+        masterTitle: 'Stormcaller',
+        roleTag: 'Chain Burst',
+        summary: 'Turns Vespera into a high-voltage lightning weaver with rapid teleports and cascading arc novas.',
+        overlayDesc: {
+          journeyman: 'Copper arc-coils along both sleeves + glowing volt visor lens.',
+          master: 'Crackling storm-crown array + twin-forked superconductor staff.',
+        },
+        journeymanNodes: [
+          {
+            id: 'highVoltage',
+            name: 'High Voltage',
+            icon: 'highVoltage',
+            tier: 2,
+            cost: 2,
+            desc: 'Basic Chain Lightning jumps to +2 additional targets (4 jumps total) and applies Exposed.',
+          },
+          {
+            id: 'staticField',
+            name: 'Static Field',
+            icon: 'staticField',
+            tier: 2,
+            cost: 2,
+            desc: 'Phase Blink cooldown reduced by 35%, and Decoy detonation Stuns enemies for 1.2s.',
+          },
+          {
+            id: 'capacitorSurge',
+            name: 'Capacitor Surge',
+            icon: 'capacitorSurge',
+            tier: 2,
+            cost: 2,
+            desc: 'Every 4th basic attack unleashes a free 110px lightning nova around the primary target for 140% ATK.',
+          },
+        ],
+        masterNodes: [
+          {
+            id: 'superconductor',
+            name: 'Superconductor',
+            icon: 'superconductor',
+            tier: 3,
+            cost: 3,
+            desc: 'Chain Lightning suffers zero damage falloff on bounces and has +15% Crit Chance.',
+          },
+          {
+            id: 'arcNova',
+            name: 'Arc Cascade',
+            icon: 'arcNova',
+            tier: 3,
+            cost: 3,
+            desc: 'Seeker Swarm pulses twice and grants Vespera 4s of Arc Overcharge.',
+          },
+          {
+            id: 'valkyrieProtocol',
+            name: 'Valkyrie Protocol',
+            icon: 'valkyrieProtocol',
+            tier: 3,
+            cost: 3,
+            desc: 'Ion Convergence becomes Valkyrie Protocol: 1200% ATK 8-satellite orbital plasma obliteration across 280px.',
+          },
+        ],
+      },
+    },
+  },
 };
 
-export const CLASS_ORDER = ['sena', 'rook', 'ines'];
-export const CLASS_LIST = [CLASSES.sena, CLASSES.rook, CLASSES.ines];
+export const CLASS_ORDER = ['sena', 'rook', 'ines', 'kaelen', 'vespera'];
+export const CLASS_LIST = [
+  CLASSES.sena,
+  CLASSES.rook,
+  CLASSES.ines,
+  CLASSES.kaelen,
+  CLASSES.vespera,
+];
 
 // Normalize class objects so both array/key lookups and UI helpers work seamlessly
 for (const cls of CLASS_LIST) {

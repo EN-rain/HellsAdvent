@@ -13,11 +13,16 @@ import {
 } from '../data/config.js';
 import { Enemy } from './Enemy.js';
 import { sound } from './Audio.js';
+import { bossMechanics } from './BossMechanics.js';
+import { obstacleManager } from './Obstacles.js';
+import { worldLedger } from './WorldLedger.js';
+import { SUGGESTED_BOSS_ORDER } from '../data/expansionConfig.js';
 
 export class Spawner {
   constructor(world = null) {
     this.world = world;
-    // Pre-allocated enemy pool (up to 64 to accommodate packs + 4 bosses)
+    bossMechanics.setEnemyClass(Enemy);
+    // Pre-allocated enemy pool (up to 64 for normal-origin enemies per D35)
     this.pool = Array.from({ length: 64 }, () => new Enemy());
     this.enemies = this.pool;
     this.spawnTimer = 0.6;
@@ -79,16 +84,33 @@ export class Spawner {
     let count = 0;
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
-      if (e.active && e.tier !== 'boss') count++;
+      if (e.active && e.tier !== 'boss' && !e.isRitualOrigin) count++;
     }
     return count;
   }
 
-  rebuildSpatialGrid() {
-    this.grid.clear();
+  /**
+   * Returns all active enemies across both the 64-slot normal pool AND the dynamic RitualActorStore (D45/D46).
+   */
+  getAllActiveEnemies() {
+    const out = [];
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
-      if (!e.active || e.hp <= 0) continue;
+      if (e.active && e.hp > 0) out.push(e);
+    }
+    if (bossMechanics && Array.isArray(bossMechanics.ritualActors)) {
+      for (let i = 0; i < bossMechanics.ritualActors.length; i++) {
+        const ra = bossMechanics.ritualActors[i];
+        if (ra && ra.active && ra.hp > 0) out.push(ra);
+      }
+    }
+    return out;
+  }
+
+  rebuildSpatialGrid() {
+    this.grid.clear();
+    const insertEntity = (e) => {
+      if (!e || !e.active || e.hp <= 0) return;
       const cx = Math.floor(e.x / this.cellSize);
       const cy = Math.floor(e.y / this.cellSize);
       const key = `${cx},${cy}`;
@@ -98,6 +120,16 @@ export class Spawner {
         this.grid.set(key, cell);
       }
       cell.push(e);
+    };
+
+    for (let i = 0; i < this.pool.length; i++) {
+      insertEntity(this.pool[i]);
+    }
+    // D45 / D46: Include all dynamically allocated Foreman ritual-origin actors in the spatial hash grid
+    if (bossMechanics && Array.isArray(bossMechanics.ritualActors)) {
+      for (let i = 0; i < bossMechanics.ritualActors.length; i++) {
+        insertEntity(bossMechanics.ritualActors[i]);
+      }
     }
   }
 
@@ -203,7 +235,8 @@ export class Spawner {
           const ox = sx + (Math.random() - 0.5) * 56;
           const oy = sy + (Math.random() - 0.5) * 56;
           if (!this._isInsideKettle(ox, oy, activeWorld)) {
-            enemy.initFromConfig(cfg, ox, oy, scaleMult);
+            const safe = obstacleManager.findSafePosition(ox, oy, cfg.radius || 12);
+            enemy.initFromConfig(cfg, safe.x, safe.y, scaleMult);
           }
         }
       } else {
@@ -213,7 +246,8 @@ export class Spawner {
         const cfg = ENEMIES_CONFIG.elites[chosenId];
         const enemy = this._getFreeEnemy();
         if (enemy && cfg) {
-          enemy.initFromConfig(cfg, sx, sy, scaleMult);
+          const safe = obstacleManager.findSafePosition(sx, sy, cfg.radius || 20);
+          enemy.initFromConfig(cfg, safe.x, safe.y, scaleMult);
         }
       }
       return;
@@ -229,9 +263,14 @@ export class Spawner {
     }
 
     for (const [bossId, cfg] of Object.entries(ENEMIES_CONFIG.bosses)) {
-      if (this.bossRespawnTimers[bossId] > 0) {
-        this.bossRespawnTimers[bossId] = Math.max(0, this.bossRespawnTimers[bossId] - dt);
-        continue;
+      // D15: Confirmed-cleared bosses stay dead permanently; automatic respawn timer is disabled for them.
+      if (this.defeatedBosses[bossId] || worldLedger.confirmedBossKills[bossId]) {
+        this.defeatedBosses[bossId] = true;
+        this.bossRespawnTimers[bossId] = 0;
+        const activeInst = this.activeBossInstances[bossId];
+        if (!activeInst || !activeInst.active) {
+          continue;
+        }
       }
 
       let instance = this.activeBossInstances[bossId];
@@ -240,11 +279,16 @@ export class Spawner {
         player.y - cfg.arenaCenter.y
       );
 
-      // Spawn boss when player approaches within 650px of its fixed arena
-      if ((!instance || !instance.active) && distToArena <= 650) {
+      // Spawn unbeaten boss when player approaches within 650px of its fixed arena
+      if (
+        (!instance || !instance.active) &&
+        !this.defeatedBosses[bossId] &&
+        distToArena <= 650
+      ) {
         const slot = this._getFreeEnemy();
         if (slot) {
           slot.initFromConfig(cfg, cfg.arenaCenter.x, cfg.arenaCenter.y, 1.0);
+          slot.isRematch = false;
           this.activeBossInstances[bossId] = slot;
           instance = slot;
         }
@@ -256,8 +300,8 @@ export class Spawner {
           instance._hasShownCard = true;
           sound.playBossAlert();
           this.bossNameCard = {
-            name: cfg.name,
-            subtitle: cfg.subtitle,
+            name: instance.name,
+            subtitle: instance.isRematch ? `${cfg.subtitle} · REMATCH` : cfg.subtitle,
             timer: 3.2,
           };
         }
@@ -265,43 +309,88 @@ export class Spawner {
     }
   }
 
-  onBossDefeated(bossId, player, particles) {
+  /**
+   * D15 / D44: Optional Rematch Mode lets players re-fight a confirmed-cleared boss
+   * without undoing the clear or territory state, paying reduced non-farmable rewards.
+   */
+  startBossRematch(bossId, player, particles) {
+    const cfg = ENEMIES_CONFIG.bosses[bossId];
+    if (!cfg) return false;
+    const existing = this.activeBossInstances[bossId];
+    if (existing && existing.active && existing.hp > 0) return false;
+
+    const slot = this._getFreeEnemy();
+    if (!slot) return false;
+
+    bossMechanics.abortActiveEncounter(bossId);
+    slot.initFromConfig(cfg, cfg.arenaCenter.x, cfg.arenaCenter.y, 1.0);
+    slot.isRematch = true;
+    slot._hasShownCard = false;
+    this.activeBossInstances[bossId] = slot;
+
+    if (particles && player) {
+      particles.spawnFloatingText(
+        player.x,
+        player.y - 32,
+        `REMATCH SPAWNED: ${cfg.name.toUpperCase()}`,
+        PALETTE.brass
+      );
+    }
+    sound.playBossAlert();
+    return true;
+  }
+
+  onBossDefeated(bossId, player, particles, details = {}) {
+    const wasAlreadyCleared = !!this.defeatedBosses[bossId] || !!worldLedger.confirmedBossKills[bossId];
     this.defeatedBosses[bossId] = true;
-    this.bossRespawnTimers[bossId] = SPAWNER_CONFIG.bossRespawnTime; // 5 minutes (300s)
+    // D15: Disable automatic respawn timer for confirmed clears
+    this.bossRespawnTimers[bossId] = 0;
     this.activeBossInstances[bossId] = null;
 
-    // Guaranteed drop of a Salvaged-grade item
-    const salvagePool = ['surplusRespirator', 'riotJacket', 'courierLeggings'];
-    const cfg = ENEMIES_CONFIG.bosses[bossId];
-    let dropId = cfg && cfg.guaranteedDrop ? cfg.guaranteedDrop : salvagePool[0];
-    if (player.ownedEquipment.includes(dropId) || player.equipped[SHOP_ITEMS[dropId]?.slot] === dropId) {
-      const unowned = salvagePool.find(
-        (id) => !player.ownedEquipment.includes(id) && player.equipped[SHOP_ITEMS[id]?.slot] !== id
-      );
-      if (unowned) dropId = unowned;
-    }
+    obstacleManager.clearByOwner(bossId);
+    worldLedger.recordConfirmedBossVictory(bossId, details, particles, player);
 
-    const dropItem = SHOP_ITEMS[dropId];
-    if (dropItem) {
-      player.ownedEquipment.push(dropId);
-      particles.spawnDamageNumber(
+    // D44: First-clear guaranteed Salvaged drop is one-time only (not repeated on optional rematches)
+    if (!wasAlreadyCleared && !details.isRematch) {
+      const salvagePool = ['surplusRespirator', 'riotJacket', 'courierLeggings'];
+      const cfg = ENEMIES_CONFIG.bosses[bossId];
+      let dropId = cfg && cfg.guaranteedDrop ? cfg.guaranteedDrop : salvagePool[0];
+      if (player.ownedEquipment.includes(dropId) || player.equipped[SHOP_ITEMS[dropId]?.slot] === dropId) {
+        const unowned = salvagePool.find(
+          (id) => !player.ownedEquipment.includes(id) && player.equipped[SHOP_ITEMS[id]?.slot] !== id
+        );
+        if (unowned) dropId = unowned;
+      }
+
+      const dropItem = SHOP_ITEMS[dropId];
+      if (dropItem && !player.ownedEquipment.includes(dropId)) {
+        player.ownedEquipment.push(dropId);
+        particles.spawnDamageNumber(
+          player.x,
+          player.y - 34,
+          0,
+          true,
+          `SALVAGED DROP: ${dropItem.name.toUpperCase()}`,
+          PALETTE.signal
+        );
+      }
+    } else if (particles) {
+      particles.spawnFloatingText(
         player.x,
         player.y - 34,
-        0,
-        true,
-        `SALVAGED DROP: ${dropItem.name.toUpperCase()}`,
-        PALETTE.signal
+        'REMATCH VICTORY (REDUCED REWARD)',
+        PALETTE.brass
       );
     }
     sound.playLevelUp();
   }
 
   getBossRespawnRemaining(bossId) {
-    return this.bossRespawnTimers[bossId] || 0;
+    return 0;
   }
 
   getActiveBossNearPlayer(player) {
-    for (const [bossId, instance] of Object.entries(this.activeBossInstances)) {
+    for (const [, instance] of Object.entries(this.activeBossInstances)) {
       if (!instance || !instance.active || instance.hp <= 0) continue;
       const d = Math.hypot(player.x - instance.x, player.y - instance.y);
       if (d <= 560) {
@@ -312,33 +401,45 @@ export class Spawner {
   }
 
   getNearestUnbeatenBossObjective(player) {
+    // D49: Recommend bosses in Suggested Order (Big Axle -> Long Dry -> Mother Sump -> The Foreman),
+    // unless the player is already inside another unbeaten boss's sector (< 900px from its arena).
     const bosses = Object.values(ENEMIES_CONFIG.bosses);
-    let nearest = null;
-    let bestDist = Infinity;
-
     for (let i = 0; i < bosses.length; i++) {
       const b = bosses[i];
       if (this.defeatedBosses[b.id]) continue;
       const d = Math.hypot(b.arenaCenter.x - player.x, b.arenaCenter.y - player.y);
-      if (d < bestDist) {
-        bestDist = d;
-        nearest = { boss: b, dist: Math.round(d) };
+      if (d <= 950) {
+        return {
+          boss: b,
+          dist: Math.round(d),
+          suggestedRank: SUGGESTED_BOSS_ORDER.indexOf(b.id) + 1,
+        };
       }
     }
 
-    // If all 4 bosses have been beaten at least once, show the nearest active/respawning boss
-    if (!nearest) {
-      for (let i = 0; i < bosses.length; i++) {
-        const b = bosses[i];
-        const d = Math.hypot(b.arenaCenter.x - player.x, b.arenaCenter.y - player.y);
-        if (d < bestDist) {
-          bestDist = d;
-          nearest = { boss: b, dist: Math.round(d), allCleared: true };
+    for (let i = 0; i < SUGGESTED_BOSS_ORDER.length; i++) {
+      const bossId = SUGGESTED_BOSS_ORDER[i];
+      if (!this.defeatedBosses[bossId]) {
+        const b = ENEMIES_CONFIG.bosses[bossId];
+        if (b) {
+          const d = Math.hypot(b.arenaCenter.x - player.x, b.arenaCenter.y - player.y);
+          return {
+            boss: b,
+            dist: Math.round(d),
+            suggestedRank: i + 1,
+            isSuggestedNext: true,
+          };
         }
       }
     }
 
-    return nearest;
+    // All 4 primary bosses confirmed defeated -> Floor 1 Cleared!
+    const fore = ENEMIES_CONFIG.bosses.theForeman;
+    return {
+      boss: fore,
+      dist: Math.round(Math.hypot(fore.arenaCenter.x - player.x, fore.arenaCenter.y - player.y)),
+      allCleared: true,
+    };
   }
 
   getNearestUnbeatenBoss(x, y) {
@@ -417,7 +518,7 @@ export class Spawner {
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
       if (!e.active) continue;
-      if (e.tier !== 'boss') {
+      if (e.tier !== 'boss' && !e.isRitualMarcher) {
         const dist = Math.hypot(e.x - player.x, e.y - player.y);
         if (dist > SPAWNER_CONFIG.despawnDist) {
           e.active = false;
@@ -440,12 +541,24 @@ export class Spawner {
       const e = this.pool[i];
       if (e.active) e.drawTelegraph(ctx, camera);
     }
+    if (bossMechanics && Array.isArray(bossMechanics.ritualActors)) {
+      for (let i = 0; i < bossMechanics.ritualActors.length; i++) {
+        const ra = bossMechanics.ritualActors[i];
+        if (ra && ra.active) ra.drawTelegraph(ctx, camera);
+      }
+    }
   }
 
   drawEnemies(ctx, camera) {
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
       if (e.active) e.draw(ctx, camera);
+    }
+    if (bossMechanics && Array.isArray(bossMechanics.ritualActors)) {
+      for (let i = 0; i < bossMechanics.ritualActors.length; i++) {
+        const ra = bossMechanics.ritualActors[i];
+        if (ra && ra.active) ra.draw(ctx, camera);
+      }
     }
   }
 }

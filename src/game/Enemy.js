@@ -17,8 +17,13 @@ import {
   drawBresenhamCircle,
   passDither,
 } from './PixelArt.js';
-import { spriteRegistry } from './Sprites.js';
+import { spriteRegistry, drawPixelText } from './Sprites.js';
 import { sound } from './Audio.js';
+import { bossMechanics } from './BossMechanics.js';
+import { fusionManager } from './FusionManager.js';
+import { tacticalSystem } from './TacticalAI.js';
+import { obstacleManager } from './Obstacles.js';
+import { worldLedger } from './WorldLedger.js';
 
 let NEXT_ENEMY_UID = 1;
 
@@ -140,6 +145,29 @@ export class Enemy {
     this.telegraphImpactFlashTimer = 0;
     this.telegraphShape = null;
     this.actionActiveTimer = 0;
+    this.kbTimer = 0;
+    this.kbVx = 0;
+    this.kbVy = 0;
+
+    // Expansion state: Fusion, Ritual, Morale, Grudges, & Special Common Behaviors
+    this.scaleMult = scaleMult;
+    this.fusionLocked = false;
+    this.fusionChannelId = null;
+    this.fusionBacklashTimer = 0;
+    this.convergeX = 0;
+    this.convergeY = 0;
+    this.isRitualOrigin = false;
+    this.isRitualMarcher = false;
+    this.ritualTargetX = undefined;
+    this.ritualTargetY = undefined;
+    this.morale = 100;
+    this.aiRoleState = 'CHASE';
+    this.grudgeState = null;
+    this.feignedDeathTimer = 0;
+    this.hasFeignedDeath = false;
+    this.signalTimer = 2.2 + Math.random() * 1.5;
+    this.confirmFinalDeath = false;
+    this.isRematch = false;
 
     this.phase = 1;
     this.brassRimTimer = 0;
@@ -147,6 +175,10 @@ export class Enemy {
     this.arenaRadius = cfg.arenaRadius || 380;
     this.guaranteedDrop = cfg.guaranteedDrop || null;
     this.patternIndex = 0;
+
+    if (this.tier === 'boss') {
+      bossMechanics.initBossState(this);
+    }
   }
 
   applyStun(duration, particles = null) {
@@ -160,20 +192,69 @@ export class Enemy {
   takeDamage(amount, hitAngle, knockback, isCrit, player, spawner, particles, camera) {
     if (!this.active || this.hp <= 0) return;
 
+    // Plate Marshal (Slab Town Elite): Frontal scrap shield reduces frontal damage by 55% unless stunned
+    if (this.id === 'plateMarshal' && !this.statuses.cannotAct()) {
+      const hitFromDirX = -Math.cos(hitAngle);
+      if (hitFromDirX * this.facingX > 0.25) {
+        amount = Math.max(1, Math.round(amount * 0.45));
+        if (particles && Math.random() < 0.5) {
+          particles.spawnFloatingText(this.x, this.y - 24, 'FRONT SHIELD! FLANK!', PALETTE.boneDark);
+        }
+      }
+    }
+
+    // Universal Stagger for 10-Mob Fusion Channel (D21)
+    if (this.fusionChannelId) {
+      fusionManager.onMemberDamaged(this, amount);
+    }
+
+    // Boss-specific damage interception (Foreman ritual invuln, Big Axle core, Mother Sump devour stagger, Long Dry shell segments)
+    if (this.tier === 'boss') {
+      amount = bossMechanics.onBossTakeDamage(this, amount, player, spawner, particles, camera);
+      if (amount <= 0) {
+        return;
+      }
+    }
+
     this.hp = Math.max(0, this.hp - amount);
     this.hitFlashFrames = 2;
     this.squashTimer = 2 / 12;
 
-    if (knockback > 0) {
-      const baseDist = Math.min(knockback * 0.35, 75);
-      const kbDist =
+    // Silt Mimic (Lye Marsh Common): Feigns death once at <= 45% HP, then lunges if player rushes in
+    if (
+      this.id === 'siltMimic' &&
+      !this.hasFeignedDeath &&
+      this.hp > 0 &&
+      this.hp <= this.maxHp * 0.45
+    ) {
+      this.hasFeignedDeath = true;
+      this.feignedDeathTimer = 1.35;
+      if (particles) {
+        particles.spawnFloatingText(this.x, this.y - 18, '...?', PALETTE.lye);
+      }
+    }
+
+    if (knockback > 0 && (!this.bm || !this.bm.ritualActive)) {
+      const baseDist = Math.min(knockback * 0.22, 48);
+      const tierMult =
         this.tier === 'boss'
-          ? Math.max(1, Math.round(baseDist * 0.15))
+          ? 0.15
+          : this.tier === 'fusionBoss'
+          ? 0.32
           : this.tier === 'elite'
-          ? Math.max(2, Math.round(baseDist * 0.45))
-          : Math.max(3, Math.round(baseDist));
+          ? 0.45
+          : 1.0;
+      const kbDist = Math.max(1, Math.round(baseDist * tierMult));
       this.x = Math.round(this.x + Math.cos(hitAngle) * kbDist);
       this.y = Math.round(this.y + Math.sin(hitAngle) * kbDist);
+
+      // Apply smooth knockback skid velocity for heavy knockbacks (like Crescent Slash)
+      if (knockback >= 120) {
+        const skidSpeed = Math.min(knockback * 1.4, 340) * tierMult;
+        this.kbVx = Math.cos(hitAngle) * skidSpeed;
+        this.kbVy = Math.sin(hitAngle) * skidSpeed;
+        this.kbTimer = 0.18;
+      }
       this._keepOutOfKettleAndBounds();
     }
 
@@ -210,6 +291,19 @@ export class Enemy {
     }
 
     if (this.hp <= 0) {
+      // Check Boss Mandatory Kill Gate / Reassembly Protocol before allowing final death (D1, D3, D22, D36)
+      if (this.tier === 'boss') {
+        const allowDeath = bossMechanics.shouldAllowFinalBossDeath(
+          this,
+          player,
+          spawner,
+          particles,
+          camera
+        );
+        if (!allowDeath) {
+          return;
+        }
+      }
       this._onDeath(player, spawner, particles, camera);
     }
   }
@@ -232,18 +326,27 @@ export class Enemy {
     this.specialTimer = 0.3;
   }
 
-  _onDeath(player, spawner, particles, camera) {
+  _onDeath(player, spawner, particles, camera, extraDetails = {}) {
+    if (this.dead) return; // Guarantee exactly-once death & reward pathway
     this.active = false;
     this.dead = true;
     this.telegraphActive = false;
+    this.fusionLocked = false;
+    this.fusionChannelId = null;
+
+    // Trigger morale drop on nearby allies when an enemy is slain (D24)
+    tacticalSystem.onEnemyKilled(this, spawner);
 
     const baseGold =
       this.goldMin + Math.random() * Math.max(0, this.goldMax - this.goldMin);
     const variance = 0.8 + Math.random() * 0.4;
-    const finalGold = Math.max(1, Math.round(baseGold * variance));
+    // D44: Optional boss rematches pay reduced non-exploitative rewards (35%)
+    const rematchMult = this.isRematch ? 0.35 : 1.0;
+    const finalGold = Math.max(1, Math.round(baseGold * variance * rematchMult));
+    const finalXp = Math.max(1, Math.round(this.xp * rematchMult));
 
     if (player) {
-      player.gainXpAndGold(this.xp, finalGold, particles);
+      player.gainXpAndGold(finalXp, finalGold, particles);
       if (player.ultimates) {
         if (typeof player.ultimates.addKillCharge === 'function') {
           player.ultimates.addKillCharge(player, this.tier);
@@ -257,6 +360,10 @@ export class Enemy {
       }
     }
 
+    if (this.tier === 'fusionBoss') {
+      worldLedger.recordFusionBossKilled(particles, player);
+    }
+
     if (particles) {
       const decalColor =
         this.id === 'lyeLeech' || this.id === 'lyeStrider' || this.id === 'motherSump'
@@ -264,23 +371,23 @@ export class Enemy {
           : '#1E1513';
       particles.spawnDecal(this.x, this.y + 4, decalColor, this.tier === 'boss' ? 14 : 6, 20.0);
 
-      if (this.id === 'tinRat') {
+      if (this.id === 'tinRat' || this.id === 'rivetTick') {
         particles.spawnDebris(this.x, this.y, 'canLid', 2);
         particles.spawnDebris(this.x, this.y, 'shardRust', 2);
-      } else if (this.id === 'dustDog') {
+      } else if (this.id === 'dustDog' || this.id === 'cinderCrow') {
         particles.spawnDebris(this.x, this.y, 'goggles', 1);
         particles.spawnDebris(this.x, this.y, 'shardBone', 3);
-      } else if (this.id === 'wireKite') {
+      } else if (this.id === 'wireKite' || this.id === 'signalMite') {
         particles.spawnDebris(this.x, this.y, 'wire', 3);
         particles.spawnDebris(this.x, this.y, 'tarp', 2);
-      } else if (this.id === 'lyeLeech' || this.id === 'sumpBat') {
+      } else if (this.id === 'lyeLeech' || this.id === 'sumpBat' || this.id === 'siltMimic') {
         particles.spawnDebris(this.x, this.y, 'tarp', 3);
         particles.spawnDebris(this.x, this.y, 'wire', 2);
-      } else if (this.tier === 'elite') {
-        particles.spawnDebris(this.x, this.y, 'canLid', 4);
-        particles.spawnDebris(this.x, this.y, 'wire', 4);
-        particles.spawnDebris(this.x, this.y, 'shardRust', 5);
-        particles.spawnShockwave(this.x, this.y, 44, PALETTE.blood, 0.25);
+      } else if (this.tier === 'elite' || this.tier === 'fusionBoss') {
+        particles.spawnDebris(this.x, this.y, 'canLid', 5);
+        particles.spawnDebris(this.x, this.y, 'wire', 5);
+        particles.spawnDebris(this.x, this.y, 'shardRust', 6);
+        particles.spawnShockwave(this.x, this.y, 52, PALETTE.blood, 0.25);
       } else if (this.tier === 'boss') {
         particles.spawnDebris(this.x, this.y, 'canLid', 8);
         particles.spawnDebris(this.x, this.y, 'goggles', 4);
@@ -290,7 +397,7 @@ export class Enemy {
       }
     }
 
-    if (this.tier === 'elite' && Math.random() < 0.2 && player) {
+    if ((this.tier === 'elite' || this.tier === 'fusionBoss') && Math.random() < 0.25 && player) {
       player.supplies.gauzeRoll = (player.supplies.gauzeRoll || 0) + 1;
       if (particles) {
         particles.spawnDamageNumber(
@@ -307,14 +414,20 @@ export class Enemy {
 
     if (this.tier === 'boss' && player && spawner) {
       if (camera) camera.shake(8, 0.35);
-      // Boss kills grant Bounty (+10% XP and +10% gold for 10 minutes)
       player.statuses.apply(
         'bounty',
         { duration: 600.0, sourceName: this.name },
         player,
         particles
       );
-      spawner.onBossDefeated(this.id, player, particles);
+      const bossDetails = {
+        ...extraDetails,
+        revived: !!(this.bm && this.bm.isIronForeman),
+        arrivals: this.bm ? this.bm.arrivals || 0 : 0,
+        feedsAllowed: this.bm ? this.bm.feedsAllowed || 0 : 0,
+        isRematch: !!this.isRematch,
+      };
+      spawner.onBossDefeated(this.id, player, particles, bossDetails);
     }
   }
 
@@ -372,11 +485,52 @@ export class Enemy {
       if (this.active && this.hp > 0) {
         this.hp = Math.max(0, this.hp - dotDmg);
         if (this.hp <= 0) {
+          if (this.tier === 'boss') {
+            const allow = bossMechanics.shouldAllowFinalBossDeath(
+              this,
+              player,
+              spawner,
+              particles,
+              camera
+            );
+            if (!allow) return;
+          }
           this._onDeath(player, spawner, particles, camera);
         }
       }
     });
     if (!this.active || this.hp <= 0) return;
+
+    // Halt normal AI & attacks while locked in a 2.0s 10-unit Fusion Channel (Section 3.2)
+    if (this.fusionLocked) {
+      this.telegraphActive = false;
+      this.actionActiveTimer = 0;
+      return;
+    }
+
+    // Halt normal boss movement/attacks during Reassembly Protocol, Overheat Stall, Subsurface Burrow, or Devour Channel
+    if (this.tier === 'boss' && this.bm) {
+      if (
+        this.bm.ritualActive ||
+        this.bm.coreExposedTimer > 0 ||
+        this.bm.disabledRestartTimer > 0 ||
+        this.bm.subsurfaceTimer > 0 ||
+        (this.bm.devourChannel && this.bm.devourChannel.active)
+      ) {
+        this.telegraphActive = false;
+        this.actionActiveTimer = 0;
+        return;
+      }
+    }
+
+    // Apply smooth knockback skid physics
+    if (this.kbTimer > 0) {
+      this.kbTimer = Math.max(0, this.kbTimer - dt);
+      const decay = this.kbTimer / 0.18;
+      this.x += this.kbVx * decay * dt;
+      this.y += this.kbVy * decay * dt;
+      this._keepOutOfKettleAndBounds();
+    }
 
     // Cannot act (Stunned, Lifted, or Boss Staggered)
     if (this.statuses.cannotAct()) {
@@ -417,7 +571,7 @@ export class Enemy {
     this.facingX = dirX >= 0 ? 1 : -1;
 
     // Sump Bat screech every 6s: Slow 25% for 2s on the player
-    if (this.id === 'sumpBat') {
+    if (this.id === 'sumpBat' && !this.isRitualMarcher) {
       this.batScreechTimer -= dt;
       if (this.batScreechTimer <= 0 && distToPlayer <= 165) {
         this.batScreechTimer = 6.0;
@@ -431,21 +585,54 @@ export class Enemy {
       }
     }
 
-    // Tin Rat unique tell: stops and twitches for 0.25s before each lunge
-    if (this.id === 'tinRat') {
+    // Signal Mite (Route 9 Scout): Broadcasts observed player habits to nearby allies every 3.8s
+    if (this.id === 'signalMite' && !this.isRitualMarcher) {
+      this.signalTimer -= dt;
+      if (this.signalTimer <= 0 && distToPlayer <= 280) {
+        this.signalTimer = 3.8;
+        tacticalSystem.emitBroadcast(this, 260, 4.5, 'intercept');
+        if (particles) {
+          particles.spawnShockwave(this.x, this.y, 42, PALETTE.signal, 0.2);
+        }
+      }
+    }
+
+    // Silt Mimic (Lye Marsh Common): Feigns collapse with a subtle twitch tell; ambushes if player steps close
+    if (this.id === 'siltMimic' && this.feignedDeathTimer > 0) {
+      this.feignedDeathTimer -= dt;
+      this.ratTwitchTimer = 0.1; // Visual tell
+      if (distToPlayer <= 72 || this.feignedDeathTimer <= 0) {
+        this.feignedDeathTimer = 0;
+        this.ratTwitchTimer = 0;
+        if (distToPlayer <= 95 && !this.statuses.cannotMove()) {
+          this.actionActiveTimer = 0.18;
+          this.actionVx = dirX * 250;
+          this.actionVy = dirY * 250;
+          if (particles) {
+            particles.spawnFloatingText(this.x, this.y - 20, 'AMBUSH!', PALETTE.lye);
+          }
+        }
+      }
+      return;
+    }
+
+    // Tin Rat / Rivet Tick / Cinder Crow unique crouch/dive tells before lunge
+    if ((this.id === 'tinRat' || this.id === 'rivetTick' || this.id === 'cinderCrow') && !this.isRitualMarcher) {
       if (this.ratTwitchTimer > 0) {
         this.ratTwitchTimer -= dt;
         if (this.ratTwitchTimer <= 0 && !this.statuses.cannotMove()) {
-          this.actionActiveTimer = 0.16;
-          this.actionVx = dirX * 220;
-          this.actionVy = dirY * 220;
+          this.actionActiveTimer = this.id === 'cinderCrow' ? 0.22 : 0.16;
+          const lungeSpd = this.id === 'rivetTick' ? 245 : this.id === 'cinderCrow' ? 260 : 220;
+          this.actionVx = dirX * lungeSpd;
+          this.actionVy = dirY * lungeSpd;
         }
         return;
       }
       this.ratLungeCooldown -= dt;
-      if (this.ratLungeCooldown <= 0 && distToPlayer < 95) {
+      const triggerRange = this.id === 'cinderCrow' ? 135 : 95;
+      if (this.ratLungeCooldown <= 0 && distToPlayer < triggerRange) {
         this.ratTwitchTimer = 0.25;
-        this.ratLungeCooldown = 2.4;
+        this.ratLungeCooldown = this.id === 'rivetTick' ? 2.1 : 2.4;
         return;
       }
     }
@@ -580,8 +767,8 @@ export class Enemy {
       return;
     }
 
-    // 3. Check if Elite or Boss should start a telegraphed special attack
-    if (this.tier === 'elite' || this.tier === 'boss') {
+    // 3. Check if Elite, Fusion Mid-Boss, or Boss should start a telegraphed special attack
+    if (this.tier === 'elite' || this.tier === 'fusionBoss' || this.tier === 'boss') {
       const cdMult =
         this.tier === 'boss'
           ? this.phase === 3
@@ -591,17 +778,29 @@ export class Enemy {
             : 1.0
           : 1.0;
       this.specialTimer -= dt;
-      if (this.specialTimer <= 0 && distToPlayer < 260) {
+      if (this.specialTimer <= 0 && distToPlayer < 275) {
         this.specialTimer = this.specialCooldown * cdMult;
         this._beginTelegraph(player);
         return;
       }
     }
 
-    // 4. Constant chase movement (blocked if Pinned)
+    // 4. Constant chase / tactical movement (blocked if Pinned)
     if (!this.statuses.cannotMove()) {
-      let speedMult = this.statuses.getMoveSpeedMultiplier();
-      if (this.id === 'lyeLeech') {
+      const steered = tacticalSystem.computeSteering(
+        this,
+        player,
+        dirX,
+        dirY,
+        distToPlayer,
+        spawner
+      );
+
+      let speedMult =
+        this.statuses.getMoveSpeedMultiplier() *
+        steered.speedMult *
+        obstacleManager.getHazardSpeedMultiplier(this);
+      if (this.id === 'lyeLeech' && !this.isRitualMarcher) {
         speedMult *= this.animFrame === 1 ? 1.65 : 0.45;
       } else if (this.tier === 'boss') {
         speedMult *= this.phase === 3 ? 1.3 : this.phase === 2 ? 1.15 : 1.0;
@@ -609,6 +808,14 @@ export class Enemy {
 
       let sepX = 0;
       let sepY = 0;
+      // Reduce separation when converging for 10-unit same-species fusion (outside Foreman ritual AOE)
+      const isConverging =
+        this.tier === 'common' &&
+        !this.isRitualMarcher &&
+        (Math.abs(this.convergeX || 0) > 0.01 || Math.abs(this.convergeY || 0) > 0.01) &&
+        !bossMechanics.isInsideForemanNoFusionField(this.x, this.y);
+
+      const sepStrength = isConverging ? 18 : 65;
       const neighbors = (spawner && typeof spawner.queryRadius === 'function')
         ? spawner.queryRadius(this.x, this.y, this.radius * 2.1)
         : [];
@@ -618,17 +825,20 @@ export class Enemy {
         const ndx = this.x - other.x;
         const ndy = this.y - other.y;
         const nDist = Math.hypot(ndx, ndy) || 0.1;
-        const minSep = this.radius + other.radius + 3;
+        const minSep = this.radius + other.radius + (isConverging ? 0 : 3);
         if (nDist < minSep) {
-          const push = ((minSep - nDist) / minSep) * 65;
+          const push = ((minSep - nDist) / minSep) * sepStrength;
           sepX += (ndx / nDist) * push;
           sepY += (ndy / nDist) * push;
         }
       }
 
+      const convVX = isConverging ? (this.convergeX || 0) * 32 : 0;
+      const convVY = isConverging ? (this.convergeY || 0) * 32 : 0;
+
       const moveSpeed = this.speed * speedMult;
-      this.x += (dirX * moveSpeed + sepX) * dt;
-      this.y += (dirY * moveSpeed + sepY) * dt;
+      this.x += (steered.dirX * moveSpeed + sepX + convVX) * dt;
+      this.y += (steered.dirY * moveSpeed + sepY + convVY) * dt;
     }
 
     if (distToPlayer <= this.radius + player.radius + 2 && this.contactCooldown <= 0) {
@@ -643,6 +853,16 @@ export class Enemy {
   }
 
   _keepOutOfKettleAndBounds() {
+    // Resolve solid & boss-generated obstacle collision with explicit flying & burrowing exceptions
+    const isBurrowed = !!(this.bm && this.bm.subsurfaceTimer > 0) || !!this.isBurrowed;
+    const resolved = obstacleManager.resolveEntityCollision(this.x, this.y, this.radius, {
+      isFlying: !!this.flying,
+      isBurrowed,
+    });
+    this.x = resolved.x;
+    this.y = resolved.y;
+    this.lastCollidedObstacle = resolved.hitObstacle;
+
     const cx = WORLD_CONFIG.kettleCenter.x;
     const cy = WORLD_CONFIG.kettleCenter.y;
     const dx = this.x - cx;
@@ -674,38 +894,56 @@ export class Enemy {
     this.telegraphDuration = 0.8;
     this.telegraphTimer = this.telegraphDuration;
 
-    const angle = Math.atan2(player.y - this.y, player.x - this.x);
+    // Use bounded tactical aim prediction (includes Elite/Fusion Grudge D26 & Signal Mite broadcast)
+    const angle = tacticalSystem.getPredictedAimAngle(this, player);
 
-    if (this.tier === 'elite') {
-      if (this.specialType === 'charge') {
-        const dist = 140;
+    if (this.tier === 'elite' || this.tier === 'fusionBoss') {
+      if (
+        this.specialType === 'charge' ||
+        this.specialType === 'switchbackCharge' ||
+        this.specialType === 'rollingRush' ||
+        this.specialType === 'pairedLungeHowl' ||
+        this.specialType === 'furnaceAirstrike'
+      ) {
+        const dist = this.tier === 'fusionBoss' ? 170 : 145;
         this.telegraphShape = {
           type: 'line',
           x1: Math.round(this.x),
           y1: Math.round(this.y),
           x2: Math.round(this.x + Math.cos(angle) * dist),
           y2: Math.round(this.y + Math.sin(angle) * dist),
-          width: 22,
+          width: this.tier === 'fusionBoss' ? 28 : 22,
           angle,
           color: PALETTE.blood,
         };
-      } else if (this.specialType === 'acidSpit') {
+      } else if (
+        this.specialType === 'acidSpit' ||
+        this.specialType === 'burrowMortar' ||
+        this.specialType === 'titanSlamLeap'
+      ) {
         this.telegraphShape = {
           type: 'circle',
           x: Math.round(player.x),
           y: Math.round(player.y),
-          radius: 44,
+          radius: this.tier === 'fusionBoss' ? 54 : 44,
           angle,
-          color: PALETTE.lye,
+          color: this.specialType === 'acidSpit' ? PALETTE.lye : PALETTE.blood,
         };
       } else {
+        // Ring pulse (Flats Harvester, Plate Marshal, Sump Cantor, Relay Colossus, Screech Choir, Brine Maw, Dredge Husk, Wire Cyclone)
+        if (this.specialType === 'overclockBroadcast' || this.specialType === 'shieldCommand') {
+          tacticalSystem.emitBroadcast(this, 300, 5.0, 'command');
+        }
         this.telegraphShape = {
           type: 'ring',
           x: Math.round(this.x),
           y: Math.round(this.y),
-          radius: 62,
+          radius: this.tier === 'fusionBoss' ? 76 : 64,
           angle,
-          color: PALETTE.blood,
+          color:
+            this.specialType === 'cantorPulse' || this.specialType === 'suctionDrain'
+              ? PALETTE.lye
+              : PALETTE.blood,
         };
       }
       return;
@@ -1021,13 +1259,15 @@ export class Enemy {
         spriteCanvas = isRight ? entry.brassRimRight[fIdx] : entry.brassRimLeft[fIdx];
       } else if (this.telegraphActive || this.ratTwitchTimer > 0) {
         spriteCanvas = isRight ? entry.tellRight[fIdx] : entry.tellLeft[fIdx];
-      } else if (this.tier === 'elite' && Math.floor(this.animClock * 6) % 2 === 1) {
+      } else if ((this.tier === 'elite' || this.tier === 'fusionBoss') && Math.floor(this.animClock * 6) % 2 === 1) {
         spriteCanvas = isRight ? entry.elitePulseRight[fIdx] : entry.elitePulseLeft[fIdx];
       } else {
         spriteCanvas = isRight ? entry.right[fIdx] : entry.left[fIdx];
       }
 
-      if (spriteCanvas) {
+      // Hide sprite while The Long Dry is burrowed underground (tremor rings drawn by BossMechanics)
+      const isBurrowed = !!(this.bm && this.bm.subsurfaceTimer > 0);
+      if (spriteCanvas && !isBurrowed) {
         const w = spriteCanvas.width;
         const h = spriteCanvas.height;
         const stunTiltX = isStaggered
@@ -1037,7 +1277,7 @@ export class Enemy {
           : isStunned
           ? 2
           : 0;
-        const squashDropY = this.squashTimer > 0 ? 2 : 0;
+        const squashDropY = this.squashTimer > 0 || this.feignedDeathTimer > 0 ? 3 : 0;
         ctx.drawImage(
           spriteCanvas,
           Math.round(sx - w / 2 + stunTiltX),
@@ -1046,7 +1286,7 @@ export class Enemy {
       }
     }
 
-    // Draw pixel-art status visuals on enemy (Bleed drops, Burn flames, Corrode dots, Pinned spike, Marked triangle, Stun points)
+    // Draw pixel-art status visuals on enemy
     this.statuses.drawEffectsOnEntity(
       ctx,
       sx,
@@ -1055,23 +1295,33 @@ export class Enemy {
       this.animClock
     );
 
-    // Overhead HP bar + up to 3 prioritized status icons (+N if more)
+    // Overhead HP bar + AI role/grudge/morale cues
     const activeStatuses = this.statuses.getUiList();
-    if (this.tier !== 'boss' && (this.hp < this.maxHp || this.tier === 'elite' || activeStatuses.length > 0)) {
-      const barW = this.tier === 'elite' ? 24 : 16;
-      const barH = 2;
+    if (
+      this.tier !== 'boss' &&
+      (this.hp < this.maxHp ||
+        this.tier === 'elite' ||
+        this.tier === 'fusionBoss' ||
+        activeStatuses.length > 0)
+    ) {
+      const barW = this.tier === 'fusionBoss' ? 36 : this.tier === 'elite' ? 24 : 16;
+      const barH = this.tier === 'fusionBoss' ? 3 : 2;
       const bx = sx - (barW >> 1);
-      const by = sy - this.radius - 6 + flyHeightOffset;
+      const by = sy - this.radius - 7 + flyHeightOffset;
       ctx.fillStyle = PALETTE.soot;
       ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
-      ctx.fillStyle = PALETTE.blood;
+      ctx.fillStyle = this.tier === 'fusionBoss' ? PALETTE.brass : PALETTE.blood;
       ctx.fillRect(bx, by, Math.max(1, Math.round((this.hp / this.maxHp) * barW)), barH);
+
+      if (this.tier === 'fusionBoss') {
+        drawPixelText(ctx, this.name.toUpperCase(), sx, by - 7, PALETTE.brass, 'center');
+      }
 
       // Up to 3 small status icons above the health bar
       if (activeStatuses.length > 0) {
         const shown = activeStatuses.slice(0, 3);
         const startX = sx - Math.round((shown.length * 6) / 2);
-        const iconY = by - 6;
+        const iconY = by - (this.tier === 'fusionBoss' ? 14 : 6);
         for (let i = 0; i < shown.length; i++) {
           const st = shown[i];
           const ix = startX + i * 6;
@@ -1080,12 +1330,18 @@ export class Enemy {
           ctx.fillStyle = st.color;
           ctx.fillRect(ix, iconY, 4, 4);
         }
-        if (activeStatuses.length > 3) {
-          ctx.fillStyle = PALETTE.bone;
-          ctx.font = 'bold 5px ui-monospace, monospace';
-          ctx.fillText(`+${activeStatuses.length - 3}`, startX + shown.length * 6 + 3, iconY + 4);
-        }
       }
+    }
+
+    // Readable AI Intelligence / Morale / Grudge / Ritual March indicator (Sections 4, 11.1)
+    if (this.isRitualMarcher) {
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillRect(sx - 2, sy - this.radius - 11, 4, 2);
+    } else if (this.aiRoleState === 'RETREAT') {
+      drawPixelText(ctx, '!', sx, sy - this.radius - 12, PALETTE.bone, 'center');
+    } else if (this.grudgeState && this.grudgeState.confidence >= 2) {
+      ctx.fillStyle = PALETTE.brass;
+      ctx.fillRect(sx - 2, sy - this.radius - 12, 4, 2);
     }
   }
 }

@@ -516,6 +516,24 @@ export class ParticlePool {
     this.spawnBurst(x, y, count, color, 35, 95, 2, 0.25);
   }
 
+  spawnHitSparks(x, y, count = 3, color = PALETTE.rust, color2 = PALETTE.brass) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 25 + Math.random() * 55;
+      this.spawnParticle({
+        kind: 'pixel',
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: 1,
+        color: i % 2 === 0 ? color : color2,
+        color2,
+        life: 0.18 + Math.random() * 0.1,
+      });
+    }
+  }
+
   spawnDirectionalSparks(x, y, angle = 0, spread = 0.6, count = 8, color = PALETTE.signal) {
     for (let i = 0; i < count; i++) {
       const a = angle + (Math.random() - 0.5) * spread;

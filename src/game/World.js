@@ -13,6 +13,7 @@ import {
   passDither,
   MATERIAL_RAMPS,
 } from './PixelArt.js';
+import { worldLedger } from './WorldLedger.js';
 
 export class World {
   constructor() {
@@ -390,24 +391,77 @@ export class World {
     ctx.fillStyle = PALETTE.brass; // Heavy iron stamp
     ctx.fillRect(hx + 6, hy + 1, 4, 5);
 
-    // Hand-painted directional signs around Kettle
+    // Hand-painted directional signs around Kettle + Territory Liberation Brass Ribbons
     const signs = [
-      { x: 3000, y: 2790 },
-      { x: 2790, y: 3000 },
-      { x: 3210, y: 3000 },
-      { x: 3000, y: 3210 },
+      { x: 3000, y: 2790, bossId: 'theForeman' },
+      { x: 2790, y: 3000, bossId: 'bigAxle' },
+      { x: 3210, y: 3000, bossId: 'motherSump' },
+      { x: 3000, y: 3210, bossId: 'theLongDry' },
     ];
     for (let i = 0; i < signs.length; i++) {
       const sg = signs[i];
       if (!camera.isVisible(sg.x, sg.y, 40)) continue;
       const sx = Math.round(sg.x - camX);
       const sy = Math.round(sg.y - camY);
+      const liberated = !!worldLedger.confirmedBossKills?.[sg.bossId];
       ctx.fillStyle = MATERIAL_RAMPS.rust[1];
       ctx.fillRect(sx - 1, sy - 4, 3, 10);
-      ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+      ctx.fillStyle = liberated ? MATERIAL_RAMPS.brass[2] : MATERIAL_RAMPS.steel[2];
       ctx.fillRect(sx - 7, sy - 8, 14, 5);
-      ctx.fillStyle = MATERIAL_RAMPS.bone[2];
+      ctx.fillStyle = liberated ? PALETTE.bone : MATERIAL_RAMPS.bone[2];
       ctx.fillRect(sx - 7, sy - 8, 14, 1);
+    }
+
+    // Boss Trophy Monuments around the Kettle Campfire
+    if (worldLedger.confirmedBossKills?.theForeman) {
+      // Foreman Hard-Hat & Gear Trophy
+      const tx = Math.round(2972 - camX);
+      const ty = Math.round(3012 - camY);
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(tx - 5, ty - 10, 10, 12);
+      ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+      ctx.fillRect(tx - 4, ty - 2, 8, 3);
+      ctx.fillStyle = PALETTE.brass;
+      ctx.fillRect(tx - 3, ty - 9, 6, 7);
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillRect(tx - 2, ty - 8, 3, 5);
+    }
+    if (worldLedger.confirmedBossKills?.bigAxle) {
+      // Big Axle Cracked Piston Trophy
+      const tx = Math.round(2966 - camX);
+      const ty = Math.round(3034 - camY);
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(tx - 5, ty - 9, 10, 11);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(tx - 4, ty - 8, 8, 2);
+      ctx.fillRect(tx - 3, ty - 5, 6, 2);
+      ctx.fillStyle = PALETTE.brass;
+      ctx.fillRect(tx - 1, ty - 8, 2, 8);
+    }
+    if (worldLedger.confirmedBossKills?.motherSump) {
+      // Mother Sump Dried Bog Lantern
+      const tx = Math.round(3028 - camX);
+      const ty = Math.round(3012 - camY);
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(tx - 4, ty - 10, 8, 12);
+      ctx.fillStyle = MATERIAL_RAMPS.bog[2];
+      ctx.fillRect(tx - 3, ty - 9, 6, 7);
+      ctx.fillStyle = PALETTE.lye;
+      ctx.fillRect(tx - 2, ty - 7, 4, 4);
+      drawDitheredGlowRings(ctx, tx, ty - 5, 5, PALETTE.lye);
+    }
+    if (worldLedger.confirmedBossKills?.theLongDry) {
+      // The Long Dry Shattered Bore Plate Trophy
+      const tx = Math.round(3034 - camX);
+      const ty = Math.round(3034 - camY);
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(tx - 5, ty - 9, 10, 11);
+      ctx.fillStyle = PALETTE.brass;
+      ctx.fillRect(tx - 4, ty - 8, 8, 5);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(tx - 4, ty - 8, 8, 1);
+      ctx.fillStyle = MATERIAL_RAMPS.rust[2];
+      ctx.fillRect(tx - 2, ty - 3, 4, 4);
     }
   }
 

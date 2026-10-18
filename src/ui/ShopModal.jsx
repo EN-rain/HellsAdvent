@@ -6,6 +6,7 @@ import {
   DIALOGUE,
 } from '../data/config.js';
 import { CharacterPortrait, PixelIcon, getGradeColor } from './PixelWidgets.jsx';
+import { worldLedger } from '../game/WorldLedger.js';
 
 const TABS = [
   { id: 'head', label: 'Head' },
@@ -97,7 +98,9 @@ function renderStatComparisons(candidateItem, equippedItem) {
 export function ShopModal({ engine, onClose }) {
   const [activeTab, setActiveTab] = useState('head');
   const [hoveredItemId, setHoveredItemId] = useState('weldingGoggles');
-  const [statusMsg, setStatusMsg] = useState(DIALOGUE.umeGreetings[0]);
+  const [statusMsg, setStatusMsg] = useState(
+    () => worldLedger.getReactiveDialogue('ume') || DIALOGUE.umeGreetings[0]
+  );
 
   const p = engine.player;
   const cls = p.classConfig;

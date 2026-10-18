@@ -28,6 +28,8 @@ export const MATERIAL_RAMPS = {
   blood: ['#24171D', '#7A1C1C', '#C92A2A', '#FF3B3B'],
   bone: ['#1F4D4A', '#7E7A6E', '#B8B1A2', '#D9D2C3'],
   verdigris: ['#0B0D10', '#1B5E4B', '#32A37B', '#4FD6A0'],
+  ember: ['#1A0F0E', '#7A2214', '#CC3F1E', '#FF5A26'],
+  volt: ['#11241E', '#4F7A22', '#8FC435', '#C9F24B'],
   lye: ['#142927', '#5E6E28', '#98A644', '#C9D26B'],
   olive: ['#0B0D10', '#253024', '#404F3B', '#687A5E'],
 };

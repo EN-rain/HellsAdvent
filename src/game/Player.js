@@ -21,6 +21,8 @@ import { StatusSystem, computeDamagePipeline } from './Status.js';
 import { MeleeBehavior } from './classes/Melee.js';
 import { RangedBehavior } from './classes/Ranged.js';
 import { MageBehavior } from './classes/Mage.js';
+import { PyroBehavior } from './classes/Pyro.js';
+import { ArtificerBehavior } from './classes/Artificer.js';
 import {
   angleTo4Facing,
   drawPixelLine,
@@ -29,6 +31,8 @@ import {
 import { bakePlayerSprites, spriteRegistry } from './Sprites.js';
 import { sound } from './Audio.js';
 import { UltimateSequencer } from './Ultimates.js';
+import { obstacleManager } from './Obstacles.js';
+import { tacticalSystem } from './TacticalAI.js';
 
 export class Player {
   constructor(classId = 'sena') {
@@ -215,6 +219,10 @@ export class Player {
       this.classBehavior = new RangedBehavior(this);
     } else if (this.classId === 'ines') {
       this.classBehavior = new MageBehavior(this);
+    } else if (this.classId === 'kaelen') {
+      this.classBehavior = new PyroBehavior(this);
+    } else if (this.classId === 'vespera') {
+      this.classBehavior = new ArtificerBehavior(this);
     } else {
       this.classBehavior = new MeleeBehavior(this);
     }
@@ -374,7 +382,7 @@ export class Player {
     return false;
   }
 
-  toggleGuardStance(particles = null) {
+  toggleGuardStance(particles = null, spawner = null, camera = null) {
     if (this.classId === 'sena' && this.classBehavior) {
       this.classBehavior.isGuarding = !this.classBehavior.isGuarding;
       if (particles) {
@@ -386,6 +394,12 @@ export class Player {
         );
       }
       return true;
+    }
+    if (this.classId === 'kaelen' && this.classBehavior && typeof this.classBehavior.trySteamVent === 'function') {
+      return this.classBehavior.trySteamVent(spawner || this._lastSpawner, particles, camera || this._lastCamera);
+    }
+    if (this.classId === 'vespera' && this.classBehavior && typeof this.classBehavior.tryRecallPulse === 'function') {
+      return this.classBehavior.tryRecallPulse(spawner || this._lastSpawner, particles, camera || this._lastCamera);
     }
     return false;
   }
@@ -436,6 +450,10 @@ export class Player {
       this.classBehavior = new RangedBehavior(this);
     } else if (this.classId === 'ines') {
       this.classBehavior = new MageBehavior(this);
+    } else if (this.classId === 'kaelen') {
+      this.classBehavior = new PyroBehavior(this);
+    } else if (this.classId === 'vespera') {
+      this.classBehavior = new ArtificerBehavior(this);
     } else {
       this.classBehavior = new MeleeBehavior(this);
     }
@@ -498,6 +516,16 @@ export class Player {
       speed += (this.passives.lightStep || 0) * 6;
     } else if (this.classId === 'ines' && this.classBehavior) {
       def += this.classBehavior.getOrbitDefBonus();
+    } else if (this.classId === 'kaelen') {
+      def += (this.passives.boilerPlate || 0) * 4;
+      speed += (this.passives.pressurizedDraft || 0) * 4;
+      if (this.hasNode('slagCarapace') && this.classBehavior && this.classBehavior.pressure >= 75) {
+        def += 8;
+      }
+    } else if (this.classId === 'vespera') {
+      speed += (this.passives.servoLubricant || 0) * 6;
+      critChance += (this.passives.copperConductors || 0) * 0.04;
+      dodgeCdRed += (this.passives.servoLubricant || 0) * 0.10;
     }
 
     // Status Effect modifiers
@@ -551,6 +579,10 @@ export class Player {
       regen *= 1 + (this.passives.secondWind || 0) * 0.12;
     } else if (this.classId === 'ines') {
       regen *= 1 + (this.passives.calmHands || 0) * 0.10;
+    } else if (this.classId === 'kaelen') {
+      regen *= 1 + (this.passives.pressurizedDraft || 0) * 0.12;
+    } else if (this.classId === 'vespera') {
+      regen *= 1 + (this.passives.capacitorBank || 0) * 0.14;
     }
     regen *= this.statuses.getStaminaRegenMultiplier();
     return regen;
@@ -692,7 +724,16 @@ export class Player {
    * - Halves remaining Burn duration
    * - Triggers Rook's Caltrop Pocket if owned
    */
-  tryDodge(moveX, moveY, worldMouseX, worldMouseY, particles) {
+  tryDodge(moveX, moveY, arg3, arg4, arg5) {
+    let worldMouseX = arg3;
+    let worldMouseY = arg4;
+    let particles = arg5;
+    if (arg3 && typeof arg3 === 'object') {
+      particles = arg3;
+      worldMouseX = this._lastWorldMouseX ?? (this.x + (this.facingX || 1) * 40);
+      worldMouseY = this._lastWorldMouseY ?? this.y;
+    }
+
     if (
       this.dead ||
       this.statuses.cannotMove() ||
@@ -725,22 +766,31 @@ export class Player {
     if (len > 0.01) {
       dx /= len;
       dy /= len;
-    } else {
+    } else if (Number.isFinite(worldMouseX) && Number.isFinite(worldMouseY)) {
       const ang = Math.atan2(worldMouseY - this.y, worldMouseX - this.x);
       dx = Math.cos(ang);
       dy = Math.sin(ang);
+    } else {
+      dx = this.facingX || 1;
+      dy = 0;
     }
 
     const dodgeDistMult =
-      this.classId === 'rook' ? 1 + (this.passives.lightStep || 0) * 0.10 : 1.0;
+      this.classId === 'rook'
+        ? 1 + (this.passives.lightStep || 0) * 0.10
+        : this.classId === 'vespera'
+        ? 1 + (this.passives.servoLubricant || 0) * 0.08
+        : 1.0;
 
     this.dodgeVx = dx * PLAYER_CONFIG.dodge.speed * dodgeDistMult;
     this.dodgeVy = dy * PLAYER_CONFIG.dodge.speed * dodgeDistMult;
-    this.facingDir = angleTo4Facing(Math.atan2(dy, dx));
+    const dodgeAngle = Math.atan2(dy, dx);
+    this.facingDir = angleTo4Facing(dodgeAngle);
     if (Math.abs(dx) > 0.1) this.facingX = dx >= 0 ? 1 : -1;
+    this._pendingObservedDodgeAngle = dodgeAngle;
 
-    if (this.classId === 'rook' && this.classBehavior) {
-      this.classBehavior.onDodgeRoll(this.x, this.y, particles);
+    if (this.classBehavior && typeof this.classBehavior.onDodgeRoll === 'function') {
+      this.classBehavior.onDodgeRoll(this.x, this.y, particles, this._lastSpawner);
     }
 
     sound.playDodge();
@@ -763,14 +813,15 @@ export class Player {
         camera
       );
     }
-    if (this.classId === 'ines') {
+    if (this.classId === 'ines' || this.classId === 'kaelen' || this.classId === 'vespera') {
       return this.classBehavior.tryBasicAttack(
         worldMouseX,
         worldMouseY,
         spawner,
         projectiles,
         particles,
-        camera
+        camera,
+        onHitStop
       );
     }
     return this.classBehavior.tryBasicAttack(
@@ -796,7 +847,7 @@ export class Player {
     if (this.classId === 'rook') {
       return this.classBehavior.trySkill1(worldMouseX, worldMouseY, projectiles, particles, camera);
     }
-    if (this.classId === 'ines') {
+    if (this.classId === 'kaelen' || this.classId === 'vespera') {
       return this.classBehavior.trySkill1(
         worldMouseX,
         worldMouseY,
@@ -832,6 +883,16 @@ export class Player {
     if (this.classId === 'ines') {
       return this.classBehavior.trySkill2(particles);
     }
+    if (this.classId === 'kaelen' || this.classId === 'vespera') {
+      return this.classBehavior.trySkill2(
+        worldMouseX,
+        worldMouseY,
+        spawner,
+        particles,
+        camera,
+        onHitStop
+      );
+    }
     return this.classBehavior.trySkill2(
       worldMouseX,
       worldMouseY,
@@ -856,6 +917,16 @@ export class Player {
       return this.classBehavior.trySkill3(worldMouseX, worldMouseY, particles);
     }
     if (this.classId === 'ines') {
+      return this.classBehavior.trySkill3(
+        worldMouseX,
+        worldMouseY,
+        spawner,
+        particles,
+        camera,
+        onHitStop
+      );
+    }
+    if (this.classId === 'kaelen' || this.classId === 'vespera') {
       return this.classBehavior.trySkill3(
         worldMouseX,
         worldMouseY,
@@ -1223,9 +1294,13 @@ export class Player {
     }
 
     // Update Class Behavior module
-    if (this.classId === 'rook') {
-      this.classBehavior.update(dt, input, spawner, projectiles, particles, camera, onHitStop);
-    } else if (this.classId === 'ines') {
+    this._lastSpawner = spawner;
+    this._lastCamera = camera;
+    if (input && Number.isFinite(input.worldMouseX)) {
+      this._lastWorldMouseX = input.worldMouseX;
+      this._lastWorldMouseY = input.worldMouseY;
+    }
+    if (this.classId === 'rook' || this.classId === 'ines' || this.classId === 'kaelen' || this.classId === 'vespera') {
       this.classBehavior.update(dt, input, spawner, projectiles, particles, camera, onHitStop);
     } else {
       this.classBehavior.update(dt, input, spawner, particles, camera);
@@ -1316,10 +1391,18 @@ export class Player {
     }
 
     // 6. Dodge Roll movement
+    if (this._pendingObservedDodgeAngle !== undefined && spawner) {
+      tacticalSystem.recordPlayerDodge(this, this._pendingObservedDodgeAngle, spawner);
+      this._pendingObservedDodgeAngle = undefined;
+    }
+
     if (this.dodgeTimer > 0) {
       this.dodgeTimer = Math.max(0, this.dodgeTimer - dt);
       this.x = this.clampCoord(this.x + this.dodgeVx * dt);
       this.y = this.clampCoord(this.y + this.dodgeVy * dt);
+      const obsRes = obstacleManager.resolveEntityCollision(this.x, this.y, this.radius);
+      this.x = this.clampCoord(obsRes.x);
+      this.y = this.clampCoord(obsRes.y);
       this.animState = 'dodge';
       this.dodgeDustTick += dt;
       if (this.dodgeDustTick >= 0.07 && particles) {
@@ -1361,7 +1444,7 @@ export class Player {
     if (moveLen > 0) {
       moveX /= moveLen;
       moveY /= moveLen;
-      let moveMult = this.attackTimer > 0 ? 0.45 : 1.0;
+      let moveMult = (this.attackTimer > 0 ? 0.45 : 1.0) * obstacleManager.getHazardSpeedMultiplier(this);
 
       if (this.isSprinting) {
         moveMult *= 1.50; // +50% sprint speed boost
@@ -1380,6 +1463,9 @@ export class Player {
       this.vy = moveY * this.speed * moveMult;
       this.x = this.clampCoord(this.x + this.vx * dt);
       this.y = this.clampCoord(this.y + this.vy * dt);
+      const obsRes = obstacleManager.resolveEntityCollision(this.x, this.y, this.radius);
+      this.x = this.clampCoord(obsRes.x);
+      this.y = this.clampCoord(obsRes.y);
 
       if (this.attackTimer <= 0) {
         this.facingDir = angleTo4Facing(Math.atan2(moveY, moveX));
@@ -1672,6 +1758,10 @@ export class Player {
           ? PALETTE.brass
           : this.classId === 'ines'
           ? PALETTE.verdigris
+          : this.classId === 'kaelen'
+          ? PALETTE.ember
+          : this.classId === 'vespera'
+          ? PALETTE.volt
           : PALETTE.signal;
 
       if (cutCanvas) {

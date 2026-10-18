@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { DIALOGUE } from '../data/config.js';
+import { DIALOGUE, ENEMIES_CONFIG } from '../data/config.js';
+import { SUGGESTED_BOSS_ORDER, KETTLE_ACHIEVEMENTS } from '../data/expansionConfig.js';
+import { worldLedger } from '../game/WorldLedger.js';
 import { CharacterPortrait, PixelIcon, StatusIcon } from './PixelWidgets.jsx';
 
 export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
@@ -130,11 +132,12 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
                   <span className="font-bold text-[#FFC83D]">HARLOW · TRADE CLERK: </span>
                   <span className="text-[#D9D2C3] italic">
                     &ldquo;
-                    {p.stage === 1
-                      ? DIALOGUE.harlowLockedJourneyman
-                      : p.stage === 2
-                      ? DIALOGUE.harlowLockedMaster
-                      : DIALOGUE.harlowDone}
+                    {worldLedger.getReactiveDialogue('harlow') ||
+                      (p.stage === 1
+                        ? DIALOGUE.harlowLockedJourneyman
+                        : p.stage === 2
+                        ? DIALOGUE.harlowLockedMaster
+                        : DIALOGUE.harlowDone)}
                     &rdquo;
                   </span>
                 </div>
@@ -540,6 +543,169 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
                 </div>
               );
             })}
+          </div>
+
+          {/* FLOOR 1 LIBERATION LEDGER, OPTIONAL BOSS REMATCHES & KETTLE COSMETICS (D13, D15, D44, D49) */}
+          <div className="bg-[#161A20] border-2 border-[#FFC83D] p-3 space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-[#3A3F47] pb-2">
+              <div>
+                <div className="text-xs font-bold tracking-wider uppercase text-[#FFC83D]">
+                  HARLOW&apos;S FLOOR 1 LIBERATION LEDGER · BOSS REMATCHES &amp; KETTLE COSMETICS
+                </div>
+                <p className="text-[11px] text-[#9E9789]">
+                  Confirmed boss kills permanently liberate their territory (auto-respawn disabled). Trigger optional rematches at Kettle or equip cosmetic titles &amp; UI trim colors.
+                </p>
+              </div>
+              {worldLedger.floor1Cleared ? (
+                <div className="px-3 py-1 bg-[#4FD6A0] text-[#0B0D10] text-xs font-bold tracking-wider uppercase shrink-0">
+                  ★ FLOOR 1 CLEARED (4/4 LIBERATED) ★
+                </div>
+              ) : (
+                <div className="px-3 py-1 bg-[#0B0D10] border border-[#FFC83D] text-xs font-bold text-[#FFC83D] shrink-0">
+                  LIBERATED: {Object.values(worldLedger.confirmedBossKills).filter(Boolean).length} / 4
+                </div>
+              )}
+            </div>
+
+            {/* 4 Boss Territories in Suggested Hunt Order (D49: Big Axle -> Long Dry -> Mother Sump -> The Foreman) */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
+              {SUGGESTED_BOSS_ORDER.map((bossId, idx) => {
+                const bossCfg = ENEMIES_CONFIG.bosses[bossId];
+                const isDefeated = !!worldLedger.confirmedBossKills[bossId];
+                const recLevels = {
+                  bigAxle: 5,
+                  theLongDry: 9,
+                  motherSump: 13,
+                  theForeman: 16,
+                };
+                const gateNotes = {
+                  bigAxle: 'Bait charges to 100% Heat & shatter exposed Engine Core.',
+                  theLongDry: 'Read real emergence tremors & break all 3 Shell Segments.',
+                  motherSump: 'Interrupt 2 Devour channels to trigger Starved vulnerability.',
+                  theForeman: 'Survive 30s Reassembly Protocol (<10 arrivals) or slay Iron Foreman.',
+                };
+
+                return (
+                  <div
+                    key={bossId}
+                    className="p-2.5 bg-[#0B0D10] border flex flex-col justify-between gap-2"
+                    style={{
+                      borderColor: isDefeated ? '#4FD6A0' : '#3A3F47',
+                    }}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-bold">
+                        <span className="text-[#FFC83D]">
+                          HUNT #{idx + 1} · REC LV.{recLevels[bossId] || 5}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.5 ${
+                            isDefeated
+                              ? 'bg-[#4FD6A0] text-[#0B0D10]'
+                              : 'bg-[#161A20] text-[#FF3B3B]'
+                          }`}
+                        >
+                          {isDefeated ? 'CLEARED' : 'CONTROLLED'}
+                        </span>
+                      </div>
+                      <div className="text-xs font-bold text-[#D9D2C3]">
+                        {bossCfg?.name || bossId}{' '}
+                        <span className="text-[10px] text-[#9E9789]">
+                          {bossCfg?.subtitle || ''}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-[#9E9789]">{gateNotes[bossId]}</div>
+                    </div>
+
+                    {isDefeated ? (
+                      <div className="pt-1">
+                        {inKettleOrHarlow ? (
+                          <button
+                            onClick={() => {
+                              engine.triggerBossRematch(bossId);
+                            }}
+                            className="w-full py-1.5 bg-[#8B3A1E] hover:bg-[#FF3B3B] text-[#D9D2C3] hover:text-[#0B0D10] font-bold text-[10px] tracking-wider uppercase cursor-pointer"
+                          >
+                            START OPTIONAL REMATCH
+                          </button>
+                        ) : (
+                          <div className="text-[9px] text-center text-[#9E9789]">
+                            Return to Kettle to start Rematch
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="py-1 text-center text-[10px] text-[#9E9789] bg-[#161A20] border border-[#3A3F47]">
+                        OPEN IN WORLD ARENA
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Kettle Recognition Achievements & Cosmetics (D13 — Purely Cosmetic Titles & Trim Colors) */}
+            <div className="pt-2 border-t border-[#3A3F47]">
+              <div className="text-[10px] font-bold text-[#9E9789] uppercase mb-1.5">
+                KETTLE RECOGNITION ACHIEVEMENTS &amp; COSMETIC TITLES (ZERO COMBAT STAT BUFFS)
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {Object.values(KETTLE_ACHIEVEMENTS).map((ach) => {
+                  const unlocked = !!worldLedger.unlockedAchievements[ach.id];
+                  const equipped = worldLedger.equippedCosmeticTitle === ach.cosmeticTitle;
+
+                  return (
+                    <div
+                      key={ach.id}
+                      className="p-2 bg-[#0B0D10] border flex flex-col justify-between gap-1.5"
+                      style={{
+                        borderColor: unlocked ? ach.trimColor : '#3A3F47',
+                        opacity: unlocked ? 1 : 0.55,
+                      }}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between text-[10px] font-bold">
+                          <span style={{ color: unlocked ? ach.trimColor : '#9E9789' }}>
+                            {ach.title}
+                          </span>
+                          <span className="text-[9px] text-[#9E9789]">
+                            {unlocked ? 'UNLOCKED' : 'LOCKED'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#9E9789] mt-0.5 leading-snug">
+                          {ach.desc}
+                        </p>
+                      </div>
+
+                      {unlocked && (
+                        <button
+                          onClick={() => {
+                            engine.equipCosmetic(equipped ? null : ach.id);
+                            forceRefresh();
+                          }}
+                          className="w-full py-1 text-[10px] font-bold border cursor-pointer"
+                          style={
+                            equipped
+                              ? {
+                                  backgroundColor: ach.trimColor,
+                                  borderColor: ach.trimColor,
+                                  color: '#0B0D10',
+                                }
+                              : {
+                                  backgroundColor: '#161A20',
+                                  borderColor: '#3A3F47',
+                                  color: ach.trimColor,
+                                }
+                          }
+                        >
+                          {equipped ? `EQUIPPED: ${ach.cosmeticTitle}` : `EQUIP: ${ach.cosmeticTitle}`}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       </div>

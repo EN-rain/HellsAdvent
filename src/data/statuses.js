@@ -374,24 +374,84 @@ export const STATUSES = {
     },
   },
 
-  riposteSurge: {
-    id: 'riposteSurge',
-    name: 'Riposte Surge',
+  overheated: {
+    id: 'overheated',
+    name: 'Overheated Surge',
     kind: 'buff',
-    color: PALETTE.signal,
-    defaultDuration: 3.0,
+    color: PALETTE.ember,
+    defaultDuration: 4.0,
     stacking: 'refresh',
     maxStacks: 1,
     statModifiers: {
-      atkBonusPct: 0.30,      // +30% ATK damage
-      attackSpeedPct: 0.40,   // +40% Attack Speed
-      moveSpeedPct: 0.20,     // +20% Move Speed
+      atkBonusPct: 0.40,
+      attackSpeedPct: 0.25,
+      moveSpeedPct: 0.15,
     },
     cleansable: false,
-    icon: 'railParry',
-    tags: ['buff', 'haste', 'offense'],
+    icon: 'overheated',
+    tags: ['classMechanic', 'buff', 'offense'],
     getTooltip() {
-      return '+30% ATK, +40% Attack Speed, and +20% Move Speed for 3s after a successful Parry.';
+      return 'Critical Boiler Overdrive: +40% ATK, +25% Attack Speed, +15% Move Speed, and twin flame sweeps.';
+    },
+  },
+
+  slagCarapace: {
+    id: 'slagCarapace',
+    name: 'Slag Carapace',
+    kind: 'buff',
+    color: PALETTE.ember,
+    defaultDuration: 4.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {
+      damageReduction: 0.25,
+    },
+    cleansable: false,
+    icon: 'slagCarapace',
+    tags: ['defense', 'buff'],
+    getTooltip() {
+      return 'Hardened molten slag plating reduces incoming damage by 25%.';
+    },
+  },
+
+  moltenJuggernaut: {
+    id: 'moltenJuggernaut',
+    name: 'Molten Juggernaut',
+    kind: 'buff',
+    color: PALETTE.ember,
+    defaultDuration: 6.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {
+      damageReduction: 0.45,
+      atkBonusPct: 0.30,
+    },
+    cleansable: false,
+    icon: 'moltenJuggernaut',
+    tags: ['stance', 'defense', 'buff'],
+    getTooltip() {
+      return 'Hellbore Juggernaut: -45% damage taken, +30% ATK, and searing magma pulses around Kaelen.';
+    },
+  },
+
+  arcOvercharge: {
+    id: 'arcOvercharge',
+    name: 'Arc Overcharge',
+    kind: 'buff',
+    color: PALETTE.volt,
+    defaultDuration: 4.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {
+      atkBonusPct: 0.25,
+      attackSpeedPct: 0.30,
+      moveSpeedPct: 0.25,
+    },
+    cleansable: false,
+    icon: 'arcOvercharge',
+    tags: ['classMechanic', 'buff', 'haste'],
+    getTooltip() {
+      return 'High-voltage drone sync: +25% ATK, +30% Attack Speed, and +25% Move Speed.';
     },
   },
 

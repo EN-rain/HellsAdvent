@@ -10,6 +10,7 @@ import { computeDamagePipeline } from './Status.js';
 import { angleTo8Dir, drawBresenhamCircle } from './PixelArt.js';
 import { spriteRegistry } from './Sprites.js';
 import { sound } from './Audio.js';
+import { obstacleManager } from './Obstacles.js';
 
 export class ProjectilePool {
   constructor(maxProjectiles = 96) {
@@ -243,6 +244,18 @@ export class ProjectilePool {
       proj.y += proj.vy * dt;
       proj.distanceTraveled += stepDist;
 
+      // Solid Obstacle Projectile Interception (D14)
+      if (
+        (proj.isPlayer || proj.distanceTraveled > 26) &&
+        obstacleManager.checkProjectileCollision(proj)
+      ) {
+        if (particles) {
+          particles.spawnHitSparks(proj.x, proj.y, 3, PALETTE.rust, PALETTE.brass);
+        }
+        this._finishProjectile(proj, player, particles);
+        continue;
+      }
+
       // Trail square pixels
       proj.trailTimer += dt;
       if (proj.trailTimer >= 1 / 48) {
@@ -440,6 +453,20 @@ export class ProjectilePool {
                 particles
               );
               this.spawnAcidPuddle(proj.x, proj.y, 26, 3.0);
+            } else if (proj.enemyStatusOnHit === 'bleed') {
+              player.statuses.apply(
+                'bleed',
+                { duration: 5.0, sourceDmg: proj.damage, sourceName: 'Cinder Crow' },
+                player,
+                particles
+              );
+            } else if (proj.enemyStatusOnHit === 'stunShort') {
+              player.statuses.apply(
+                'stunned',
+                { duration: 0.45, sourceName: 'Slag Glob' },
+                player,
+                particles
+              );
             }
             proj.active = false;
             continue;

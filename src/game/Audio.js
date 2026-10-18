@@ -453,6 +453,58 @@ class SoundSystem {
     osc.stop(now + 0.24);
   }
 
+  playExplosion(heavy = false) {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const dur = heavy ? 0.42 : 0.30;
+
+    // Filtered explosion noise burst
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = this._createNoiseBuffer(dur);
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(heavy ? 380 : 310, now);
+    filter.frequency.exponentialRampToValueAtTime(32, now + dur);
+
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime((heavy ? 0.68 : 0.52) * this.masterVolume, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+    noise.connect(filter);
+    filter.connect(nGain);
+    nGain.connect(this.ctx.destination);
+    noise.start(now);
+
+    // Deep sub-bass boom
+    const osc = this.ctx.createOscillator();
+    const oGain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(heavy ? 120 : 150, now);
+    osc.frequency.exponentialRampToValueAtTime(22, now + dur);
+    oGain.gain.setValueAtTime((heavy ? 0.62 : 0.46) * this.masterVolume, now);
+    oGain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    osc.connect(oGain);
+    oGain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + dur);
+  }
+
+  playReloadTick() {
+    if (!this._canPlay()) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(740, now);
+    osc.frequency.exponentialRampToValueAtTime(1200, now + 0.025);
+    gain.gain.setValueAtTime(0.14 * this.masterVolume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.03);
+  }
+
   // --- STATUS EFFECT SYNTHESIZED AUDIO ---
 
   playStatusBleed() {

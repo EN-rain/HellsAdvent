@@ -24,6 +24,8 @@ export const ULTIMATE_CHARGE_CONFIG = {
     sena: 1.0,
     rook: 0.6,
     ines: 0.7,
+    kaelen: 0.9,
+    vespera: 0.8,
   },
   counterweightBlockMultiplier: 2.0,
   pausedDuringUltimates: ['holdTheLine', 'craneDrop'],
@@ -1107,6 +1109,764 @@ export const ULTIMATES = {
       },
     ],
   },
+
+  // ============================================================================
+  // KAELEN VOS — THERMO-LANCER / PYRO-ALCHEMIST ULTIMATES
+  // ============================================================================
+
+  sunfallFurnace: {
+    id: 'sunfallFurnace',
+    classId: 'kaelen',
+    branch: null,
+    nodeRequired: null,
+    name: 'Sunfall Cataclysm',
+    titleCard: 'SUNFALL CATACLYSM',
+    hotkey: 'R',
+    icon: 'sunfallFurnace',
+    accent: PALETTE.ember,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 6.4,
+    radius: 230,
+    stunDuration: 2.0,
+    summary: '640% Total ATK · 8-Ray Solar Flare + Meteor Rain · 230px Cataclysm',
+    desc: 'Ignites a pressurized solar reactor overhead, freezing time for an ember visor cut-in before erupting 8 revolving solar flare beams, 12 falling slag meteors, and a 230px thermobaric shockwave.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 70,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'SUNFALL CATACLYSM',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.18,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 340,
+        action: 'kaelenIgniteSolarCore',
+        nonGameplay: false,
+        params: {
+          radius: 230,
+          durationMs: 1350,
+          rayCount: 8,
+          meteorCount: 12,
+          corrosiveRain: false,
+          tectonicFissures: false,
+        },
+      },
+      {
+        t: 650,
+        action: 'kaelenSolarPulseWave',
+        nonGameplay: false,
+        params: {
+          waveIndex: 1,
+          radius: 210,
+          damageMult: 1.6,
+          burnDuration: 5.0,
+          corrodeStacks: 1,
+          shakePx: 6,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 2,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 1050,
+        action: 'kaelenSolarPulseWave',
+        nonGameplay: false,
+        params: {
+          waveIndex: 2,
+          radius: 220,
+          damageMult: 1.8,
+          burnDuration: 5.0,
+          corrodeStacks: 1,
+          shakePx: 7,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 3,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 1520,
+        action: 'kaelenSolarCataclysmSlam',
+        nonGameplay: false,
+        params: {
+          radius: 230,
+          damageMult: 3.0,
+          stunDuration: 2.0,
+          burnDuration: 6.0,
+          corrodeStacks: 2,
+          shakePx: 11,
+          spawnCrater: true,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 4,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 1850,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  tectonicKiln: {
+    id: 'tectonicKiln',
+    classId: 'kaelen',
+    branch: 'furnace',
+    nodeRequired: 'tectonicKiln',
+    name: 'Tectonic Kiln',
+    titleCard: 'TECTONIC KILN',
+    hotkey: 'R',
+    icon: 'tectonicKiln',
+    accent: PALETTE.ember,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 8.2,
+    radius: 260,
+    stunDuration: 2.5,
+    summary: '820% Total ATK · 8 Magma Fissures · Molten Juggernaut (+40% DEF)',
+    desc: 'Splits the battlefield with 8 radiating magma fissures while dropping 16 slag meteors across 260px, dealing 820% total ATK and granting Kaelen Molten Juggernaut (+40% DEF, 100% Pressure) for 8s.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 70,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'TECTONIC KILN',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.2,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 340,
+        action: 'kaelenIgniteSolarCore',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          durationMs: 1450,
+          rayCount: 8,
+          meteorCount: 16,
+          corrosiveRain: false,
+          tectonicFissures: true,
+          grantMoltenJuggernaut: true,
+        },
+      },
+      {
+        t: 680,
+        action: 'kaelenSolarPulseWave',
+        nonGameplay: false,
+        params: {
+          waveIndex: 1,
+          radius: 250,
+          damageMult: 2.2,
+          burnDuration: 6.0,
+          corrodeStacks: 1,
+          shakePx: 7,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 3,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 1100,
+        action: 'kaelenSolarPulseWave',
+        nonGameplay: false,
+        params: {
+          waveIndex: 2,
+          radius: 255,
+          damageMult: 2.4,
+          burnDuration: 6.0,
+          corrodeStacks: 1,
+          shakePx: 8,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 3,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 1580,
+        action: 'kaelenSolarCataclysmSlam',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          damageMult: 3.6,
+          stunDuration: 2.5,
+          burnDuration: 7.0,
+          corrodeStacks: 2,
+          shakePx: 12,
+          spawnCrater: true,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 4,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 1920,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  blightHurricane: {
+    id: 'blightHurricane',
+    classId: 'kaelen',
+    branch: 'alchemist',
+    nodeRequired: 'blightHurricane',
+    name: 'Blight Hurricane',
+    titleCard: 'BLIGHT HURRICANE',
+    hotkey: 'R',
+    icon: 'blightHurricane',
+    accent: PALETTE.lye,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 7.4,
+    radius: 260,
+    stunDuration: 2.0,
+    summary: '740% Total ATK · Vortex Pull + 5 Corrode Stacks · Acid Firestorm',
+    desc: 'Turns Sunfall Cataclysm into a swirling green-and-ember chemical firestorm that vacuums enemies inward, inflicts 5 max Corrode stacks + White-Hot Burn, and detonates for 740% total ATK.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 70,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'BLIGHT HURRICANE',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.18,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 340,
+        action: 'kaelenIgniteSolarCore',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          durationMs: 1450,
+          rayCount: 8,
+          meteorCount: 14,
+          corrosiveRain: true,
+          tectonicFissures: false,
+        },
+      },
+      {
+        t: 680,
+        action: 'kaelenSolarPulseWave',
+        nonGameplay: false,
+        params: {
+          waveIndex: 1,
+          radius: 250,
+          damageMult: 2.0,
+          burnDuration: 6.0,
+          corrodeStacks: 3,
+          pullInwardPx: 65,
+          shakePx: 6,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 2,
+            color: PALETTE.lye,
+          },
+        },
+      },
+      {
+        t: 1100,
+        action: 'kaelenSolarPulseWave',
+        nonGameplay: false,
+        params: {
+          waveIndex: 2,
+          radius: 255,
+          damageMult: 2.2,
+          burnDuration: 6.0,
+          corrodeStacks: 3,
+          pullInwardPx: 75,
+          shakePx: 7,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 3,
+            color: PALETTE.lye,
+          },
+        },
+      },
+      {
+        t: 1580,
+        action: 'kaelenSolarCataclysmSlam',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          damageMult: 3.2,
+          stunDuration: 2.0,
+          burnDuration: 7.0,
+          corrodeStacks: 5,
+          shakePx: 11,
+          spawnCrater: true,
+          impactFrame: {
+            kind: 'explosion',
+            frames: 4,
+            color: PALETTE.lye,
+          },
+        },
+      },
+      {
+        t: 1920,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  // ============================================================================
+  // VESPERA LOCKE — ARC-DRONE ARTIFICER / SUMMONER ULTIMATES
+  // ============================================================================
+
+  orbitalSingularity: {
+    id: 'orbitalSingularity',
+    classId: 'vespera',
+    branch: null,
+    nodeRequired: null,
+    name: 'Orbital Ion Singularity',
+    titleCard: 'ION SINGULARITY',
+    hotkey: 'R',
+    icon: 'orbitalSingularity',
+    accent: PALETTE.volt,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 6.6,
+    radius: 240,
+    stunDuration: 2.0,
+    summary: '660% Total ATK · Geometric Pentagram Matrix · Ion Sky-Pillar',
+    desc: 'Expands all orbiting Arc-Drones into a 240px high-voltage geometric pentagram matrix, calling down 3 orbital ion pillars that vaporize enemies for 660% total ATK and Stun for 2.0s.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 70,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'ION SINGULARITY',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.18,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 340,
+        action: 'vesperaDeployIonMatrix',
+        nonGameplay: false,
+        params: {
+          radius: 240,
+          durationMs: 1380,
+          vertexCount: 5,
+          spawnValkyrieSwarm: false,
+          thunderheadStorm: false,
+        },
+      },
+      {
+        t: 660,
+        action: 'vesperaIonMatrixPulse',
+        nonGameplay: false,
+        params: {
+          pulseIndex: 1,
+          radius: 230,
+          damageMult: 1.8,
+          pullInwardPx: 50,
+          shakePx: 6,
+          impactFrame: {
+            kind: 'beam',
+            frames: 2,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1060,
+        action: 'vesperaIonMatrixPulse',
+        nonGameplay: false,
+        params: {
+          pulseIndex: 2,
+          radius: 235,
+          damageMult: 1.8,
+          pullInwardPx: 60,
+          shakePx: 7,
+          impactFrame: {
+            kind: 'beam',
+            frames: 3,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1520,
+        action: 'vesperaIonSingularityCollapse',
+        nonGameplay: false,
+        params: {
+          radius: 240,
+          damageMult: 3.0,
+          stunDuration: 2.0,
+          shakePx: 11,
+          spawnCrater: true,
+          impactFrame: {
+            kind: 'beam',
+            frames: 4,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1860,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  valkyrieSwarm: {
+    id: 'valkyrieSwarm',
+    classId: 'vespera',
+    branch: 'swarm',
+    nodeRequired: 'valkyrieSwarm',
+    name: 'Valkyrie Swarm Protocol',
+    titleCard: 'VALKYRIE PROTOCOL',
+    hotkey: 'R',
+    icon: 'valkyrieSwarm',
+    accent: PALETTE.volt,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 8.0,
+    radius: 260,
+    stunDuration: 2.2,
+    summary: '800% Total ATK · +16 Seeker Micro-Drones · 6-Point Hexagram Matrix',
+    desc: 'Projects a 6-point hexagram drone matrix across 260px for 800% total ATK while launching 16 autonomous Seeker Micro-Drones and granting Vespera Arc Overcharge for 8s.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 70,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'VALKYRIE PROTOCOL',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.2,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 340,
+        action: 'vesperaDeployIonMatrix',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          durationMs: 1450,
+          vertexCount: 6,
+          spawnValkyrieSwarm: true,
+          thunderheadStorm: false,
+        },
+      },
+      {
+        t: 680,
+        action: 'vesperaIonMatrixPulse',
+        nonGameplay: false,
+        params: {
+          pulseIndex: 1,
+          radius: 250,
+          damageMult: 2.2,
+          pullInwardPx: 55,
+          shakePx: 7,
+          impactFrame: {
+            kind: 'beam',
+            frames: 3,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1100,
+        action: 'vesperaIonMatrixPulse',
+        nonGameplay: false,
+        params: {
+          pulseIndex: 2,
+          radius: 255,
+          damageMult: 2.3,
+          pullInwardPx: 65,
+          shakePx: 8,
+          impactFrame: {
+            kind: 'beam',
+            frames: 3,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1580,
+        action: 'vesperaIonSingularityCollapse',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          damageMult: 3.5,
+          stunDuration: 2.2,
+          shakePx: 11,
+          spawnCrater: true,
+          impactFrame: {
+            kind: 'beam',
+            frames: 4,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1920,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  zenithThunderhead: {
+    id: 'zenithThunderhead',
+    classId: 'vespera',
+    branch: 'dynamo',
+    nodeRequired: 'zenithThunderhead',
+    name: 'Zenith Thunderhead',
+    titleCard: 'ZENITH THUNDERHEAD',
+    hotkey: 'R',
+    icon: 'zenithThunderhead',
+    accent: PALETTE.volt,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 8.6,
+    radius: 280,
+    stunDuration: 2.6,
+    summary: '860% Total ATK · 8-Point Octagram Storm · 24 Sky-Lightning Bolts',
+    desc: 'Expands the Ion Singularity into a 280px 8-point octagram storm that calls down 24 sequential sky-lightning bolts and supercharges all deployed Tesla Pylons for 860% total ATK.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 70,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'ZENITH THUNDERHEAD',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.22,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 340,
+        action: 'vesperaDeployIonMatrix',
+        nonGameplay: false,
+        params: {
+          radius: 280,
+          durationMs: 1480,
+          vertexCount: 8,
+          spawnValkyrieSwarm: false,
+          thunderheadStorm: true,
+        },
+      },
+      {
+        t: 680,
+        action: 'vesperaIonMatrixPulse',
+        nonGameplay: false,
+        params: {
+          pulseIndex: 1,
+          radius: 270,
+          damageMult: 2.4,
+          pullInwardPx: 65,
+          shakePx: 8,
+          impactFrame: {
+            kind: 'beam',
+            frames: 3,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1100,
+        action: 'vesperaIonMatrixPulse',
+        nonGameplay: false,
+        params: {
+          pulseIndex: 2,
+          radius: 275,
+          damageMult: 2.5,
+          pullInwardPx: 75,
+          shakePx: 9,
+          impactFrame: {
+            kind: 'beam',
+            frames: 3,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1580,
+        action: 'vesperaIonSingularityCollapse',
+        nonGameplay: false,
+        params: {
+          radius: 280,
+          damageMult: 3.7,
+          stunDuration: 2.6,
+          shakePx: 12,
+          spawnCrater: true,
+          impactFrame: {
+            kind: 'beam',
+            frames: 4,
+            color: PALETTE.volt,
+          },
+        },
+      },
+      {
+        t: 1920,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
 };
 
 /**
@@ -1128,7 +1888,18 @@ export function getActiveUltimateForPlayer(classId = 'sena', ownedNodes = []) {
     if (ownedNodes.includes('junkyardRain')) return ULTIMATES.junkyardRain;
     return ULTIMATES.scrapfall;
   }
+  if (classId === 'kaelen') {
+    if (ownedNodes.includes('tectonicKiln')) return ULTIMATES.tectonicKiln;
+    if (ownedNodes.includes('blightHurricane')) return ULTIMATES.blightHurricane;
+    return ULTIMATES.sunfallFurnace;
+  }
+  if (classId === 'vespera') {
+    if (ownedNodes.includes('valkyrieSwarm')) return ULTIMATES.valkyrieSwarm;
+    if (ownedNodes.includes('zenithThunderhead')) return ULTIMATES.zenithThunderhead;
+    return ULTIMATES.orbitalSingularity;
+  }
   return ULTIMATES.sevenCuts;
 }
 
 export default ULTIMATES;
+

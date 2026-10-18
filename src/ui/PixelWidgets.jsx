@@ -374,6 +374,38 @@ export function StatusIcon({ statusId, size = 24 }) {
         ctx.fillRect(5, 4, 2, 4);
         break;
       }
+      case 'overheated': {
+        // Blazing ember pressure gauge needle at max
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(2, 2, 8, 8);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(3, 4, 6, 5);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 2, 2, 5);
+        break;
+      }
+      case 'slagCarapace':
+      case 'moltenJuggernaut': {
+        // Molten ember-rimmed armor shield
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(2, 1, 8, 9);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(3, 2, 6, 7);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 4, 2, 3);
+        break;
+      }
+      case 'arcOvercharge': {
+        // Volt lightning bolt inside a copper halo
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(2, 2, 8, 8);
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(3, 3, 6, 6);
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(5, 2, 3, 4);
+        ctx.fillRect(4, 5, 3, 5);
+        break;
+      }
       default: {
         ctx.fillStyle = PALETTE.signal;
         ctx.fillRect(3, 3, 6, 6);
@@ -710,6 +742,129 @@ export function PixelIcon({ itemId, size = 32 }) {
         ctx.fillRect(2, 11, 12, 2);
         ctx.fillStyle = PALETTE.brass;
         ctx.fillRect(5, 9, 6, 2);
+        break;
+      }
+      // KAELEN VOS (THERMO-LANCER) SKILLS & ULTIMATES
+      case 'naphthaJet':
+      case 'skill_naphthaJet': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Rocket-lance dash spear with blazing ember wake
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(1, 9, 8, 4);
+        ctx.fillRect(3, 6, 7, 3);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(7, 4, 5, 4);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(11, 2, 3, 3);
+        break;
+      }
+      case 'causticMortar':
+      case 'skill_causticMortar': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Pressurized lye/ember canister shell + acid splash ring
+        ctx.fillStyle = PALETTE.lye;
+        ctx.fillRect(2, 11, 12, 3);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 3, 6, 7);
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(6, 5, 4, 3);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(7, 2, 2, 2);
+        break;
+      }
+      case 'ventSupernova':
+      case 'skill_ventSupernova': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Radial 8-way boiler blast star
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(2, 6, 12, 4);
+        ctx.fillRect(6, 2, 4, 12);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(4, 4, 8, 8);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(6, 6, 4, 4);
+        break;
+      }
+      case 'sunfallFurnace':
+      case 'tectonicKiln':
+      case 'blightHurricane':
+      case 'skill_sunfallFurnace': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Miniature sun core with solar flare rays & crater ring
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(3, 2, 10, 10);
+        ctx.fillRect(1, 12, 14, 2);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 4, 6, 6);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(6, 5, 4, 4);
+        break;
+      }
+      // VESPERA LOCKE (ARC-DRONE ARTIFICER) SKILLS & ULTIMATES
+      case 'teslaPylon':
+      case 'skill_teslaPylon': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Twin copper spire pylons linked by a volt laser tether
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(2, 4, 3, 10);
+        ctx.fillRect(11, 4, 3, 10);
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(2, 2, 3, 2);
+        ctx.fillRect(11, 2, 3, 2);
+        ctx.fillRect(5, 6, 6, 2);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(5, 7, 6, 1);
+        break;
+      }
+      case 'seekerSwarm':
+      case 'skill_seekerSwarm': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Three winged micro-drones with volt cores
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(2, 3, 4, 3);
+        ctx.fillRect(9, 2, 4, 3);
+        ctx.fillRect(6, 9, 5, 4);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(3, 4, 2, 1);
+        ctx.fillRect(10, 3, 2, 1);
+        ctx.fillRect(8, 10, 2, 2);
+        break;
+      }
+      case 'arcDischarge':
+      case 'skill_arcDischarge': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Phase-blink lightning ring + electric arc
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(3, 2, 10, 2);
+        ctx.fillRect(3, 12, 10, 2);
+        ctx.fillRect(2, 4, 2, 8);
+        ctx.fillRect(12, 4, 2, 8);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(6, 4, 4, 3);
+        ctx.fillRect(5, 7, 5, 2);
+        ctx.fillRect(7, 9, 3, 3);
+        break;
+      }
+      case 'orbitalSingularity':
+      case 'valkyrieSwarm':
+      case 'zenithThunderhead':
+      case 'skill_orbitalSingularity': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Geometric star matrix + vertical ion beam
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(2, 10, 12, 3);
+        ctx.fillRect(6, 1, 4, 14);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(7, 1, 2, 14);
+        ctx.fillRect(4, 11, 8, 1);
         break;
       }
       default: {

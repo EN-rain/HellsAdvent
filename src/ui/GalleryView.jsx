@@ -171,6 +171,26 @@ export function GalleryView({ onBackToGame }) {
       notes: 'Torn hazmat plastic wings on bent umbrella ribs; swollen pulsing pale belly sac; 3f erratic flap.',
     },
     {
+      id: 'rivetTick',
+      name: 'Rivet Tick (Common · Slab Town / Copper Flats)',
+      notes: 'Six-legged iron mite that pounces at range and latches onto armor.',
+    },
+    {
+      id: 'signalMite',
+      name: 'Signal Mite (Common · Route 9 / Copper Flats)',
+      notes: 'Antenna-backed copper bug that emits a static shock ring on attack.',
+    },
+    {
+      id: 'siltMimic',
+      name: 'Silt Mimic (Common · Lye Marsh / Slab Town)',
+      notes: 'Half-buried drum crustacean that snaps with rusted pincers when approached.',
+    },
+    {
+      id: 'cinderCrow',
+      name: 'Cinder Crow (Common · Route 9 / Copper Flats)',
+      notes: 'Ash-feathered scavenger with a welded rebar beak that dives in diagonal strafes.',
+    },
+    {
       id: 'cleaverHauler',
       name: 'Cleaver Hauler (Elite · 1px Pulsing Blood Rim)',
       notes: 'Hunched figure dragging wheeled scrap cart by chain; welded butcher cleaver right hand.',
@@ -186,24 +206,89 @@ export function GalleryView({ onBackToGame }) {
       notes: 'Half-human operator fused into front of rotary harvester blade drum; drum revs through 3 frames on tell.',
     },
     {
+      id: 'plateMarshal',
+      name: 'Plate Marshal (Elite · Slab Town)',
+      notes: 'Heavy welded-plate shield bearer that deflects frontal hits and issues squad flank orders.',
+    },
+    {
+      id: 'switchbackDriver',
+      name: 'Switchback Driver (Elite · Route 9)',
+      notes: 'Wheeled highway rig runner that executes double switchback charges with exhaust feints.',
+    },
+    {
+      id: 'sumpCantor',
+      name: 'Sump Cantor (Elite · Lye Marsh)',
+      notes: 'Bell-ringing bog cultist that channels corrosive resonance pulses and coordinates leech packs.',
+    },
+    {
+      id: 'boreSentinel',
+      name: 'Bore Sentinel (Elite · Copper Flats)',
+      notes: 'Burrowing drill-sentinel that launches slag mortars and exposes its vent core after surfacing.',
+    },
+    {
+      id: 'scrapRatKing',
+      name: 'Scrap Rat King (10× Tin Rat Amalgam · Fusion Mid-Boss)',
+      notes: '10 Tin Rats knotted by tail and jagged soup-can armor into a rolling thrashing wheel.',
+    },
+    {
+      id: 'bonepackAlpha',
+      name: 'Bonepack Alpha (10× Dust Dog Amalgam · Fusion Mid-Boss)',
+      notes: 'Multi-headed fused hound pack wrapped in barbed wire and glowing rib-plates.',
+    },
+    {
+      id: 'wireCyclone',
+      name: 'Wire Cyclone (10× Wire Kite Amalgam · Fusion Mid-Boss)',
+      notes: 'Cyclonic column of 10 Wire Kites crackling with high-voltage brass arcs.',
+    },
+    {
+      id: 'brineMaw',
+      name: 'Brine Maw (10× Lye Leech Amalgam · Fusion Mid-Boss)',
+      notes: 'Bloated multi-mouthed bog leech mass dripping concentrated lye; prioritized by Mother Sump.',
+    },
+    {
+      id: 'screechChoir',
+      name: 'Screech Choir (10× Sump Bat Amalgam · Fusion Mid-Boss)',
+      notes: 'Hanging cluster-beast of 10 fused hazmat wings and sonic sacs.',
+    },
+    {
+      id: 'rivetTitan',
+      name: 'Rivet Titan (10× Rivet Tick Amalgam · Fusion Mid-Boss)',
+      notes: 'Walking iron boulder of 10 fused Rivet Ticks that slams the ground and sheds molten rivets.',
+    },
+    {
+      id: 'relayColossus',
+      name: 'Relay Colossus (10× Signal Mite Amalgam · Fusion Mid-Boss)',
+      notes: 'Walking radio-tower arachnid formed from 10 fused Signal Mites that overclocks nearby allies.',
+    },
+    {
+      id: 'dredgeHusk',
+      name: 'Dredge Husk (10× Silt Mimic Amalgam · Fusion Mid-Boss)',
+      notes: 'Fortress hermit-crab built from 10 fused oil drums that baits attacks with fake stagger tremors.',
+    },
+    {
+      id: 'blackwingFurnace',
+      name: 'Blackwing Furnace (10× Cinder Crow Amalgam · Fusion Mid-Boss)',
+      notes: 'Swirling avian furnace formed from 10 Cinder Crows that carpets burning airstrike lanes.',
+    },
+    {
       id: 'theForeman',
-      name: 'The Foreman (Boss · Slab Town · Brass Rim on Phase Shift)',
-      notes: 'Tracked excavator rig with operator skull in yellow hard hat inside cab, hydraulic bucket arm, and wrecking ball.',
+      name: 'The Foreman (Boss · Slab Town · 30s Reassembly Protocol)',
+      notes: 'Tracked excavator rig that calls 15 waves of 10 marchers at 0 HP; revives as The Iron Foreman if 10+ arrive.',
     },
     {
       id: 'bigAxle',
-      name: 'Big Axle (Boss · Route 9 · Brass Rim on Phase Shift)',
-      notes: 'Armored highway diesel cab with twin stacks, glaring headlight eyes, and two chained trailer sections.',
+      name: 'Big Axle (Boss · Route 9 · Engine Heat & Core Gate)',
+      notes: 'Armored highway diesel cab that builds Heat on missed charges until its Engine Core exposes.',
     },
     {
       id: 'motherSump',
-      name: 'Mother Sump (Boss · Lye Marsh · Brass Rim on Phase Shift)',
-      notes: 'Asymmetric mass of rusted 55-gallon drums, tarp, and pulsing brood sac that sheds Lye Leeches.',
+      name: 'Mother Sump (Boss · Lye Marsh · Devour & Starvation Gate)',
+      notes: 'Corrosive brood-matron that attempts to devour leeches and Brine Maws; deny 2 feeds to Starve her.',
     },
     {
       id: 'theLongDry',
-      name: 'The Long Dry (Boss · Copper Flats · Brass Rim on Phase Shift)',
-      notes: 'Giant bore worm built from riveted pipe rings; gaping maw ringed with rotary drill bits.',
+      name: 'The Long Dry (Boss · Copper Flats · 3-Shell Segment Gate)',
+      notes: 'Giant bore worm with real vs decoy emergence tremors and 3 breakable armored shell segments.',
     },
   ];
 
@@ -224,10 +309,10 @@ export function GalleryView({ onBackToGame }) {
         <div className="flex flex-wrap items-center justify-between gap-4 border-b-2 border-[#3A3F47] pb-4">
           <div>
             <h1 className="text-xl font-bold tracking-wider text-[#00F0FF]">
-              GRAVEL SKY · SPRITE, CLASS, &amp; STATUS GALLERY (?gallery)
+              HELLSADVENT · SPRITE, CLASS, FUSION, &amp; STATUS GALLERY (?gallery)
             </h1>
             <p className="text-xs text-[#9E9789] mt-1">
-              Every character class, promotion overlay, status icon, and enemy rendered from code at 1x and 6x on soot (#0B0D10).
+              Every character class, promotion overlay, status icon, and all 29 enemy &amp; fusion sprites rendered from code at 1x and 6x on soot (#0B0D10).
             </p>
           </div>
           <button
@@ -242,7 +327,7 @@ export function GalleryView({ onBackToGame }) {
         <section className="bg-[#161A20] border-2 border-[#3A3F47] p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-[#FFC83D] tracking-wider uppercase">
-              1. SOLID BLACK SILHOUETTE RECOGNITION ROW (SENA, ROOK, INES + ALL 12 ENEMIES)
+              1. SOLID BLACK SILHOUETTE RECOGNITION ROW (SENA, ROOK, INES + ALL 29 ENEMIES &amp; FUSIONS)
             </h2>
             <span className="text-xs text-[#9E9789]">
               Every character and enemy is uniquely identifiable from its silhouette alone.

@@ -85,6 +85,13 @@ export class UltimateSequencer {
     // Ines Scrapfall / Crane Drop / Junkyard Rain runtime state
     this.levitationZone = null; // { x, y, radius, elapsedMs, durationMs, pieces: [...] }
     this.slamStreaks = []; // [{ x, y, radius, life, maxLife, color }]
+
+    // Kaelen Sunfall Cataclysm / Tectonic Kiln / Blight Hurricane runtime state
+    this.solarCataclysm = null; // { x, y, radius, elapsedMs, durationMs, rayCount, corrosiveRain, tectonicFissures, meteors: [...] }
+
+    // Vespera Orbital Ion Singularity / Valkyrie Swarm / Zenith Thunderhead runtime state
+    this.ionSingularity = null; // { x, y, radius, elapsedMs, durationMs, vertexCount, thunderheadStorm, pillars: [...] }
+
     this.lastPlayerRef = null;
     this.lastSpawnerRef = null;
   }
@@ -113,6 +120,8 @@ export class UltimateSequencer {
     this.slamStreaks = [];
     this.aimLineActive = false;
     this.levitationZone = null;
+    this.solarCataclysm = null;
+    this.ionSingularity = null;
   }
 
   getActiveUltimateDef(player) {
@@ -632,6 +641,37 @@ export class UltimateSequencer {
       }
       if (this.levitationZone.elapsedMs >= this.levitationZone.durationMs) {
         this.levitationZone = null;
+      }
+    }
+
+    // Update Kaelen's Solar Cataclysm animation (revolving solar rays + falling slag meteors)
+    if (this.solarCataclysm) {
+      this.solarCataclysm.elapsedMs += dt * 1000;
+      for (const m of this.solarCataclysm.meteors) {
+        m.progress += dt / Math.max(0.15, m.fallDuration);
+        if (m.progress >= 1 && !m.impacted) {
+          m.impacted = true;
+          if (particles) {
+            const col = this.solarCataclysm.corrosiveRain ? PALETTE.lye : PALETTE.ember;
+            particles.spawnShockwave(m.targetX, m.targetY, 42, col, 0.22);
+            particles.spawnBurst(m.targetX, m.targetY, 8, col, 25, 110, 2, 0.28);
+          }
+        }
+      }
+      if (this.solarCataclysm.elapsedMs >= this.solarCataclysm.durationMs) {
+        this.solarCataclysm = null;
+      }
+    }
+
+    // Update Vespera's Ion Singularity matrix (rotating geometric laser web + sky lightning pillars)
+    if (this.ionSingularity) {
+      this.ionSingularity.elapsedMs += dt * 1000;
+      for (const pil of this.ionSingularity.pillars) {
+        pil.life -= dt;
+      }
+      this.ionSingularity.pillars = this.ionSingularity.pillars.filter((pil) => pil.life > 0);
+      if (this.ionSingularity.elapsedMs >= this.ionSingularity.durationMs) {
+        this.ionSingularity = null;
       }
     }
 
@@ -1464,6 +1504,388 @@ export class UltimateSequencer {
         break;
       }
 
+      case 'kaelenIgniteSolarCore': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 230;
+        const meteorCount = p.meteorCount || 12;
+        const meteors = [];
+        for (let i = 0; i < meteorCount; i++) {
+          const ang = (i / meteorCount) * Math.PI * 2 + (i % 3) * 0.4;
+          const dist = 35 + ((i * 39) % (rad - 30));
+          const tx = player.clampCoord(player.x + Math.cos(ang) * dist);
+          const ty = player.clampCoord(player.y + Math.sin(ang) * dist);
+          meteors.push({
+            startX: tx - 65,
+            startY: ty - 170,
+            targetX: tx,
+            targetY: ty,
+            progress: -(i * 0.06),
+            fallDuration: 0.36 + (i % 3) * 0.06,
+            impacted: false,
+          });
+        }
+        this.solarCataclysm = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1400,
+          rayCount: p.rayCount || 8,
+          corrosiveRain: !!p.corrosiveRain,
+          tectonicFissures: !!p.tectonicFissures,
+          meteors,
+        };
+        if (player.classBehavior && typeof player.classBehavior.addPressure === 'function') {
+          player.classBehavior.pressure = 100;
+          player.statuses.apply('overheated', { duration: 6.0, sourceName: this.ultDef.name }, player, particles);
+          if (p.grantMoltenJuggernaut) {
+            player.statuses.apply('moltenJuggernaut', { duration: 8.0, sourceName: 'Tectonic Kiln' }, player, particles);
+          }
+        }
+        if (typeof sound.playExplosion === 'function') sound.playExplosion();
+        else if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        break;
+      }
+
+      case 'kaelenSolarPulseWave': {
+        const zx = this.solarCataclysm ? this.solarCataclysm.x : player.x;
+        const zy = this.solarCataclysm ? this.solarCataclysm.y : player.y;
+        const rad = p.radius || 220;
+        const col = this.solarCataclysm?.corrosiveRain ? PALETTE.lye : PALETTE.ember;
+
+        if (typeof sound.playExplosion === 'function') sound.playExplosion();
+        else if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 7, 0.18);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, col, 0.32);
+          particles.spawnBurst(zx, zy, 24, col, 45, 165, 3, 0.38);
+          particles.spawnBurst(zx, zy, 14, PALETTE.bone, 60, 180, 2, 0.25);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 28)
+          : [];
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          const dist = Math.hypot(e.x - zx, e.y - zy);
+          if (dist <= rad + (e.radius || 12)) {
+            if (p.pullInwardPx > 0 && e.tier !== 'boss' && dist > 18) {
+              const pullAng = Math.atan2(zy - e.y, zx - e.x);
+              e.x = player.clampCoord(e.x + Math.cos(pullAng) * p.pullInwardPx);
+              e.y = player.clampCoord(e.y + Math.sin(pullAng) * p.pullInwardPx);
+            }
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 1.8),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: this.ultDef.name,
+              targetName: e.name,
+            });
+            e.takeDamage(
+              pipe.finalDamage,
+              Math.atan2(e.y - zy, e.x - zx),
+              60,
+              false,
+              player,
+              spawner,
+              particles,
+              camera
+            );
+            if (e.active && e.hp > 0) {
+              e.statuses.apply(
+                'burn',
+                { duration: p.burnDuration || 5.0, sourceAtk: player.atk * 1.4, sourceName: this.ultDef.name },
+                e,
+                particles
+              );
+              if (p.corrodeStacks > 0) {
+                for (let c = 0; c < p.corrodeStacks; c++) {
+                  e.statuses.apply('corrode', { duration: 8.0, sourceName: this.ultDef.name }, e, particles);
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
+
+      case 'kaelenSolarCataclysmSlam': {
+        const zx = this.solarCataclysm ? this.solarCataclysm.x : player.x;
+        const zy = this.solarCataclysm ? this.solarCataclysm.y : player.y;
+        const rad = p.radius || 240;
+        const col = this.solarCataclysm?.corrosiveRain ? PALETTE.lye : PALETTE.ember;
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playExplosion === 'function') sound.playExplosion();
+        else if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 11, 0.34);
+        if (p.spawnCrater && world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        this.slamStreaks.push({
+          x: zx,
+          y: zy,
+          radius: rad,
+          life: 0.36,
+          maxLife: 0.36,
+          color: col,
+        });
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, col, 0.42);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.65), PALETTE.bone, 0.28);
+          particles.spawnBurst(zx, zy, 36, col, 60, 210, 3, 0.5);
+          particles.spawnBurst(zx, zy, 20, PALETTE.brass, 40, 170, 2, 0.4);
+        }
+
+        // Spawn lingering hazard pools via Kaelen's classBehavior if available
+        if (player.classId === 'kaelen' && player.classBehavior && Array.isArray(player.classBehavior.pools)) {
+          for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2 + 0.4;
+            player.classBehavior.pools.push({
+              x: player.clampCoord(zx + Math.cos(a) * (rad * 0.45)),
+              y: player.clampCoord(zy + Math.sin(a) * (rad * 0.45)),
+              radius: 68,
+              life: 6.0,
+              maxLife: 6.0,
+              tickTimer: 0.15,
+              kind: this.solarCataclysm?.corrosiveRain ? 'caustic' : 'magma',
+            });
+          }
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 3.0),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: this.ultDef.name,
+              targetName: e.name,
+            });
+            e.takeDamage(
+              pipe.finalDamage,
+              Math.atan2(e.y - zy, e.x - zx),
+              185,
+              false,
+              player,
+              spawner,
+              particles,
+              camera
+            );
+            if (e.active && e.hp > 0) {
+              if (p.stunDuration > 0) {
+                e.statuses.apply('stun', { duration: p.stunDuration, sourceName: this.ultDef.name }, e, particles);
+              }
+              e.statuses.apply(
+                'burn',
+                { duration: p.burnDuration || 6.0, sourceAtk: player.atk * 1.5, sourceName: this.ultDef.name },
+                e,
+                particles
+              );
+              for (let c = 0; c < (p.corrodeStacks || 2); c++) {
+                e.statuses.apply('corrode', { duration: 8.0, sourceName: this.ultDef.name }, e, particles);
+              }
+            }
+          }
+        }
+        this.solarCataclysm = null;
+        break;
+      }
+
+      case 'vesperaDeployIonMatrix': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 240;
+        this.ionSingularity = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1420,
+          vertexCount: p.vertexCount || 5,
+          thunderheadStorm: !!p.thunderheadStorm,
+          pillars: [],
+        };
+        player.statuses.apply('arcOvercharge', { duration: 8.0, sourceName: this.ultDef.name }, player, particles);
+        if (
+          p.spawnValkyrieSwarm &&
+          player.classId === 'vespera' &&
+          player.classBehavior &&
+          Array.isArray(player.classBehavior.seekerSwarm)
+        ) {
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            player.classBehavior.seekerSwarm.push({
+              x: player.x + Math.cos(a) * 20,
+              y: player.y + Math.sin(a) * 20,
+              vx: Math.cos(a) * 240,
+              vy: Math.sin(a) * 240,
+              damage: Math.round(player.atk * 1.35),
+              life: 4.5,
+              trailTick: 0,
+            });
+          }
+        }
+        sound.playUltimateStart();
+        break;
+      }
+
+      case 'vesperaIonMatrixPulse': {
+        const zx = this.ionSingularity ? this.ionSingularity.x : player.x;
+        const zy = this.ionSingularity ? this.ionSingularity.y : player.y;
+        const rad = p.radius || 235;
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 7, 0.18);
+
+        if (this.ionSingularity) {
+          const vCount = this.ionSingularity.vertexCount || 5;
+          for (let i = 0; i < vCount; i++) {
+            const a = (i / vCount) * Math.PI * 2 + (p.pulseIndex || 1) * 0.6;
+            const px = zx + Math.cos(a) * (rad * 0.68);
+            const py = zy + Math.sin(a) * (rad * 0.68);
+            this.ionSingularity.pillars.push({
+              x: px,
+              y: py,
+              width: 18,
+              life: 0.34,
+              maxLife: 0.34,
+            });
+          }
+        }
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.volt, 0.30);
+          particles.spawnBurst(zx, zy, 22, PALETTE.volt, 55, 185, 2, 0.32);
+          particles.spawnBurst(zx, zy, 14, PALETTE.signal, 45, 160, 2, 0.26);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 28)
+          : [];
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          const dist = Math.hypot(e.x - zx, e.y - zy);
+          if (dist <= rad + (e.radius || 12)) {
+            if (p.pullInwardPx > 0 && e.tier !== 'boss' && dist > 16) {
+              const pullAng = Math.atan2(zy - e.y, zx - e.x);
+              e.x = player.clampCoord(e.x + Math.cos(pullAng) * p.pullInwardPx);
+              e.y = player.clampCoord(e.y + Math.sin(pullAng) * p.pullInwardPx);
+            }
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 1.8),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: this.ultDef.name,
+              targetName: e.name,
+            });
+            e.takeDamage(
+              pipe.finalDamage,
+              Math.atan2(zy - e.y, zx - e.x),
+              45,
+              false,
+              player,
+              spawner,
+              particles,
+              camera
+            );
+            if (e.active && e.hp > 0) {
+              e.statuses.apply('marked', { duration: 6.0, sourceName: this.ultDef.name }, e, particles);
+              e.statuses.apply('slow', { duration: 3.0, sourceName: this.ultDef.name }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'vesperaIonSingularityCollapse': {
+        const zx = this.ionSingularity ? this.ionSingularity.x : player.x;
+        const zy = this.ionSingularity ? this.ionSingularity.y : player.y;
+        const rad = p.radius || 240;
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playExplosion === 'function') sound.playExplosion();
+        else if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 11, 0.34);
+        if (p.spawnCrater && world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        this.slamStreaks.push({
+          x: zx,
+          y: zy,
+          radius: rad,
+          life: 0.38,
+          maxLife: 0.38,
+          color: PALETTE.volt,
+        });
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.volt, 0.42);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.55), PALETTE.bone, 0.28);
+          particles.spawnBurst(zx, zy, 38, PALETTE.volt, 65, 220, 3, 0.48);
+          particles.spawnBurst(zx, zy, 20, PALETTE.signal, 50, 180, 2, 0.38);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 3.0),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: this.ultDef.name,
+              targetName: e.name,
+            });
+            e.takeDamage(
+              pipe.finalDamage,
+              Math.atan2(e.y - zy, e.x - zx),
+              165,
+              false,
+              player,
+              spawner,
+              particles,
+              camera
+            );
+            if (e.active && e.hp > 0) {
+              if (p.stunDuration > 0) {
+                e.statuses.apply('stun', { duration: p.stunDuration, sourceName: this.ultDef.name }, e, particles);
+              }
+              e.statuses.apply('marked', { duration: 7.0, sourceName: this.ultDef.name }, e, particles);
+            }
+          }
+        }
+
+        this.ionSingularity = null;
+        break;
+      }
+
       case 'endCast': {
         this.active = false;
         this.worldFrozen = false;
@@ -1474,6 +1896,8 @@ export class UltimateSequencer {
         this.cutInActive = false;
         this.aimLineActive = false;
         this.levitationZone = null;
+        this.solarCataclysm = null;
+        this.ionSingularity = null;
         player.ultimateActive = false;
         player.statuses.remove('untouchable');
 
@@ -1842,6 +2266,130 @@ export class UltimateSequencer {
         drawPixelLine(ctx, x, yTop, x, yBot, k % 2 === 0 ? PALETTE.bone : ss.color, k % 3 === 0 ? 2 : 1);
       }
     }
+
+    // 5. Draw Kaelen's Sunfall Cataclysm / Tectonic Kiln / Blight Hurricane World Effects
+    if (this.solarCataclysm) {
+      const sc = this.solarCataclysm;
+      const zx = Math.round(sc.x - camX);
+      const zy = Math.round(sc.y - camY);
+      const rad = sc.radius;
+      const primaryCol = sc.corrosiveRain ? PALETTE.lye : PALETTE.ember;
+      const spin = sc.elapsedMs * 0.0042;
+
+      // Outer & inner furnace rings
+      drawBresenhamCircle(ctx, zx, zy, rad, primaryCol, 0.9);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.55), PALETTE.brass, 0.75);
+      drawBresenhamCircle(ctx, zx, zy, 26, PALETTE.bone, 1.0);
+
+      // Levitating miniature solar core above Kaelen
+      const sunY = zy - 34;
+      ctx.fillStyle = primaryCol;
+      ctx.fillRect(zx - 12, sunY - 12, 24, 24);
+      ctx.fillStyle = PALETTE.brass;
+      ctx.fillRect(zx - 8, sunY - 8, 16, 16);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(zx - 4, sunY - 4, 8, 8);
+
+      // Revolving 8-Ray Solar Flare Beams sweeping the battlefield
+      for (let i = 0; i < sc.rayCount; i++) {
+        const a = spin + (i / sc.rayCount) * Math.PI * 2;
+        const rx = Math.round(zx + Math.cos(a) * rad);
+        const ry = Math.round(zy + Math.sin(a) * rad);
+        drawPixelLine(ctx, zx, zy, rx, ry, primaryCol, 3);
+        drawPixelLine(ctx, zx, zy, rx, ry, i % 2 === 0 ? PALETTE.bone : PALETTE.brass, 1);
+
+        // If Tectonic Kiln, draw jagged magma fissures branching along the ground
+        if (sc.tectonicFissures) {
+          const midX = Math.round(zx + Math.cos(a) * (rad * 0.55));
+          const midY = Math.round(zy + Math.sin(a) * (rad * 0.55));
+          const branchA = a + 0.45;
+          drawPixelLine(
+            ctx,
+            midX,
+            midY,
+            Math.round(midX + Math.cos(branchA) * 55),
+            Math.round(midY + Math.sin(branchA) * 55),
+            PALETTE.ember,
+            2
+          );
+        }
+      }
+
+      // Falling Molten Slag Meteors
+      for (const m of sc.meteors) {
+        if (m.progress < 0 || m.progress > 1) continue;
+        const mx = Math.round((m.startX + (m.targetX - m.startX) * m.progress) - camX);
+        const my = Math.round((m.startY + (m.targetY - m.startY) * m.progress) - camY);
+        const tx = Math.round(m.targetX - camX);
+        const ty = Math.round(m.targetY - camY);
+
+        // Ground impact reticle
+        drawBresenhamCircle(ctx, tx, ty, 14, primaryCol, 0.65);
+        // Meteor tail & blazing core
+        drawPixelLine(ctx, mx - 12, my - 28, mx, my, primaryCol, 3);
+        drawPixelLine(ctx, mx - 8, my - 18, mx, my, PALETTE.bone, 1);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(mx - 3, my - 3, 6, 6);
+      }
+    }
+
+    // 6. Draw Vespera's Orbital Ion Singularity / Valkyrie Swarm / Zenith Thunderhead World Effects
+    if (this.ionSingularity) {
+      const ion = this.ionSingularity;
+      const zx = Math.round(ion.x - camX);
+      const zy = Math.round(ion.y - camY);
+      const rad = ion.radius;
+      const vCount = ion.vertexCount || 5;
+      const rot = -ion.elapsedMs * 0.0038;
+
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.volt, 0.9);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.42), PALETTE.signal, 0.8);
+
+      // Compute outer polygon vertices
+      const verts = [];
+      for (let i = 0; i < vCount; i++) {
+        const a = rot + (i / vCount) * Math.PI * 2;
+        verts.push({
+          x: Math.round(zx + Math.cos(a) * rad),
+          y: Math.round(zy + Math.sin(a) * rad),
+        });
+      }
+
+      // Draw outer geometric polygon + internal star chords (pentagram / hexagram / octagram)
+      const step = vCount >= 5 ? 2 : 1;
+      for (let i = 0; i < vCount; i++) {
+        const v1 = verts[i];
+        const v2 = verts[(i + 1) % vCount];
+        const vStar = verts[(i + step) % vCount];
+        drawPixelLine(ctx, v1.x, v1.y, v2.x, v2.y, PALETTE.volt, 2);
+        drawPixelLine(ctx, v1.x, v1.y, vStar.x, vStar.y, i % 2 === 0 ? PALETTE.bone : PALETTE.volt, 1);
+
+        // Orbiting Vertex Drone Node
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(v1.x - 4, v1.y - 4, 8, 8);
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(v1.x - 3, v1.y - 3, 6, 6);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(v1.x - 1, v1.y - 1, 2, 2);
+      }
+
+      // Central orbital ion sky-beam + peripheral pillars
+      ctx.fillStyle = PALETTE.volt;
+      ctx.fillRect(zx - 10, 0, 20, zy);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(zx - 4, 0, 8, zy);
+
+      for (const pil of ion.pillars) {
+        const px = Math.round(pil.x - camX);
+        const py = Math.round(pil.y - camY);
+        const w = Math.max(4, Math.round(pil.width * (pil.life / pil.maxLife)));
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(px - Math.floor(w / 2), 0, w, py);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(px - Math.max(1, Math.floor(w / 4)), 0, Math.max(2, Math.floor(w / 2)), py);
+        drawBresenhamCircle(ctx, px, py, 18, PALETTE.volt, 0.9);
+      }
+    }
   }
 
   drawImpactFrame(ctx, width, height, player, accessibility = {}) {
@@ -1864,6 +2412,10 @@ export class UltimateSequencer {
         ? PALETTE.brass
         : player.classId === 'ines'
         ? PALETTE.verdigris
+        : player.classId === 'kaelen'
+        ? PALETTE.ember
+        : player.classId === 'vespera'
+        ? PALETTE.volt
         : PALETTE.signal);
 
     // Multi-frame Sakuga polarity inversion:
@@ -2038,6 +2590,30 @@ export class UltimateSequencer {
         const a = (r / 20) * Math.PI * 2;
         drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * 180, sy + Math.sin(a) * 180, r % 2 === 0 ? primaryLineCol : secondaryLineCol, 2);
       }
+    } else if (data.kind === 'explosion') {
+      // Kaelen Sunfall Cataclysm / Tectonic Kiln Solar Supernova Impact Frame:
+      // 8-pointed blazing solar cross + concentric thermobaric blast rings
+      drawBresenhamCircle(ctx, sx, sy, 110, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 68, primaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 28, secondaryLineCol, 1.0);
+      for (let r = 0; r < 28; r++) {
+        const a = (r / 28) * Math.PI * 2;
+        const len = r % 2 === 0 ? 260 : 140;
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len, r % 2 === 0 ? primaryLineCol : secondaryLineCol, r % 4 === 0 ? 4 : 2);
+      }
+    } else if (data.kind === 'beam') {
+      // Vespera Orbital Ion Singularity Impact Frame:
+      // Towering vertical sky-to-ground ion pillar + geometric star matrix
+      ctx.fillStyle = secondaryLineCol;
+      ctx.fillRect(sx - 34, 0, 68, height);
+      ctx.fillStyle = primaryLineCol;
+      ctx.fillRect(sx - 16, 0, 32, height);
+      drawBresenhamCircle(ctx, sx, sy, 96, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 52, primaryLineCol, 1.0);
+      for (let r = 0; r < 16; r++) {
+        const a = (r / 16) * Math.PI * 2;
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * 220, sy + Math.sin(a) * 220, r % 2 === 0 ? primaryLineCol : secondaryLineCol, 2);
+      }
     } else {
       // Ines Scrapfall / Crane Drop / Junkyard Rain Magnetic Crush Impact Frame:
       // Heavy vertical gravity streaks slamming into (sx, sy) + radial crater shockwave
@@ -2105,6 +2681,10 @@ export class UltimateSequencer {
           ? PALETTE.brass
           : player.classId === 'ines'
           ? PALETTE.verdigris
+          : player.classId === 'kaelen'
+          ? PALETTE.ember
+          : player.classId === 'vespera'
+          ? PALETTE.volt
           : PALETTE.signal;
       ctx.fillStyle = accent;
       ctx.fillRect(0, barH - 1, width, 1);
@@ -2118,6 +2698,10 @@ export class UltimateSequencer {
           ? PALETTE.brass
           : player.classId === 'ines'
           ? PALETTE.verdigris
+          : player.classId === 'kaelen'
+          ? PALETTE.ember
+          : player.classId === 'vespera'
+          ? PALETTE.volt
           : PALETTE.signal;
 
       const bannerY = 52;

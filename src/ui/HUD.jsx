@@ -275,6 +275,74 @@ function ClassMechanicBar({ mech, accentColor, engine }) {
     );
   }
 
+  if (mech.type === 'boilerPressure') {
+    const pct = Math.max(0, Math.min(100, mech.pressure || 0));
+    const isRedZone = mech.inRedZone || pct >= 75;
+    return (
+      <div className="space-y-0.5 pt-0.5">
+        <div className="flex items-center justify-between text-[9px] font-bold">
+          <span style={{ color: mech.overheated ? '#FFFFFF' : isRedZone ? PALETTE.ember : '#9E9789' }}>
+            {mech.overheated
+              ? '★ OVERHEATED SURGE (+40% ATK)'
+              : isRedZone
+              ? 'RED GAUGE (+35% SKILL DMG)'
+              : 'BOILER PRESSURE'}
+          </span>
+          <span className="text-[#FF5A26] tabular-nums">
+            {pct}% [V] VENT
+          </span>
+        </div>
+        <div className="relative h-2.5 w-full bg-[#0B0D10] border border-[#3A3F47]">
+          {/* 75% Red Gauge threshold marker */}
+          <div className="absolute top-0 bottom-0 left-[75%] w-0.5 bg-[#D9D2C3] z-10" />
+          <div
+            className="h-full transition-all duration-75"
+            style={{
+              width: `${pct}%`,
+              backgroundColor: mech.overheated
+                ? '#D9D2C3'
+                : isRedZone
+                ? PALETTE.ember
+                : PALETTE.brass,
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (mech.type === 'arcSwarm') {
+    return (
+      <div className="flex items-center justify-between gap-2 pt-0.5">
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] font-bold text-[#9E9789]">ARC-DRONES</span>
+          <div className="flex items-center gap-1 ml-1">
+            {Array.from({ length: mech.maxDrones || 3 }, (_, idx) => {
+              const active = idx < (mech.drones || 0);
+              return (
+                <div
+                  key={idx}
+                  className="w-2.5 h-2.5 border"
+                  style={{
+                    borderColor: active ? PALETTE.volt : '#3A3F47',
+                    backgroundColor: active
+                      ? mech.overcharged
+                        ? '#D9D2C3'
+                        : PALETTE.volt
+                      : '#0B0D10',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+        <span className="text-[9px] font-bold text-[#C9F24B] tabular-nums">
+          PYLONS {mech.pylons || 0}/{mech.maxPylons || 2} · [V] PULSE
+        </span>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -308,7 +376,14 @@ export function HUD({ snapshot, engine }) {
   };
 
   const obj = snapshot.objective;
-  const objDir = obj ? getDirectionLabel(obj.boss.arenaCenter.x, obj.boss.arenaCenter.y) : '';
+  const objDir = obj
+    ? obj.dir ||
+      (obj.boss?.arenaCenter
+        ? getDirectionLabel(obj.boss.arenaCenter.x, obj.boss.arenaCenter.y)
+        : '')
+    : '';
+  const objName = obj ? obj.name || obj.boss?.name || '' : '';
+  const objDistM = obj ? (obj.boss ? Math.round(obj.dist / 16) : obj.dist) : 0;
   const canPromote = snapshot.canPromoteJourneyman || snapshot.canPromoteMaster;
 
   const quickSupplies = [
@@ -447,17 +522,25 @@ export function HUD({ snapshot, engine }) {
 
         {/* Top-Center: Objective Line + Promotion Notice + Active Boss Health & Stagger Bar */}
         <div className="flex flex-col items-center gap-2 max-w-xl w-full">
-          {obj && (
-            <div className="bg-[#0B0D10]/90 border border-[#3A3F47] px-3.5 py-1 text-xs text-[#D9D2C3] tracking-wide tabular-nums">
-              <span className="text-[#9E9789]">OBJECTIVE: </span>
-              <span className="font-bold" style={{ color: accent }}>
-                {obj.boss.name}
-              </span>
-              <span className="text-[#9E9789]">
-                {' '}
-                · {objDir} ({Math.round(obj.dist / 16)}m)
-              </span>
+          {snapshot.worldLedger?.floor1Complete ? (
+            <div className="bg-[#0B0D10]/95 border-2 border-[#4FD6A0] px-3.5 py-1 text-xs text-[#4FD6A0] font-bold tracking-wide">
+              ★ FLOOR 1 LIBERATED — ALL 4 TERRITORIES CLEARED · VISIT HARLOW FOR REMATCHES ★
             </div>
+          ) : (
+            obj && (
+              <div className="bg-[#0B0D10]/90 border border-[#3A3F47] px-3.5 py-1 text-xs text-[#D9D2C3] tracking-wide tabular-nums">
+                <span className="text-[#FFC83D] font-bold">
+                  HUNT #{obj.orderIndex || 1}/4 (REC LV.{obj.recommendedLevel || 5}):{' '}
+                </span>
+                <span className="font-bold" style={{ color: accent }}>
+                  {objName}
+                </span>
+                <span className="text-[#9E9789]">
+                  {' '}
+                  · {objDir} ({objDistM}m)
+                </span>
+              </div>
+            )
           )}
 
           {canPromote && (
@@ -466,17 +549,22 @@ export function HUD({ snapshot, engine }) {
             </div>
           )}
 
-          {/* Large Boss Health Bar + Stagger Bar across the top when fighting a Boss */}
+          {/* Large Boss Health Bar + Stagger Bar + Signature Mechanic Bar */}
           {snapshot.activeBoss && (
             <div className="w-full bg-[#0B0D10]/95 border-2 border-[#FF3B3B] p-2 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
-                <div>
+                <div className="flex items-center gap-1.5">
                   <span className="font-bold text-[#FF3B3B] uppercase tracking-wider">
                     {snapshot.activeBoss.name}
                   </span>
-                  <span className="text-[#9E9789] ml-2 text-[11px]">
+                  <span className="text-[#9E9789] text-[11px]">
                     {snapshot.activeBoss.subtitle}
                   </span>
+                  {snapshot.activeBoss.isRematch && (
+                    <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#8B3A1E] text-[#D9D2C3]">
+                      REMATCH
+                    </span>
+                  )}
                 </div>
                 <span className="text-[#FFC83D] font-bold text-[11px]">
                   PHASE {snapshot.activeBoss.phase} / 3
@@ -520,6 +608,110 @@ export function HUD({ snapshot, engine }) {
                   </span>
                 </div>
               </div>
+
+              {/* Boss Signature Mechanic Bar (D1–D5, D18, D21–D23, D28–D48) */}
+              {snapshot.activeBoss.mechanic && (() => {
+                const mech = snapshot.activeBoss.mechanic;
+                let subText = '';
+                let barPct = 0;
+                let barColor = '#FFC83D';
+
+                if (mech.type === 'foremanRitual') {
+                  subText = `ARRIVALS: ${mech.arrivals}/${mech.threshold} · WAVE ${mech.wavesSpawned}/${mech.totalWaves} · ${mech.remainingSec}S`;
+                  barPct = Math.round(((30 - mech.remainingSec) / 30) * 100);
+                  barColor = mech.willRevive ? '#FF3B3B' : '#00F0FF';
+                } else if (mech.type === 'foreman') {
+                  subText = 'KEEP ARRIVALS < 10';
+                  barPct = 100;
+                  barColor = '#00F0FF';
+                } else if (mech.type === 'bigAxle') {
+                  subText = mech.coreExposed
+                    ? `CORE HP: ${mech.coreHpPct}% (${mech.coreExposedSec}S)`
+                    : `HEAT: ${mech.heat}/${mech.maxHeat}`;
+                  barPct = mech.coreBroken ? 100 : mech.coreExposed ? mech.coreHpPct : mech.heat;
+                  barColor = mech.coreBroken ? '#4FD6A0' : mech.coreExposed ? '#00F0FF' : '#FFC83D';
+                } else if (mech.type === 'motherSump') {
+                  subText = mech.devourActive
+                    ? `INTERRUPT STAGGER: ${mech.devourStaggerPct}%`
+                    : `FEEDS DENIED: ${mech.deniedFeeds}/${mech.requiredDeniedFeeds}`;
+                  barPct = mech.isStarved
+                    ? 100
+                    : mech.devourActive
+                    ? mech.devourStaggerPct
+                    : Math.round((mech.deniedFeeds / Math.max(1, mech.requiredDeniedFeeds)) * 100);
+                  barColor = mech.isStarved ? '#4FD6A0' : mech.devourActive ? '#FF3B3B' : '#FFC83D';
+                } else if (mech.type === 'theLongDry') {
+                  subText = mech.exposed
+                    ? `WINDOW: ${mech.exposedSec}S · PLATES: ${mech.segmentsBroken}/${mech.totalSegments}`
+                    : `PLATES: ${mech.segmentsBroken}/${mech.totalSegments}`;
+                  barPct = Math.round((mech.segmentsBroken / Math.max(1, mech.totalSegments)) * 100);
+                  barColor = mech.segmentsBroken >= mech.totalSegments ? '#4FD6A0' : mech.exposed ? '#00F0FF' : '#FFC83D';
+                }
+
+                return (
+                  <div className="pt-1 border-t border-[#3A3F47]">
+                    <div className="flex items-center justify-between text-[10px] font-bold uppercase mb-0.5">
+                      <span style={{ color: barColor }}>{mech.label}</span>
+                      <span className="text-[#D9D2C3] tabular-nums">{subText}</span>
+                    </div>
+                    <div className="relative h-2 w-full bg-[#161A20] border border-[#3A3F47]">
+                      <div
+                        className="h-full transition-all duration-75"
+                        style={{
+                          width: `${Math.max(0, Math.min(100, barPct))}%`,
+                          backgroundColor: barColor,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* 10x MOB FUSION CONVERGENCE BANNER (D6, D7, D11, D16, D21, D25) */}
+          {snapshot.activeFusion && (
+            <div className="w-full bg-[#0B0D10]/95 border-2 border-[#FFC83D] p-2 space-y-1">
+              <div className="flex items-center justify-between text-[10px] font-bold uppercase">
+                <span className="text-[#FFC83D]">
+                  ⚠ 10× FUSION CONVERGENCE → {snapshot.activeFusion.targetName}
+                </span>
+                <span className="text-[#FF3B3B] tabular-nums">
+                  {snapshot.activeFusion.remainingSec.toFixed(1)}S
+                </span>
+              </div>
+              <div className="relative h-2 w-full bg-[#161A20] border border-[#3A3F47]">
+                <div
+                  className="h-full bg-[#FF3B3B]"
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(100, snapshot.activeFusion.progressPct || 0)
+                    )}%`,
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[9px] font-bold uppercase">
+                <span className="text-[#4FD6A0]">
+                  {snapshot.activeFusion.inBacklashWindow
+                    ? '★ BACKLASH WINDOW ACTIVE (INTERRUPT = 1.5S STUN) ★'
+                    : 'DEAL DAMAGE / STUN / DISPLACE TO INTERRUPT'}
+                </span>
+                <span className="text-[#4FD6A0] tabular-nums">
+                  STAGGER {Math.round(snapshot.activeFusion.staggerPct || 0)}%
+                </span>
+              </div>
+              <div className="relative h-1.5 w-full bg-[#161A20] border border-[#3A3F47]">
+                <div
+                  className="h-full bg-[#4FD6A0]"
+                  style={{
+                    width: `${Math.max(
+                      0,
+                      Math.min(100, snapshot.activeFusion.staggerPct || 0)
+                    )}%`,
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -542,13 +734,25 @@ export function HUD({ snapshot, engine }) {
         {/* Top-Right: Minimap & Current Zone Indicator */}
         <div className="flex flex-col items-end gap-1.5">
           <div className="bg-[#0B0D10]/90 border border-[#3A3F47] px-2.5 py-1 text-right">
-            <div className="text-xs font-bold text-[#D9D2C3] uppercase tracking-wider">
-              {snapshot.areaName}
+            <div className="flex items-center justify-end gap-1.5">
+              {snapshot.worldLedger?.zoneLiberated && (
+                <span className="px-1 py-0.5 text-[9px] font-bold bg-[#4FD6A0] text-[#0B0D10] uppercase">
+                  LIBERATED (-65% SPAWNS)
+                </span>
+              )}
+              <div className="text-xs font-bold text-[#D9D2C3] uppercase tracking-wider">
+                {snapshot.areaName}
+              </div>
             </div>
             <div className="text-[10px] text-[#9E9789]">
               {snapshot.areaSubtitle}
               {snapshot.stormActive ? ' · DUST STORM' : ''}
             </div>
+            {snapshot.worldLedger && (
+              <div className="text-[9px] font-bold text-[#FFC83D] mt-0.5">
+                TERRITORIES LIBERATED: {snapshot.worldLedger.liberatedCount} / 4
+              </div>
+            )}
           </div>
           <Minimap
             playerX={snapshot.x}

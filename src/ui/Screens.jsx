@@ -171,7 +171,7 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
         <svg
           viewBox="0 0 560 110"
           className="w-full max-w-xl h-auto block"
-          aria-label="GRAVEL SKY"
+          aria-label="HellsAdvent"
         >
           <rect
             x="0"
@@ -190,10 +190,10 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
             fill="#D9D2C3"
             fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
             fontWeight="900"
-            fontSize="58"
-            letterSpacing="6"
+            fontSize="52"
+            letterSpacing="4"
           >
-            GRAVEL SKY
+            HELLSADVENT
           </text>
           <text
             x="24"
@@ -204,12 +204,12 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
             fontSize="13"
             letterSpacing="4"
           >
-            RUST · ASH · DEAD WATER · THREE TRADES
+            FLOOR 1 · RUST · ASH · DEAD WATER · THREE TRADES
           </text>
         </svg>
 
         <p className="mt-4 text-sm text-[#D9D2C3]/90 max-w-lg leading-relaxed bg-[#0B0D10] border border-[#3A3F47] p-3.5">
-          Kettle&apos;s boiler is still burning. Pick your trade—Railcut melee, Springgun ranged, or Magnetist coil—and clear Slab Town, Route 9, Lye Marsh, and the Copper Flats.
+          Kettle&apos;s boiler is still burning. Pick your trade—Railcut melee, Springgun ranged, or Magnetist coil—interrupt 10-mob convergence rituals, and liberate Lye Marsh, Route 9, Slab Town, and the Copper Flats.
         </p>
 
         <div className="mt-6 w-72 bg-[#0B0D10] border-2 border-[#3A3F47] p-4 space-y-2.5">
@@ -377,7 +377,7 @@ export function SaveSlotScreen({ engine, onBack }) {
                       UNSTAMPED TRADE LEDGER
                     </div>
                     <p className="text-xs text-[#9E9789] px-4">
-                      Start a new run as Sena Ibuki (Melee), Rook Matsuda (Ranged), or Ines Calloway (Mage).
+                      Start a new run as Sena (Melee), Rook (Ranged), Ines (Mage), Kaelen (Thermo-Lancer), or Vespera (Artificer).
                     </p>
                   </div>
                 )}
@@ -489,8 +489,8 @@ export function CharacterSelectScreen({ engine, onBack }) {
         </button>
       </div>
 
-      {/* Three Tall Cards Side by Side */}
-      <div className="relative z-10 my-auto grid grid-cols-1 lg:grid-cols-3 gap-5 max-w-6xl w-full mx-auto py-3">
+      {/* Five Tall Cards Side by Side */}
+      <div className="relative z-10 my-auto grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-3.5 max-w-7xl w-full mx-auto py-2">
         {CLASS_ORDER.map((classId) => {
           const cls = CLASSES[classId];
           const accent = cls.accentColor;

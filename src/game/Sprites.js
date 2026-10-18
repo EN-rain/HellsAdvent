@@ -394,6 +394,48 @@ export function applyPromotionOverlayToGrid(g, classId, stage = 1, branch = null
         g.line(cx - 5, topY + 12, cx + 4, topY + 9, 'steel', 2, 2);
       }
     }
+  } else if (classId === 'kaelen') {
+    if (branch === 'furnace') {
+      // Journeyman (Furnace): dual boiler smokestacks on back + ember slag vents
+      g.shadedRect(cx - 10, topY + 1, 3, 7, 'steel');
+      g.rect(cx - 10, topY, 3, 2, 'ember', 3);
+      if (stage >= 3) {
+        // Master (Cinderlord): molten slag pauldron & glowing furnace grate chest
+        g.shadedRect(cx - 7, topY + 7, 5, 5, 'ember');
+        g.rect(cx - 2, topY + 11, 5, 4, 'ember', 3);
+      }
+    } else if (branch === 'alchemist') {
+      // Journeyman (Alchemist): pressurized green lye tank strapped beside boiler
+      g.shadedRect(cx - 10, topY + 6, 4, 9, 'bog');
+      g.rect(cx - 9, topY + 8, 2, 5, 'lye', 3);
+      if (stage >= 3) {
+        // Master (Blight-Venter): brass hazmat hood & white phosphor nozzle ring
+        g.shadedRect(cx - 5, topY - 1, 10, 4, 'brass');
+        g.rect(cx + 12, topY + 10, 4, 4, 'lye', 3);
+      }
+    }
+  } else if (classId === 'vespera') {
+    if (branch === 'swarm') {
+      // Journeyman (Swarm): twin shoulder micro-drone launch pods
+      g.shadedRect(cx - 8, topY + 5, 4, 5, 'brass');
+      g.set(cx - 7, topY + 6, 'volt', 3);
+      if (stage >= 3) {
+        // Master (Hive-Queen): halo of glowing volt command antennas behind head
+        g.line(cx - 6, topY + 3, cx - 10, topY - 3, 'volt', 3, 1);
+        g.line(cx + 4, topY + 3, cx + 8, topY - 3, 'volt', 3, 1);
+        g.rect(cx - 11, topY - 4, 2, 2, 'volt', 3);
+        g.rect(cx + 7, topY - 4, 2, 2, 'volt', 3);
+      }
+    } else if (branch === 'dynamo') {
+      // Journeyman (Dynamo): high-voltage copper capacitor spines on back
+      g.shadedRect(cx - 10, topY + 4, 5, 12, 'brass');
+      g.line(cx - 10, topY + 6, cx - 6, topY + 14, 'volt', 3, 1);
+      if (stage >= 3) {
+        // Master (Archon): glowing volt arc-crown and levitating coil rings
+        g.rect(cx - 3, topY - 3, 6, 2, 'volt', 3);
+        g.set(cx, topY - 4, 'bone', 3);
+      }
+    }
   }
 
   return g;
@@ -656,6 +698,286 @@ export function buildInesFrameGrid(anim, frameIdx, dir = 'right', equipped = {},
   return g;
 }
 
+/**
+ * KAELEN VOS — THERMO-LANCER / PYRO-ALCHEMIST (48x48 canvas, heavy boiler frame ~31px tall)
+ * - Slitted brass foundry diving/welding helm with glowing ember visor slit
+ * - Scorched leather foundry apron over heavy steel plate coat
+ * - Twin-cylinder brass steam boiler strapped to back with glowing ember pressure gauge & smokestack
+ * - Weapon: The Ignis Lance (hollow piston spear with glowing pilot tip & fuel hose)
+ */
+export function buildKaelenFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
+  const g = new PixelGrid(48, 48);
+  const coatMat =
+    equipped.body === 'plateCoat'
+      ? 'rust'
+      : equipped.body === 'riotJacket'
+      ? 'bog'
+      : 'steel';
+  const legsMat =
+    equipped.legs === 'hydraulicShins'
+      ? 'brass'
+      : equipped.legs === 'courierLeggings'
+      ? 'bog'
+      : 'coat';
+
+  if (anim === 'dodge') {
+    const cx = 24;
+    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 8, 'rust', 2);
+    g.circle(cx - 3, cy, 4, 'ember', 3);
+    g.line(cx - 8, cy + 3, cx + 9, cy - 3, 'brass', 3, 2);
+    return g;
+  }
+
+  if (anim === 'death') {
+    g.shadedRect(11, 33, 19, 7, 'rust');
+    g.shadedRect(14, 29, 9, 6, 'brass'); // Fallen boiler pack
+    g.rect(16, 30, 3, 2, 'ember', 2);
+    g.line(18, 36, 36, 35, 'steel', 2, 2); // Dropped Ignis Lance
+    return g;
+  }
+
+  let bobY = 0;
+  let torsoLeanX = 0;
+  let leftFootX = 0;
+  let rightFootX = 0;
+  let leftFootY = 0;
+  let rightFootY = 0;
+
+  if (anim === 'idle') {
+    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
+  } else if (anim === 'run') {
+    bobY = frameIdx % 3 === 1 ? -1 : 0;
+    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 2;
+    const strideX = [-4, -2, 1, 4, 2, -1][frameIdx % 6];
+    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
+    leftFootX = strideX;
+    rightFootX = -strideX;
+    leftFootY = strideY;
+    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
+  } else if (anim === 'hurt') {
+    torsoLeanX = -2;
+    bobY = 1;
+  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    torsoLeanX = frameIdx === 1 || frameIdx === 2 ? (anim === 'attack3' ? 4 : 2) : -1;
+  }
+
+  const cx = 23 + torsoLeanX;
+  const topY = 10 + bobY;
+
+  // Twin-cylinder brass steam boiler strapped to back
+  const packX = dir === 'down' ? cx + 4 : cx - 10;
+  const packY = topY + 4;
+  g.shadedRect(packX, packY, 6, 13, 'brass');
+  g.rect(packX + 1, packY - 3, 3, 4, 'steel', 2); // Smokestack chimney
+  if (frameIdx % 2 === 0) {
+    g.set(packX + 2, packY - 4, 'ember', 3); // Chimney ember spark
+  }
+  // Glowing boiler firebox grate
+  g.rect(packX + 1, packY + 5, 4, 5, 'ember', frameIdx % 2 === 0 ? 3 : 2);
+
+  // Heavy foundry legs & iron-shod boots
+  const legBaseY = topY + 21;
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 4, 6, 'coat');
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + 5 + leftFootY, 4, 5, legsMat);
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 4, 6, 'coat');
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + 5 + rightFootY, 4, 5, legsMat);
+
+  // Torso: Steel coat + Scorched rust leather foundry apron
+  const coatY = topY + 8;
+  g.shadedRect(cx - 5, coatY, 11, 13, coatMat);
+  g.shadedRect(cx - 4, coatY + 2, 9, 11, 'rust'); // Scorched leather apron
+  // Chest pressure gauge
+  g.circle(cx, coatY + 5, 2, 'brass', 3);
+  g.set(cx, coatY + 5, 'ember', 3);
+
+  // Head: Slitted Brass Foundry Helm with glowing Ember Visor
+  const headX = cx - 4;
+  const headY = topY;
+  g.shadedRect(headX, headY, 9, 8, 'brass');
+  g.line(headX + 1, headY + 1, headX + 7, headY + 1, 'steel', 3, 1); // Rivet brow
+  if (dir !== 'up') {
+    const visorX = dir === 'down' ? headX + 1 : headX + 3;
+    g.rect(visorX, headY + 3, 5, 2, 'coat', 0);
+    g.rect(visorX + 1, headY + 3, 4, 2, 'ember', 3);
+    if (isUltimateEyes) {
+      g.set(visorX + 2, headY + 3, 'bone', 3);
+    }
+  }
+
+  // Weapon: The Ignis Lance (hollow steel/brass piston spear + flame jet smear on attacks)
+  const lanceY = topY + 12;
+  // Fuel hose from boiler to lance
+  g.line(packX + 3, packY + 11, cx + 3, lanceY + 3, 'coat', 1, 1);
+
+  if (anim === 'attack1' || anim === 'attack2') {
+    // Wide Naphtha Flame Sweep
+    g.shadedRect(cx + 2, lanceY - 1, 14, 4, 'steel');
+    g.rect(cx + 12, lanceY - 2, 5, 5, 'brass', 3);
+    if (frameIdx === 1 || frameIdx === 2) {
+      // Blazing ember flame cone smear
+      for (let r = 15; r <= 24; r++) {
+        const spread = Math.floor((r - 13) * 0.7);
+        for (let dy = -spread; dy <= spread; dy++) {
+          const mat = Math.abs(dy) >= spread - 1 ? 'ember' : 'brass';
+          g.set(cx + r, lanceY + dy, mat, 3);
+        }
+      }
+      g.set(cx + 18, lanceY, 'bone', 3);
+    } else {
+      g.rect(cx + 17, lanceY - 1, 3, 3, 'ember', 3);
+    }
+  } else if (anim === 'attack3') {
+    // Hit 3: Piston Lance Thrust!
+    const thrustExt = frameIdx === 1 || frameIdx === 2 ? 7 : 0;
+    g.shadedRect(cx + 2, lanceY - 1, 16 + thrustExt, 4, 'steel');
+    g.rect(cx + 10 + thrustExt, lanceY - 2, 5, 5, 'brass', 3);
+    g.line(cx + 15 + thrustExt, lanceY, cx + 23 + thrustExt, lanceY, 'ember', 3, 3);
+    if (frameIdx === 2) {
+      g.line(cx + 16, lanceY, cx + 24, lanceY, 'bone', 3, 1);
+    }
+  } else {
+    // Carried Ignis Lance angled forward
+    g.line(cx - 2, lanceY + 3, cx + 15, lanceY - 4, 'steel', 2, 3);
+    g.rect(cx + 11, lanceY - 4, 4, 3, 'brass', 3);
+    // Pilot flame flickering at nozzle tip
+    g.rect(cx + 15, lanceY - 5, 3, 3, 'ember', frameIdx % 2 === 0 ? 3 : 2);
+    g.set(cx + 16, lanceY - 4, 'bone', 3);
+  }
+
+  return g;
+}
+
+/**
+ * VESPERA LOCKE — ARC-DRONE ARTIFICER / SUMMONER (48x48 canvas, slender ~30px tall)
+ * - Asymmetric white-blonde shock of hair over dark undercut
+ * - High-collared dark insulated trench coat with copper wire trim & volt-green vents
+ * - Illuminated volt-green visor glasses
+ * - Floating rotary copper halo dynamo rack behind shoulders
+ * - Weapon: The Arc-Lash (flexible copper-braid lightning whip + hovering drone)
+ */
+export function buildVesperaFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
+  const g = new PixelGrid(48, 48);
+  const coatMat =
+    equipped.body === 'plateCoat'
+      ? 'rust'
+      : equipped.body === 'riotJacket'
+      ? 'bog'
+      : 'coat';
+  const legsMat =
+    equipped.legs === 'hydraulicShins'
+      ? 'brass'
+      : equipped.legs === 'courierLeggings'
+      ? 'bog'
+      : 'steel';
+
+  if (anim === 'dodge') {
+    // Phase-blink electric sphere
+    const cx = 24;
+    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 8, 'coat', 1);
+    g.circle(cx, cy, 6, 'volt', 3);
+    g.circle(cx, cy, 3, 'bone', 3);
+    return g;
+  }
+
+  if (anim === 'death') {
+    g.shadedRect(12, 34, 17, 6, coatMat);
+    g.shadedRect(26, 34, 6, 5, 'bone'); // White-blonde hair
+    g.circle(16, 31, 4, 'brass', 2); // Fallen halo dynamo
+    g.set(16, 31, 'volt', 2);
+    return g;
+  }
+
+  let bobY = 0;
+  let torsoLeanX = 0;
+  let leftFootX = 0;
+  let rightFootX = 0;
+  let leftFootY = 0;
+  let rightFootY = 0;
+
+  if (anim === 'idle') {
+    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
+  } else if (anim === 'run') {
+    bobY = frameIdx % 3 === 1 ? -1 : 0;
+    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 2;
+    const strideX = [-3, -1, 1, 3, 1, -1][frameIdx % 6];
+    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
+    leftFootX = strideX;
+    rightFootX = -strideX;
+    leftFootY = strideY;
+    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
+  } else if (anim === 'hurt') {
+    torsoLeanX = -2;
+    bobY = 1;
+  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    torsoLeanX = frameIdx === 1 || frameIdx === 2 ? 2 : 0;
+  }
+
+  const cx = 23 + torsoLeanX;
+  const topY = 10 + bobY;
+
+  // Floating Copper Halo Dynamo Rack behind shoulders
+  const haloX = cx - 4;
+  const haloY = topY + 6 + (frameIdx % 2 === 0 ? -1 : 0);
+  g.circle(haloX, haloY, 6, 'brass', 2);
+  g.circle(haloX, haloY, 4, 'coat', 0);
+  // Volt nodes on halo ring
+  g.set(haloX - 6, haloY, 'volt', 3);
+  g.set(haloX, haloY - 6, 'volt', 3);
+  g.set(haloX + 5, haloY - 3, 'volt', 3);
+
+  // Legs & Insulated Boots
+  const legBaseY = topY + 21;
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 3, 6, 'coat');
+  g.shadedRect(cx - 4 + leftFootX, legBaseY + 5 + leftFootY, 4, 5, legsMat);
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 3, 6, 'coat');
+  g.shadedRect(cx + 1 + rightFootX, legBaseY + 5 + rightFootY, 4, 5, legsMat);
+
+  // High-collared dark insulated trench coat with volt capacitor trim
+  const coatY = topY + 8;
+  g.shadedRect(cx - 5, coatY, 10, 14, coatMat);
+  g.line(cx - 4, coatY + 2, cx - 4, coatY + 12, 'brass', 3, 1);
+  g.line(cx + 3, coatY + 2, cx + 3, coatY + 12, 'volt', 3, 1); // Volt seam
+  // High popped collar
+  g.shadedRect(cx - 5, topY + 6, 10, 3, coatMat);
+
+  // Head, Illuminated Volt Visor Glasses, & White-Blonde Asymmetric Hair
+  const headX = cx - 4;
+  const headY = topY;
+  g.shadedRect(headX, headY + 1, 8, 6, 'skin');
+  if (dir !== 'up') {
+    const visorX = dir === 'down' ? headX + 1 : headX + 3;
+    // Volt visor glasses
+    g.rect(visorX, headY + 3, 5, 2, 'volt', 3);
+    g.set(visorX + 1, headY + 3, 'bone', 3);
+    if (isUltimateEyes) {
+      g.rect(visorX, headY + 2, 5, 3, 'volt', 3);
+    }
+  }
+  // White-blonde shock of hair swept forward
+  g.shadedRect(headX - 1, headY - 1, 9, 3, 'bone');
+  g.rect(headX + 5, headY + 1, 3, 4, 'bone', 3); // Swept bangs
+
+  // Weapon: The Arc-Lash (copper-braid whip crackling with volt-green lightning)
+  const armX = cx + 2;
+  const armY = topY + 10;
+  g.rect(armX, armY, 4, 3, 'brass', 3); // Insulated gauntlet
+  if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    // Crackling lightning whip arc across front
+    const whipY = anim === 'attack2' ? armY - 5 : anim === 'attack3' ? armY + 2 : armY - 1;
+    g.line(armX + 3, armY, armX + 12, whipY - 3, 'volt', 3, 2);
+    g.line(armX + 12, whipY - 3, armX + 22, whipY + 2, 'volt', 3, 2);
+    g.line(armX + 4, armY, armX + 21, whipY + 1, 'bone', 3, 1);
+  } else {
+    // Coiled whip at side with idle electric spark
+    g.circle(armX + 4, armY + 2, 3, 'brass', 2);
+    g.set(armX + 6, armY + (frameIdx % 2 === 0 ? 0 : 3), 'volt', 3);
+  }
+
+  return g;
+}
+
 export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, branch = null) {
   const animDefs = {
     idle: 4,
@@ -673,6 +995,10 @@ export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, br
       ? PALETTE.brass
       : classId === 'ines'
       ? PALETTE.verdigris
+      : classId === 'kaelen'
+      ? PALETTE.ember
+      : classId === 'vespera'
+      ? PALETTE.volt
       : PALETTE.signal;
 
   const directions = ['right', 'left', 'down', 'up'];
@@ -704,6 +1030,10 @@ export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, br
           grid = buildRookFrameGrid(anim, f, baseDir, equipped, false);
         } else if (classId === 'ines') {
           grid = buildInesFrameGrid(anim, f, baseDir, equipped, false);
+        } else if (classId === 'kaelen') {
+          grid = buildKaelenFrameGrid(anim, f, baseDir, equipped, false);
+        } else if (classId === 'vespera') {
+          grid = buildVesperaFrameGrid(anim, f, baseDir, equipped, false);
         } else {
           grid = buildSenaFrameGrid(anim, f, baseDir, equipped, false);
         }
@@ -1066,6 +1396,163 @@ export function buildEnemyFrameGrid(id, frameIdx = 0, isTell = false) {
       return g;
     }
 
+    case 'rivetTick': {
+      // COMMON (24x20): Scrap-plated parasite with riveted carapace and spring-loaded hind legs
+      const g = new PixelGrid(24, 20);
+      const crouch = isTell ? 2 : frameIdx % 2;
+      g.shadedRect(5, 7 + crouch, 13, 8, 'steel');
+      g.rect(7, 8 + crouch, 3, 2, 'brass', 3); // Rivet studs
+      g.rect(12, 8 + crouch, 3, 2, 'brass', 3);
+      g.rect(16, 10 + crouch, 3, 3, isTell ? 'signal' : 'blood', 3); // Mandible / eye
+      // 6 skittering legs
+      g.line(6, 14, 4, 18, 'rust', 2, 1);
+      g.line(11, 14, 11, 18, 'rust', 2, 1);
+      g.line(16, 14, 18, 18, 'rust', 2, 1);
+      return g;
+    }
+
+    case 'signalMite': {
+      // COMMON (24x24): Fragile tripod scout carrying a copper dish and blinking signal antenna
+      const g = new PixelGrid(24, 24);
+      const pulse = frameIdx % 2;
+      g.shadedRect(7, 10, 10, 7, 'coat');
+      g.circle(12, 10, 4, 'brass', 2); // Copper dish
+      // Antenna spire
+      g.line(12, 9, 12, 2, 'steel', 3, 1);
+      g.rect(10, 1, 5, 3, isTell || pulse === 1 ? 'signal' : 'brass', 3);
+      // Tripod wire legs
+      g.line(8, 16, 5, 22, 'steel', 2, 1);
+      g.line(12, 16, 12, 22, 'steel', 2, 1);
+      g.line(16, 16, 19, 22, 'steel', 2, 1);
+      return g;
+    }
+
+    case 'siltMimic': {
+      // COMMON (28x22): Hermit crab-like scrap lurker hiding under a dented oil drum lid
+      const g = new PixelGrid(28, 22);
+      const collapse = isTell ? 3 : frameIdx % 2;
+      g.shadedRect(4, 6 + collapse, 18, 10, 'bog');
+      g.shadedRect(6, 4 + collapse, 14, 5, 'rust'); // Dented drum lid shell
+      // Hidden pincer & glaring eye underneath
+      g.rect(19, 11 + collapse, 5, 4, 'steel', 3);
+      g.set(18, 10 + collapse, isTell ? 'blood' : 'brass', 3);
+      return g;
+    }
+
+    case 'cinderCrow': {
+      // COMMON (28x26): Sheet-metal scavenger bird with glowing furnace belly and razor pinions
+      const g = new PixelGrid(28, 26);
+      const flap = frameIdx % 2 === 0 ? -4 : 4;
+      g.shadedRect(9, 10, 10, 7, 'coat');
+      g.rect(11, 12, 5, 3, isTell ? 'blood' : 'rust', 3); // Furnace ember belly
+      g.line(10, 11, 3, 10 + flap, 'steel', 2, 2); // Left wing
+      g.line(17, 11, 25, 10 + flap, 'steel', 3, 2); // Right wing
+      g.rect(19, 10, 5, 3, 'bone', 3); // Iron beak
+      g.set(17, 10, 'brass', 3);
+      return g;
+    }
+
+    case 'plateMarshal': {
+      // ELITE (48x48): Heavy commander carrying a towering riveted boiler-door riot shield & signal baton
+      const g = new PixelGrid(48, 48);
+      const march = frameIdx % 2;
+      g.shadedRect(14, 14 + march, 16, 22, 'rust');
+      g.shadedRect(17, 8 + march, 10, 7, 'steel');
+      g.rect(22, 10 + march, 4, 2, 'signal', 3); // Visor slit
+      // Towering frontal scrap shield on right side (x=30..41, y=10..42)
+      g.shadedRect(30, 10, 10, 32, 'steel');
+      g.shadedRect(32, 13, 6, 26, 'coat');
+      g.rect(38, 14, 2, 24, isTell ? 'signal' : 'brass', 3);
+      // Command baton raised on tell
+      if (isTell) {
+        g.line(18, 14, 10, 4, 'signal', 3, 3);
+      }
+      return g;
+    }
+
+    case 'switchbackDriver': {
+      // ELITE (48x48): Twin-wheeled gyro-cycle raider with dual exhaust pipes and ramming prow
+      const g = new PixelGrid(48, 48);
+      const rev = frameIdx % 2;
+      g.circle(14, 34, 8, 'coat', 1); // Rear wheel
+      g.circle(34, 34, 8, 'coat', 1); // Front wheel
+      g.shadedRect(12, 20 + rev, 24, 12, 'rust'); // Engine chassis
+      g.shadedRect(18, 11 + rev, 10, 10, 'steel'); // Rider torso
+      g.rect(36, 22, 8, 8, isTell ? 'blood' : 'brass', 3); // Ramming prow
+      // Exhaust pipes
+      g.line(12, 22, 4, 16, 'steel', 2, 3);
+      if (isTell) {
+        g.rect(2, 13, 5, 5, 'signal', 3);
+      }
+      return g;
+    }
+
+    case 'sumpCantor': {
+      // ELITE (48x48): Hooded marsh figure carrying a swinging corroded iron dive-bell on a gantry pole
+      const g = new PixelGrid(48, 48);
+      const sway = frameIdx % 2 === 0 ? -2 : 2;
+      g.shadedRect(14, 16, 14, 26, 'bog');
+      g.shadedRect(16, 9, 10, 8, 'brass'); // Brass diving helmet head
+      g.rect(20, 12, 4, 3, 'signal', 3);
+      // Gantry pole & swinging bell on right
+      g.line(26, 38, 28, 8, 'steel', 2, 2);
+      g.line(28, 8, 38, 8, 'steel', 2, 2);
+      g.shadedRect(33 + sway, 16, 10, 12, isTell ? 'brass' : 'rust');
+      if (isTell) {
+        g.circle(38 + sway, 22, 9, 'signal', 3);
+      }
+      return g;
+    }
+
+    case 'boreSentinel': {
+      // ELITE (48x48): Vertical industrial rock-drill automaton with glowing cooling vents
+      const g = new PixelGrid(48, 48);
+      const spin = frameIdx % 2;
+      g.shadedRect(14, 10, 20, 22, 'rust');
+      g.shadedRect(16, 14, 16, 10, isTell ? 'blood' : 'brass'); // Vent core
+      // Conical drill base
+      g.shadedRect(16, 32, 16, 5, 'steel');
+      g.shadedRect(19 + spin, 37, 10, 5, 'bone');
+      g.rect(22, 42, 4, 4, 'steel', 3);
+      return g;
+    }
+
+    case 'scrapRatKing':
+    case 'bonepackAlpha':
+    case 'wireCyclone':
+    case 'brineMaw':
+    case 'screechChoir':
+    case 'rivetTitan':
+    case 'relayColossus':
+    case 'dredgeHusk':
+    case 'blackwingFurnace': {
+      // FUSION MID-BOSSES (64x64): Towering 10-unit amalgamated wasteland monstrosities
+      const g = new PixelGrid(64, 64);
+      const pulse = frameIdx % 2 === 0 ? -2 : 2;
+      const primaryMat =
+        id === 'brineMaw' || id === 'dredgeHusk'
+          ? 'bog'
+          : id === 'wireCyclone' || id === 'relayColossus'
+          ? 'brass'
+          : id === 'bonepackAlpha'
+          ? 'bone'
+          : 'rust';
+
+      // Massive amalgamated chassis (x=12..52, y=14..54)
+      g.shadedRect(14, 18 + pulse, 36, 32, primaryMat);
+      g.shadedRect(10, 26 - pulse, 44, 20, 'steel');
+      // Welded crown of 10 glowing eyes / sensors across the amalgam
+      for (let i = 0; i < 5; i++) {
+        const ex = 16 + i * 7;
+        const ey = 22 + ((i % 2) * 5) + pulse;
+        g.rect(ex, ey, 4, 4, isTell ? 'blood' : 'signal', 3);
+      }
+      // Heavy protruding weapon/maw on front right
+      g.shadedRect(46, 24 + pulse, 14, 18, isTell ? 'blood' : 'brass');
+      g.rect(54, 28 + pulse, 5, 10, 'bone', 3);
+      return g;
+    }
+
     case 'theLongDry':
     default: {
       // BOSS 4 (96x96): Giant worm built from stacked iron pipe rings,
@@ -1120,14 +1607,35 @@ class SpriteRegistry {
     this.initialized = true;
 
     const enemyDefs = [
+      // 9 Commons
       { id: 'tinRat', tier: 'common', frames: 2 },
       { id: 'dustDog', tier: 'common', frames: 4 },
       { id: 'wireKite', tier: 'common', frames: 4 },
       { id: 'lyeLeech', tier: 'common', frames: 3 },
       { id: 'sumpBat', tier: 'common', frames: 3 },
+      { id: 'rivetTick', tier: 'common', frames: 2 },
+      { id: 'signalMite', tier: 'common', frames: 2 },
+      { id: 'siltMimic', tier: 'common', frames: 2 },
+      { id: 'cinderCrow', tier: 'common', frames: 2 },
+      // 7 Elites
       { id: 'cleaverHauler', tier: 'elite', frames: 2 },
       { id: 'lyeStrider', tier: 'elite', frames: 2 },
       { id: 'flatsHarvester', tier: 'elite', frames: 3 },
+      { id: 'plateMarshal', tier: 'elite', frames: 2 },
+      { id: 'switchbackDriver', tier: 'elite', frames: 2 },
+      { id: 'sumpCantor', tier: 'elite', frames: 2 },
+      { id: 'boreSentinel', tier: 'elite', frames: 2 },
+      // 9 Fusion Mid-Bosses
+      { id: 'scrapRatKing', tier: 'fusionBoss', frames: 2 },
+      { id: 'bonepackAlpha', tier: 'fusionBoss', frames: 2 },
+      { id: 'wireCyclone', tier: 'fusionBoss', frames: 2 },
+      { id: 'brineMaw', tier: 'fusionBoss', frames: 2 },
+      { id: 'screechChoir', tier: 'fusionBoss', frames: 2 },
+      { id: 'rivetTitan', tier: 'fusionBoss', frames: 2 },
+      { id: 'relayColossus', tier: 'fusionBoss', frames: 2 },
+      { id: 'dredgeHusk', tier: 'fusionBoss', frames: 2 },
+      { id: 'blackwingFurnace', tier: 'fusionBoss', frames: 2 },
+      // 4 Primary Bosses
       { id: 'theForeman', tier: 'boss', frames: 2 },
       { id: 'bigAxle', tier: 'boss', frames: 2 },
       { id: 'motherSump', tier: 'boss', frames: 2 },
@@ -1155,8 +1663,18 @@ class SpriteRegistry {
         const grid = buildEnemyFrameGrid(def.id, f, false);
         const tellGrid = buildEnemyFrameGrid(def.id, f, true);
 
-        const baseRim = def.tier === 'elite' ? PALETTE.blood : null;
-        const pulseRim = def.tier === 'elite' ? MATERIAL_RAMPS.blood[1] : null;
+        const baseRim =
+          def.tier === 'elite'
+            ? PALETTE.blood
+            : def.tier === 'fusionBoss'
+            ? PALETTE.brass
+            : null;
+        const pulseRim =
+          def.tier === 'elite'
+            ? MATERIAL_RAMPS.blood[1]
+            : def.tier === 'fusionBoss'
+            ? PALETTE.signal
+            : null;
 
         entry.right.push(grid.bakeToCanvas({ rimColor: baseRim, mirrorX: false }));
         entry.left.push(grid.bakeToCanvas({ rimColor: baseRim, mirrorX: true }));
@@ -1272,10 +1790,12 @@ class SpriteRegistry {
     this.boltAngles = this.rookBoltAngles;
     this.scrapVariants = this.scrapVariantAngles.map((arr) => arr[0]);
 
-    // Pre-render 64x16 Ultimate Eye Cut-In Strips for Sena, Rook, and Ines
+    // Pre-render 64x16 Ultimate Eye Cut-In Strips for all 5 classes
     this.cutInCanvases.sena = this._buildCutIn('sena');
     this.cutInCanvases.rook = this._buildCutIn('rook');
     this.cutInCanvases.ines = this._buildCutIn('ines');
+    this.cutInCanvases.kaelen = this._buildCutIn('kaelen');
+    this.cutInCanvases.vespera = this._buildCutIn('vespera');
     this.cutInCanvas = this.cutInCanvases.sena;
 
     // Cache base class sprite sheets for Character Select card animations
@@ -1283,6 +1803,8 @@ class SpriteRegistry {
       sena: bakePlayerSprites({}, 'sena', 1, null),
       rook: bakePlayerSprites({}, 'rook', 1, null),
       ines: bakePlayerSprites({}, 'ines', 1, null),
+      kaelen: bakePlayerSprites({}, 'kaelen', 1, null),
+      vespera: bakePlayerSprites({}, 'vespera', 1, null),
     };
   }
 
@@ -1302,6 +1824,44 @@ class SpriteRegistry {
     cctx.imageSmoothingEnabled = false;
     cctx.fillStyle = PALETTE.soot;
     cctx.fillRect(0, 0, 64, 16);
+
+    if (classId === 'kaelen') {
+      // Kaelen: Slitted brass foundry helmet visor blazing with pressurized white-hot ember fire
+      cctx.fillStyle = MATERIAL_RAMPS.brass[2];
+      cctx.fillRect(6, 1, 52, 14);
+      cctx.fillStyle = MATERIAL_RAMPS.steel[1];
+      cctx.fillRect(10, 4, 44, 8);
+      cctx.fillStyle = PALETTE.soot;
+      cctx.fillRect(12, 5, 40, 6);
+      // Blazing ember visor slit + twin furnace glare points
+      cctx.fillStyle = PALETTE.ember;
+      cctx.fillRect(14, 6, 36, 4);
+      cctx.fillStyle = PALETTE.brass;
+      cctx.fillRect(18, 6, 10, 4);
+      cctx.fillRect(36, 6, 10, 4);
+      cctx.fillStyle = '#FFFFFF';
+      cctx.fillRect(21, 7, 4, 2);
+      cctx.fillRect(39, 7, 4, 2);
+      return c;
+    }
+
+    if (classId === 'vespera') {
+      // Vespera: Illuminated volt-green visor glasses with electric arc telemetry & white-blonde hair
+      cctx.fillStyle = PALETTE.bone;
+      cctx.fillRect(4, 0, 56, 4);
+      cctx.fillStyle = MATERIAL_RAMPS.skin[2];
+      cctx.fillRect(12, 4, 40, 11);
+      // Sleek angular volt visor glasses
+      cctx.fillStyle = PALETTE.soot;
+      cctx.fillRect(14, 4, 36, 8);
+      cctx.fillStyle = PALETTE.volt;
+      cctx.fillRect(16, 5, 14, 6);
+      cctx.fillRect(34, 5, 14, 6);
+      cctx.fillStyle = '#FFFFFF';
+      cctx.fillRect(19, 6, 5, 3);
+      cctx.fillRect(37, 6, 5, 3);
+      return c;
+    }
 
     if (classId === 'rook') {
       // Rook: Single eye behind the brass rangefinder monocle, brass flash
@@ -1498,6 +2058,85 @@ export function drawCharacterPortrait(
     g.circle(32 + headOffX, 7, 7, 'coat', 1); // Top bun
     g.shadedRect(17 + headOffX, 9, 30, 9, 'coat');
     g.line(20 + headOffX, 10, 34 + headOffX, 14, 'bone', 3, 2); // Grey streak
+
+    const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
+    ctx.drawImage(baked, 0, 0);
+    return;
+  }
+
+  if (classId === 'kaelen') {
+    // KAELEN VOS PORTRAIT (Thermo-Lancer in brass/iron foundry diving helm + twin boiler)
+    // Twin boiler cylinders & smokestacks behind shoulders
+    g.shadedRect(6, 12, 11, 38, 'brass');
+    g.shadedRect(47, 12, 11, 38, 'brass');
+    g.rect(8, 8, 6, 5, 'steel', 2);
+    g.rect(50, 8, 6, 5, 'steel', 2);
+    g.rect(9, 6, 4, 3, 'ember', 3);
+    g.rect(51, 6, 4, 3, 'ember', 3);
+
+    // Heavy steel shoulders & scorched rust foundry apron
+    g.shadedRect(10, 44, 44, 20, 'steel');
+    g.shadedRect(16, 46, 32, 18, 'rust');
+    // Chest boiler gauge
+    g.circle(32, 54, 5, 'brass', 3);
+    g.circle(32, 54, 3, 'ember', 3);
+
+    //Domed Brass & Steel Foundry Helmet
+    g.shadedRect(17 + headOffX, 9, 30, 32, 'brass');
+    g.shadedRect(19 + headOffX, 12, 26, 26, 'steel');
+    // Slitted Horizontal Visor Plate
+    g.shadedRect(18 + headOffX, 20, 28, 9, 'coat');
+    if (expression === 'hurt') {
+      // Flickering cracked ember visor
+      g.rect(21 + headOffX, 23, 9, 3, 'ember', 2);
+      g.rect(34 + headOffX, 23, 9, 3, 'ember', 2);
+    } else {
+      const visorStep = expression === 'ultimate' ? 3 : 2;
+      g.rect(20 + headOffX, 22, 24, 5, 'ember', visorStep);
+      g.rect(23 + headOffX, 23, 6, 3, 'bone', 3);
+      g.rect(35 + headOffX, 23, 6, 3, 'bone', 3);
+    }
+    // Vertical breathing grille bars on chin
+    for (let vx = 23; vx <= 39; vx += 4) {
+      g.line(vx + headOffX, 31, vx + headOffX, 36, 'coat', 0, 2);
+    }
+
+    const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
+    ctx.drawImage(baked, 0, 0);
+    return;
+  }
+
+  if (classId === 'vespera') {
+    // VESPERA LOCKE PORTRAIT (Arc-Drone Artificer with copper halo dynamo & volt visor)
+    // Copper Halo Dynamo ring behind head/shoulders
+    g.circle(32, 28, 24, 'brass', 2);
+    g.circle(32, 28, 20, 'coat', 0);
+    g.rect(30, 3, 4, 4, 'volt', 3);
+    g.rect(8, 26, 4, 4, 'volt', 3);
+    g.rect(52, 26, 4, 4, 'volt', 3);
+
+    // High-collared insulated dark trench coat with volt seams
+    g.shadedRect(10, 45, 44, 19, 'coat');
+    g.shadedRect(15, 38, 34, 10, 'coat'); // High collar
+    g.line(16, 40, 16, 62, 'volt', 3, 2);
+    g.line(48, 40, 48, 62, 'volt', 3, 2);
+
+    // Face
+    g.shadedRect(20 + headOffX, 16, 24, 21, 'skin');
+    // Illuminated Volt Visor Glasses
+    g.shadedRect(18 + headOffX, 22, 28, 7, 'coat');
+    const lensStep = expression === 'ultimate' ? 3 : 2;
+    g.rect(20 + headOffX, 23, 10, 5, 'volt', lensStep);
+    g.rect(34 + headOffX, 23, 10, 5, 'volt', lensStep);
+    if (expression !== 'hurt') {
+      g.rect(22 + headOffX, 24, 3, 2, 'bone', 3);
+      g.rect(36 + headOffX, 24, 3, 2, 'bone', 3);
+    }
+    g.rect(29 + headOffX, 33, 6, 1, 'coat', 0);
+
+    // Asymmetric white-blonde hair swept over right side
+    g.shadedRect(17 + headOffX, 8, 30, 9, 'bone');
+    g.shadedRect(36 + headOffX, 14, 9, 14, 'bone');
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
     ctx.drawImage(baked, 0, 0);

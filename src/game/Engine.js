@@ -24,6 +24,11 @@ import { ProjectilePool } from './Projectile.js';
 import { ParticleSystem } from './Particles.js';
 import { sound } from './Audio.js';
 import { spriteRegistry, drawPixelText } from './Sprites.js';
+import { bossMechanics } from './BossMechanics.js';
+import { fusionManager } from './FusionManager.js';
+import { tacticalSystem } from './TacticalAI.js';
+import { obstacleManager } from './Obstacles.js';
+import { worldLedger } from './WorldLedger.js';
 
 const SAVE_SLOT_PREFIX = 'gravel_sky_save_slot_';
 const LEGACY_SAVE_KEY = 'gravel_sky_save_v1';
@@ -191,6 +196,11 @@ export class GameEngine {
 
   startNewCharacterInSlot(slotIndex, classId) {
     this.activeSlotIndex = slotIndex;
+    worldLedger.reset();
+    bossMechanics.resetAll();
+    fusionManager.reset();
+    tacticalSystem.reset();
+    obstacleManager.clearTemporary();
     this.player = new Player(classId);
     this.spawner = new Spawner(this.world);
     if (this.projectiles && typeof this.projectiles.clear === 'function') {
@@ -342,7 +352,19 @@ export class GameEngine {
 
     // Check player death
     if (this.player.dead && this.player.deathAnimTimer >= 1.0 && this.uiState === 'playing') {
-      this.lastGoldLost = this.player.applyDeathPenalty();
+      // D8 / D19 / D43: Restore boss encounter-entry snapshot on boss wipe
+      if (worldLedger.activeBossEncounterSnapshot) {
+        const bossId = worldLedger.activeBossEncounterSnapshot.bossId;
+        worldLedger.restoreBossEntrySnapshot(this.player);
+        bossMechanics.abortActiveEncounter(bossId);
+        if (this.spawner.activeBossInstances[bossId]) {
+          this.spawner.activeBossInstances[bossId].active = false;
+          this.spawner.activeBossInstances[bossId] = null;
+        }
+        this.lastGoldLost = 0;
+      } else {
+        this.lastGoldLost = this.player.applyDeathPenalty();
+      }
       this.saveProgress();
       this.setUiState('death');
 
@@ -368,6 +390,30 @@ export class GameEngine {
       this.world,
       timeStopped
     );
+
+    if (!timeStopped) {
+      obstacleManager.update(dt, this.player, this.spawner, this.particles, this.camera);
+      tacticalSystem.update(dt, this.player, this.spawner.getAllActiveEnemies());
+      bossMechanics.update(
+        dt,
+        this.player,
+        this.spawner,
+        this.projectiles,
+        this.particles,
+        this.camera,
+        this.world,
+        worldLedger
+      );
+      fusionManager.update(
+        dt,
+        this.spawner,
+        this.player,
+        this.particles,
+        this.camera,
+        bossMechanics,
+        worldLedger
+      );
+    }
 
     if (this.spawner.activeBoss) {
       const b = this.spawner.activeBoss;
@@ -402,8 +448,16 @@ export class GameEngine {
     // 1. World terrain chunks, Kettle camp, Ume, Harlow, Boss arena markers
     this.world.draw(octx, this.camera, this.spawner);
 
+    // 1.5. Environmental Obstacles (Solid Pillars, Low Cover, Destructible Steam/Acid/Capacitors)
+    obstacleManager.draw(octx, this.camera);
+
     // 2. Ground decals (scorches, slashes, footprints, puddle rings, tripwires, craters)
     this.particles.drawGroundDecals(octx, this.camera);
+
+    // 2.5. Ground Telegraphs, Boss Ritual Props, & 10x Fusion Convergence Channeling
+    this.spawner.drawTelegraphs(octx, this.camera);
+    bossMechanics.drawWorldOverlays(octx, this.camera, this.spawner);
+    fusionManager.drawWorldOverlays(octx, this.camera);
 
     // 3. Loot & grounded scrap pickups
     this.particles.drawPickups(octx, this.camera);
@@ -439,10 +493,11 @@ export class GameEngine {
       }
     }
 
-    // 5. Y-Sorted Entities (Player + Enemies)
+    // 5. Y-Sorted Entities (Player + Enemies + Ritual Actors)
     const renderList = [];
-    for (let i = 0; i < this.spawner.enemies.length; i++) {
-      const e = this.spawner.enemies[i];
+    const activeEnemies = this.spawner.getAllActiveEnemies();
+    for (let i = 0; i < activeEnemies.length; i++) {
+      const e = activeEnemies[i];
       if (e.active && !e.dead && this.camera.isVisible(e.x, e.y, e.radius + 48)) {
         renderList.push({ y: e.y, type: 'enemy', entity: e });
       }
@@ -952,25 +1007,57 @@ export class GameEngine {
     return false;
   }
 
+  equipCosmetic(achId) {
+    worldLedger.equipCosmetic(achId);
+    sound.playUiClick();
+    this.saveProgress();
+    this.notifyUi();
+  }
+
+  equipCosmeticTitle(title) {
+    worldLedger.equippedCosmeticTitle = title || null;
+    sound.playUiClick();
+    this.saveProgress();
+    this.notifyUi();
+  }
+
+  equipCosmeticTrim(trimColor) {
+    worldLedger.equippedCosmeticTrim = trimColor || null;
+    sound.playUiClick();
+    this.saveProgress();
+    this.notifyUi();
+  }
+
+  triggerBossRematch(bossId) {
+    if (this.spawner.startBossRematch(bossId, this.player, this.particles)) {
+      this.setUiState('playing');
+      return true;
+    }
+    return false;
+  }
+
   respawnAfterDeath() {
+    bossMechanics.resetAll();
+    fusionManager.reset();
+    obstacleManager.clearTemporary();
     this.player.respawnAtKettle();
     this.projectiles.clear();
     this.camera.snapTo(this.player.x, this.player.y, this.world.size);
     this.setUiState('playing');
     this.saveProgress();
-
   }
 
   // --- SAVE / LOAD SYSTEM (3 Save Slots + Electron IPC or localStorage fallback) ---
   saveProgress(slotIndex = this.activeSlotIndex) {
     const payload = {
-      version: 2,
+      version: 3,
       slotIndex,
       timestamp: Date.now(),
       scanlinesEnabled: this.scanlinesEnabled,
       settings: { ...this.settings },
       player: this.player.toJSON(),
       spawner: this.spawner.toJSON(),
+      worldLedger: worldLedger.toJSON(),
     };
 
     try {
@@ -1000,6 +1087,11 @@ export class GameEngine {
       data = null;
     }
 
+    bossMechanics.resetAll();
+    fusionManager.reset();
+    tacticalSystem.reset();
+    obstacleManager.clearTemporary();
+
     if (data) {
       if (typeof data.scanlinesEnabled === 'boolean') {
         this.scanlinesEnabled = data.scanlinesEnabled;
@@ -1008,9 +1100,15 @@ export class GameEngine {
         this.settings = { ...this.settings, ...data.settings };
       }
       this.player.fromJSON(data.player);
+      if (data.worldLedger) {
+        worldLedger.fromJSON(data.worldLedger);
+      } else {
+        worldLedger.reset();
+      }
       this.spawner.fromJSON(data.spawner);
       this.camera.snapTo(this.player.x, this.player.y, this.world.size);
     } else {
+      worldLedger.reset();
       this.player = new Player('sena');
       this.spawner = new Spawner(this.world);
       this.camera.snapTo(this.player.x, this.player.y, this.world.size);
@@ -1023,6 +1121,11 @@ export class GameEngine {
     } catch {
       // Ignore
     }
+    worldLedger.reset();
+    bossMechanics.resetAll();
+    fusionManager.reset();
+    tacticalSystem.reset();
+    obstacleManager.clearTemporary();
     this.player = new Player(this.player.classId || 'sena');
     this.spawner = new Spawner(this.world);
     if (this.projectiles && typeof this.projectiles.clear === 'function') {
@@ -1076,11 +1179,14 @@ export class GameEngine {
       classId: p.classId,
       characterName: cls.characterName,
       className: cls.className,
-      classTitle: p.getTitle(),
+      classTitle: worldLedger.equippedCosmeticTitle || p.getTitle(),
+      baseClassTitle: p.getTitle(),
       stage: p.stage,
       stageName: p.getStageLabel(),
-      fullTitleLine: p.getFullTitleLine(),
-      accentColor: cls.accentColor,
+      fullTitleLine: worldLedger.equippedCosmeticTitle
+        ? `${cls.characterName} — ${worldLedger.equippedCosmeticTitle} (${p.getStageLabel()})`
+        : p.getFullTitleLine(),
+      accentColor: worldLedger.equippedCosmeticTrim || cls.accentColor,
       weaponName: cls.weaponName,
       branch: p.branch,
       unlockedNodes: [...p.unlockedNodes],
@@ -1118,6 +1224,7 @@ export class GameEngine {
       statuses: (p.statuses || p.status)?.getHudStatusList?.() || [],
       areaName: area.name,
       areaSubtitle: area.subtitle,
+      areaId: area.id,
       stormActive: this.world.stormTimer > 0,
       nearUme: this.isPlayerNearUme(),
       nearHarlow: this.isPlayerNearHarlow(),
@@ -1127,6 +1234,18 @@ export class GameEngine {
       y: Math.round(p.y),
       defeatedBosses: { ...this.spawner.defeatedBosses },
       objective: nearestBoss,
+      worldLedger: {
+        floor1Complete: worldLedger.floor1Cleared,
+        liberatedCount: Object.values(worldLedger.confirmedBossKills).filter(Boolean).length,
+        zoneLiberated: worldLedger.territories[area.id]?.state === 'CLEARED',
+        confirmedBossKills: { ...worldLedger.confirmedBossKills },
+        unlockedAchievements: { ...worldLedger.unlockedAchievements },
+        equippedCosmeticTitle: worldLedger.equippedCosmeticTitle,
+        equippedCosmeticTrim: worldLedger.equippedCosmeticTrim,
+        umeReactiveLine: worldLedger.getReactiveDialogue('ume'),
+        harlowReactiveLine: worldLedger.getReactiveDialogue('harlow'),
+      },
+      activeFusion: fusionManager.getHudChannelSummary(),
       activeBoss: boss
         ? {
             id: boss.id,
@@ -1135,8 +1254,13 @@ export class GameEngine {
             hp: Math.ceil(boss.hp),
             maxHp: boss.maxHp,
             phase: boss.phase,
+            isRematch: !!boss.isRematch,
             staggerPct: Math.round((boss.statuses || boss.status)?.stagger || 0),
-            staggered: Boolean((boss.statuses || boss.status)?.has?.('staggered') || ((boss.statuses || boss.status)?.staggeredTimer > 0)),
+            staggered: Boolean(
+              (boss.statuses || boss.status)?.has?.('staggered') ||
+                (boss.statuses || boss.status)?.staggeredTimer > 0
+            ),
+            mechanic: bossMechanics.getHudBossMechanicState(boss),
           }
         : null,
       bossNameCard: this.bossNameCard ? { ...this.bossNameCard } : null,
