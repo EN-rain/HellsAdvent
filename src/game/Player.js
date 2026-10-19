@@ -674,13 +674,19 @@ export class Player {
     return { success: true };
   }
 
-  investTreeNode(skillId, choice) {
+  investTreeNode(skillId, choice, allowRefund = true) {
     if (!skillId) return { success: false, reason: 'Invalid skill ID' };
     if (!this.treeNodes) this.treeNodes = {};
 
-    // If already invested in this skill node, switching fork is free
-    if (this.treeNodes[skillId]) {
+    // If already invested in this skill node
+    if (this.treeNodes[skillId] !== undefined) {
+      if (allowRefund && this.treeNodes[skillId] === choice) {
+        delete this.treeNodes[skillId];
+        this.recalculateStats(false);
+        return { success: true, refunded: true };
+      }
       this.treeNodes[skillId] = choice;
+      this.recalculateStats(false);
       return { success: true, switched: true };
     }
 
@@ -690,11 +696,13 @@ export class Player {
     }
 
     this.treeNodes[skillId] = choice;
+    this.recalculateStats(false);
     return { success: true, invested: true };
   }
 
   respecTree() {
     this.treeNodes = {};
+    this.recalculateStats(false);
     return { success: true };
   }
 
@@ -702,6 +710,20 @@ export class Player {
     const totalPoints = Math.max(0, this.level - 1);
     const spent = Object.keys(this.treeNodes || {}).length;
     return Math.max(0, totalPoints - spent);
+  }
+
+  getSkillFork(skillNameOrId) {
+    if (!this.treeNodes || !skillNameOrId) return null;
+    if (this.treeNodes[skillNameOrId] !== undefined) return this.treeNodes[skillNameOrId];
+
+    const target = String(skillNameOrId).toLowerCase().replace(/[^a-z0-9]/g, '');
+    for (const [k, v] of Object.entries(this.treeNodes)) {
+      const kNorm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (kNorm === target || kNorm.includes(target) || target.includes(kNorm)) {
+        return v;
+      }
+    }
+    return null;
   }
 
   getIntrinsicTrait() {
@@ -1406,7 +1428,26 @@ export class Player {
 
     sound.playHitMelee?.();
 
-    const atkDmg = this.atk;
+    // Check if player has an active fork mutation from the specialization tree
+    const chosenFork = this.getSkillFork(skillDef?.id) ?? this.getSkillFork(skillDef?.name);
+    let forkMult = 1.0;
+    if (chosenFork !== null && chosenFork !== undefined) {
+      if (chosenFork === 0) {
+        forkMult = 1.25;
+        const forkLabel = skillDef?.fork?.[0]?.split(/[\s(]/)[0] || 'FORK A';
+        if (particles && typeof particles.spawnFloatingText === 'function') {
+          particles.spawnFloatingText(this.x, this.y - 28, `[${forkLabel.toUpperCase()}]`, PALETTE.signal);
+        }
+      } else {
+        forkMult = 1.45;
+        const forkLabel = skillDef?.fork?.[1]?.split(/[\s(]/)[0] || 'FORK B';
+        if (particles && typeof particles.spawnFloatingText === 'function') {
+          particles.spawnFloatingText(this.x, this.y - 28, `[${forkLabel.toUpperCase()}]`, PALETTE.brass);
+        }
+      }
+    }
+
+    const atkDmg = Math.round(this.atk * forkMult);
     const skillName = (skillDef?.name || '').toLowerCase();
 
     // Dash / Movement skills
@@ -1529,6 +1570,56 @@ export class Player {
     ) {
       return false;
     }
+
+    // Check if equipped ultimate is an awakened specialization ultimate
+    const allSkills = getAllSkillsForCharacter(this.classId);
+    const ultDef = allSkills.find((s) => s.id === this.ultimateSlot && s.type === 'ultimate');
+    if (ultDef && ultDef.source !== 'Original') {
+      if (this.ultimateCharge < 100) return false;
+      this.ultimateCharge = 0;
+      this.ultimateActive = true;
+
+      const ultFork = this.getSkillFork(ultDef.id) ?? this.getSkillFork(ultDef.name);
+      const isForkB = ultFork === 1;
+      const ultDamage = Math.round(this.atk * (isForkB ? 6.5 : 5.0));
+
+      sound.playExplosion?.();
+      if (camera) camera.shake(6.0, 0.45);
+
+      if (particles) {
+        particles.spawnShockwave(this.x, this.y, 160, PALETTE.brass, 0.5);
+        particles.spawnShockwave(this.x, this.y, 240, PALETTE.signal, 0.7);
+        if (typeof particles.spawnFloatingText === 'function') {
+          particles.spawnFloatingText(this.x, this.y - 36, `AWAKENING: ${ultDef.name.toUpperCase()}`, PALETTE.brass);
+          if (ultFork !== null && ultFork !== undefined) {
+            particles.spawnFloatingText(this.x, this.y - 48, isForkB ? '[FORK B: EPICENTER BURST]' : '[FORK A: EXTENDED FIELD]', PALETTE.signal);
+          }
+        }
+      }
+
+      const hitRadius = isForkB ? 180 : 250;
+      if (spawner && typeof spawner.queryRadius === 'function') {
+        const enemies = spawner.queryRadius(this.x, this.y, hitRadius);
+        for (const e of enemies) {
+          if (e && e.active && e.hp > 0) {
+            e.takeDamage(ultDamage, 0, 180, true, this, spawner, particles, camera);
+          }
+        }
+        if (spawner.activeBoss && spawner.activeBoss.active) {
+          const bDist = Math.hypot(spawner.activeBoss.x - this.x, spawner.activeBoss.y - this.y);
+          if (bDist <= hitRadius + 60) {
+            spawner.activeBoss.takeDamage(ultDamage, this, particles, camera);
+          }
+        }
+      }
+
+      setTimeout(() => {
+        this.ultimateActive = false;
+      }, 500);
+
+      return true;
+    }
+
     return this.classBehavior.tryUltimate(
       worldMouseX,
       worldMouseY,
