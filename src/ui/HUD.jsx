@@ -735,6 +735,11 @@ export function HUD({ snapshot, engine }) {
         <div className="flex flex-col items-end gap-1.5">
           <div className="bg-[#0B0D10]/90 border border-[#3A3F47] px-2.5 py-1 text-right">
             <div className="flex items-center justify-end gap-1.5">
+              {snapshot.inSafeZone && (
+                <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#4FD6A0]/20 text-[#4FD6A0] border border-[#4FD6A0]/40 uppercase tracking-wider">
+                  SAFE ZONE · PEACEFUL
+                </span>
+              )}
               {snapshot.worldLedger?.zoneLiberated && (
                 <span className="px-1 py-0.5 text-[9px] font-bold bg-[#4FD6A0] text-[#0B0D10] uppercase">
                   LIBERATED (-65% SPAWNS)
@@ -813,6 +818,14 @@ export function HUD({ snapshot, engine }) {
             [K] SKILLS {snapshot.skillPoints > 0 ? `(+${snapshot.skillPoints})` : ''}
           </button>
 
+          <button
+            onClick={() => engine.setUiState('dev')}
+            className="px-2.5 py-2 bg-[#25102E] border border-[#C042FF] hover:border-[#00F0FF] hover:bg-[#3B154A] text-xs font-bold text-[#ECA6FF] hover:text-[#FFFFFF] whitespace-nowrap cursor-pointer transition-colors shadow-[0_0_8px_rgba(192,66,255,0.35)]"
+            title="Open Dev Cheats & Settings [~ or F2]"
+          >
+            [~] DEV
+          </button>
+
           {snapshot.nearUme && (
             <button
               onClick={() => engine.setUiState('shop')}
@@ -833,7 +846,16 @@ export function HUD({ snapshot, engine }) {
         </div>
 
         {/* Center: Three Class Skill Icons with Hotkeys & Cooldown Sweeps + Ultimate Charge Ring */}
-        <div className="flex items-center gap-3 bg-[#0B0D10]/90 border-2 border-[#3A3F47] px-3.5 py-2">
+        <div className="flex flex-col items-center">
+          {snapshot.inSafeZone && (
+            <div className="text-[10px] font-bold text-[#4FD6A0] tracking-wider uppercase mb-1 flex items-center justify-center gap-1.5 bg-[#0B0D10]/95 px-2.5 py-0.5 border border-[#4FD6A0]/40 shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#4FD6A0] animate-pulse"></span>
+              SAFE ZONE · WEAPONS SHEATHED
+            </div>
+          )}
+          <div className={`flex items-center gap-3 bg-[#0B0D10]/90 border-2 px-3.5 py-2 ${
+            snapshot.inSafeZone ? 'border-[#4FD6A0]/40' : 'border-[#3A3F47]'
+          }`}>
           {skillList.map((sk) => {
             const onCd = sk.cd > 0.05;
             const cdRatio = sk.maxCd > 0 ? Math.min(1, sk.cd / sk.maxCd) : 0;
@@ -976,6 +998,7 @@ export function HUD({ snapshot, engine }) {
             </span>
           </div>
         </div>
+      </div>
 
         {/* Right: Quick Mute & Pause Affordance */}
         <div

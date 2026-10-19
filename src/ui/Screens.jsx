@@ -1015,6 +1015,13 @@ export function PauseMenu({ engine, onResume, onOpenGallery }) {
             OPTIONS
           </button>
 
+          <button
+            onClick={() => engine.setUiState('dev')}
+            className="w-full py-2.5 bg-[#25102E] border border-[#C042FF] hover:border-[#00F0FF] hover:bg-[#3B154A] text-xs font-bold text-[#ECA6FF] hover:text-[#FFFFFF] cursor-pointer transition-colors shadow-[0_0_8px_rgba(192,66,255,0.25)]"
+          >
+            DEV SETTINGS &amp; CHEATS [~]
+          </button>
+
           {onOpenGallery && (
             <button
               onClick={onOpenGallery}

@@ -123,6 +123,17 @@ export class Player {
     this.ultimateCharge = 0;
     this.ultimateActive = false;
 
+    // Developer Cheats & Tuner flags
+    this.godmode = false;
+    this.infiniteStamina = false;
+    this.noCooldowns = false;
+    this.oneHitKill = false;
+    this.speedBoost = false;
+
+    // Safe Zone State
+    this.inSafeZone = true;
+    this.safeZoneWarnTimer = 0;
+
     // Animation & Action state
     this.facingDir = 'right';
     this.facingX = 1;
@@ -373,8 +384,85 @@ export class Player {
     }
   }
 
+  setGold(val, particles = null) {
+    this.gold = Math.max(0, Math.round(val));
+    sound.playCoin?.();
+    if (particles) {
+      particles.spawnFloatingText?.(this.x, this.y - 22, `${this.gold} G`, PALETTE.brass);
+    }
+  }
+
   gainXp(val, particles = null) {
     this.gainXpAndGold(val, 0, particles);
+  }
+
+  setLevel(targetLevel, particles = null) {
+    const newLevel = Math.max(1, Math.min(PLAYER_CONFIG.levelCap || 50, Math.round(targetLevel)));
+    const diff = newLevel - this.level;
+    this.level = newLevel;
+    if (diff > 0) {
+      this.skillPoints += diff;
+    }
+    this.xp = 0;
+    this.xpToNext = PLAYER_CONFIG.xpForNextLevel(this.level);
+    this.recalculateStats(false);
+    this.hp = this.maxHp;
+    this.stamina = this.maxStamina;
+    sound.playLevelUp?.();
+    if (particles) {
+      particles.spawnShockwave?.(this.x, this.y, 85, PALETTE.brass, 0.35);
+      particles.spawnFloatingText?.(this.x, this.y - 25, `LEVEL ${this.level}!`, PALETTE.signal);
+    }
+    return this.level;
+  }
+
+  addLevel(count = 1, particles = null) {
+    return this.setLevel(this.level + count, particles);
+  }
+
+  addSkillPoints(amount = 1) {
+    this.skillPoints = Math.max(0, this.skillPoints + Math.round(amount));
+  }
+
+  setSkillPoints(amount = 0) {
+    this.skillPoints = Math.max(0, Math.round(amount));
+  }
+
+  refillHealthAndStamina() {
+    this.hp = this.maxHp;
+    this.stamina = this.maxStamina;
+    this.dead = false;
+    this.statuses.cleanseAllDebuffs?.();
+  }
+
+  unlockAllSpecializations() {
+    if (!this.unlockedClasses) this.unlockedClasses = [];
+    for (const specKey of Object.keys(SPECIALIZATIONS)) {
+      if (!this.unlockedClasses.includes(specKey)) {
+        this.unlockedClasses.push(specKey);
+      }
+    }
+    return true;
+  }
+
+  fillUltimateCharge() {
+    this.ultimateCharge = 100;
+  }
+
+  clearAllCooldowns() {
+    for (const k of Object.keys(this.cooldowns)) {
+      this.cooldowns[k] = 0;
+    }
+  }
+
+  setSuppliesMax(count = 99) {
+    this.supplies = {
+      gauzeRoll: count,
+      sugarTin: count,
+      lyeWash: count,
+      hotStew: count,
+      stimStick: count,
+    };
   }
 
   recalcStats() {
@@ -404,7 +492,31 @@ export class Player {
     return false;
   }
 
+  isInSafeZone(world = null) {
+    if (world && typeof world.getAreaAt === 'function') {
+      const area = world.getAreaAt(this.x, this.y);
+      return !!(area && area.safe);
+    }
+    const dx = this.x - WORLD_CONFIG.kettleCenter.x;
+    const dy = this.y - WORLD_CONFIG.kettleCenter.y;
+    return dx * dx + dy * dy <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius;
+  }
+
+  warnSafeZone(particles = null, message = 'SAFE ZONE — WEAPONS SHEATHED') {
+    if (this.safeZoneWarnTimer <= 0) {
+      this.safeZoneWarnTimer = 1.0;
+      sound.playError?.();
+      if (particles && typeof particles.spawnFloatingText === 'function') {
+        particles.spawnFloatingText(this.x, this.y - 24, message, PALETTE.signal);
+      }
+    }
+  }
+
   toggleGuardStance(particles = null, spawner = null, camera = null) {
+    if (this.inSafeZone || this.isInSafeZone()) {
+      this.warnSafeZone(particles, 'SAFE ZONE — COMBAT DISABLED');
+      return false;
+    }
     if (this.classId === 'sena' && this.classBehavior) {
       this.classBehavior.isGuarding = !this.classBehavior.isGuarding;
       if (particles) {
@@ -772,6 +884,13 @@ export class Player {
     this.critMult = 1.5;
     this.equipDamageReduction = equipDr;
 
+    if (this.oneHitKill) {
+      this.atk = 99999;
+    }
+    if (this.speedBoost) {
+      this.speed = Math.round(this.speed * 1.6);
+    }
+
     const prevMaxHp = this.maxHp || maxHp;
     this.maxHp = maxHp;
     this.maxStamina = maxStamina;
@@ -1033,6 +1152,10 @@ export class Player {
   // --- DELEGATED BASIC ATTACK, SKILLS 1/2/3, & ULTIMATE ---
 
   tryBasicAttack(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop) {
+    if (this.inSafeZone || this.isInSafeZone()) {
+      this.warnSafeZone(particles, 'SAFE ZONE — WEAPONS SHEATHED');
+      return false;
+    }
     if (!this.classBehavior) return false;
     if (this.classId === 'rook') {
       return this.classBehavior.tryBasicAttack(
@@ -1065,6 +1188,10 @@ export class Player {
   }
 
   trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop) {
+    if (this.inSafeZone || this.isInSafeZone()) {
+      this.warnSafeZone(particles, 'SAFE ZONE — SKILLS DISABLED');
+      return false;
+    }
     if (
       this.dead ||
       this.statuses.cannotAct() ||
@@ -1098,6 +1225,10 @@ export class Player {
   }
 
   trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop) {
+    if (this.inSafeZone || this.isInSafeZone()) {
+      this.warnSafeZone(particles, 'SAFE ZONE — SKILLS DISABLED');
+      return false;
+    }
     if (
       this.dead ||
       this.statuses.cannotAct() ||
@@ -1134,6 +1265,10 @@ export class Player {
   }
 
   trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop) {
+    if (this.inSafeZone || this.isInSafeZone()) {
+      this.warnSafeZone(particles, 'SAFE ZONE — SKILLS DISABLED');
+      return false;
+    }
     if (
       this.dead ||
       this.statuses.cannotAct() ||
@@ -1178,6 +1313,10 @@ export class Player {
   useSkillByIndex(idx, worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world, onHitStop) {
     if (idx < 0 || idx > 3) return false;
     if (this.dead || this.statuses.cannotAct() || this.ultimateActive) return false;
+    if (this.inSafeZone || this.isInSafeZone(world)) {
+      this.warnSafeZone(particles, 'SAFE ZONE — SKILLS DISABLED');
+      return false;
+    }
 
     const slotCdKey = `skill${idx + 1}`;
     if (this.cooldowns[slotCdKey] > 0.05) return false;
@@ -1377,6 +1516,10 @@ export class Player {
   }
 
   tryUltimate(worldMouseX, worldMouseY, spawner, particles, camera) {
+    if (this.inSafeZone || this.isInSafeZone()) {
+      this.warnSafeZone(particles, 'SAFE ZONE — ULTIMATE DISABLED');
+      return false;
+    }
     if (
       this.dead ||
       this.statuses.cannotAct() ||
@@ -1396,6 +1539,10 @@ export class Player {
   }
 
   useUltimate(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world, settings) {
+    if (this.inSafeZone || this.isInSafeZone(world)) {
+      this.warnSafeZone(particles, 'SAFE ZONE — ULTIMATE DISABLED');
+      return false;
+    }
     if (this.ultimates && typeof this.ultimates.tryCast === 'function') {
       return this.ultimates.tryCast(
         this,
@@ -1414,6 +1561,9 @@ export class Player {
 
   takeDamage(rawDamage, sourceX, sourceY, particles, camera, sourceEntity = null, spawner = null) {
     if (
+      this.godmode ||
+      this.inSafeZone ||
+      this.isInSafeZone() ||
       this.dead ||
       this.invulnTimer > 0 ||
       this.dodgeTimer > 0 ||
@@ -1545,8 +1695,8 @@ export class Player {
       this.y = this.clampCoord(this.y + Math.sin(kbAngle) * 6);
     }
 
-    sound.playPlayerHurt();
-    camera.shake(4, 0.14);
+    sound?.playPlayerHurt?.();
+    camera?.shake?.(4, 0.14);
 
     if (particles) {
       particles.spawnBurst(this.x, this.y, 5, PALETTE.blood, 30, 85, 2, 0.24);
@@ -1647,6 +1797,10 @@ export class Player {
     const area = world && typeof world.getAreaAt === 'function'
       ? world.getAreaAt(this.x, this.y)
       : (world && typeof world.getZoneAt === 'function' ? world.getZoneAt(this.x, this.y) : null);
+    this.inSafeZone = !!(area && area.safe) || this.isInSafeZone(world);
+    if (this.safeZoneWarnTimer > 0) {
+      this.safeZoneWarnTimer = Math.max(0, this.safeZoneWarnTimer - dt);
+    }
     if (area && !area.safe && world) {
       const tx = Math.floor(this.x / 16);
       const ty = Math.floor(this.y / 16);
@@ -1689,6 +1843,21 @@ export class Player {
 
     // Recalculate dynamic stats affected by active statuses/scrap orbit
     this.recalculateStats(false);
+
+    // Developer Cheats maintenance
+    if (this.godmode) {
+      this.hp = this.maxHp;
+      this.dead = false;
+      this.invulnTimer = Math.max(this.invulnTimer, 0.5);
+    }
+    if (this.infiniteStamina) {
+      this.stamina = this.maxStamina;
+    }
+    if (this.noCooldowns) {
+      for (const key of Object.keys(this.cooldowns)) {
+        this.cooldowns[key] = 0;
+      }
+    }
 
     // Cooldowns & timers
     for (const key of Object.keys(this.cooldowns)) {
@@ -1894,8 +2063,8 @@ export class Player {
       this.vy = 0;
     }
 
-    // 8. Basic Attack: triggered by left click or while holding left mouse
-    if (input && input.mouseDown && this.attackTimer <= 0) {
+    // 8. Basic Attack: triggered by left click or while holding left mouse (blocked in Safe Zone)
+    if (input && input.mouseDown && this.attackTimer <= 0 && !this.inSafeZone) {
       this.tryBasicAttack(
         input.worldMouseX,
         input.worldMouseY,

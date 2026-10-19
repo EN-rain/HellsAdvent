@@ -344,6 +344,10 @@ test('Executing skills deducts stamina, respects obstacles, and triggers indepen
   player.stamina = 100;
   player.cooldowns.skill1 = 0;
   player.cooldowns.skill4 = 0;
+  // Position player in combat sector (outside Kettle safe zone)
+  player.x = 1000;
+  player.y = 1000;
+  player.inSafeZone = false;
 
   // Mock engine environment
   const mockWorld = {

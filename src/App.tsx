@@ -9,6 +9,7 @@ import { HUD } from './ui/HUD.jsx';
 import { ShopModal } from './ui/ShopModal.jsx';
 import { InventoryModal } from './ui/InventoryModal.jsx';
 import { SkillPanel } from './ui/SkillPanel.jsx';
+import { DevSettingsModal } from './ui/DevSettingsModal.jsx';
 import { GalleryView } from './ui/GalleryView.jsx';
 import {
   TitleScreen,
@@ -153,6 +154,14 @@ export default function App() {
         <SkillPanel
           engine={engine}
           isHarlowMode={uiState === 'harlow'}
+          onClose={() => engine.setUiState('playing')}
+        />
+      )}
+
+      {/* Dev Cheats & Settings Modal */}
+      {!galleryOpen && uiState === 'dev' && engine && (
+        <DevSettingsModal
+          engine={engine}
           onClose={() => engine.setUiState('playing')}
         />
       )}

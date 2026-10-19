@@ -622,6 +622,16 @@ export class GameEngine {
       return;
     }
 
+    if (e.code === 'Backquote' || e.code === 'F2') {
+      e.preventDefault();
+      if (this.uiState === 'dev') {
+        this.setUiState('playing');
+      } else if (this.uiState === 'playing' || this.uiState === 'pause') {
+        this.setUiState('dev');
+      }
+      return;
+    }
+
     if (e.code === 'Escape') {
       if (this.uiState === 'playing') {
         this.setUiState('pause');
@@ -630,7 +640,8 @@ export class GameEngine {
         this.uiState === 'inventory' ||
         this.uiState === 'skills' ||
         this.uiState === 'harlow' ||
-        this.uiState === 'pause'
+        this.uiState === 'pause' ||
+        this.uiState === 'dev'
       ) {
         this.setUiState('playing');
       } else if (this.uiState === 'charSelect') {
@@ -1151,6 +1162,50 @@ export class GameEngine {
     this.notifyUi();
   }
 
+  // --- DEVELOPER CHEATS & ACTIONS ---
+
+  killAllNearbyEnemies() {
+    let killed = 0;
+    const enemies = this.spawner.getAllActiveEnemies();
+    for (const e of enemies) {
+      if (e && e.active && e.hp > 0 && e.tier !== 'boss') {
+        e.hp = 0;
+        if (typeof e.die === 'function') {
+          e.die(this.player, this.spawner, this.particles, this.camera);
+        } else {
+          e.active = false;
+        }
+        killed++;
+      }
+    }
+    this.notifyUi();
+    return killed;
+  }
+
+  killActiveBoss() {
+    const boss = this.spawner.activeBoss;
+    if (boss && boss.active && boss.hp > 0) {
+      boss.takeDamage(999999, this.player, this.particles, this.camera);
+      this.notifyUi();
+      return true;
+    }
+    return false;
+  }
+
+  teleportPlayerTo(x, y) {
+    this.player.x = Math.round(x);
+    this.player.y = Math.round(y);
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.camera.snapTo(this.player.x, this.player.y, this.world.size);
+    if (this.particles) {
+      this.particles.spawnShockwave?.(this.player.x, this.player.y, 80, PALETTE.signal, 0.3);
+      this.particles.spawnSmokePuff?.(this.player.x, this.player.y, 14);
+    }
+    sound.playSkillLunge?.();
+    this.notifyUi();
+  }
+
   getHudSnapshot() {
     const p = this.player;
     const area = this.world.getZoneAt(p.x, p.y);
@@ -1249,6 +1304,11 @@ export class GameEngine {
       xp: p.xp,
       xpToNext: p.level >= 20 ? XP_CURVE[20] : XP_CURVE[p.level + 1],
       gold: p.gold,
+      godmode: Boolean(p.godmode),
+      infiniteStamina: Boolean(p.infiniteStamina),
+      noCooldowns: Boolean(p.noCooldowns),
+      oneHitKill: Boolean(p.oneHitKill),
+      speedBoost: Boolean(p.speedBoost),
       atk: p.atk,
       def: p.def,
       speed: p.speed,
@@ -1275,6 +1335,7 @@ export class GameEngine {
       areaName: area.name,
       areaSubtitle: area.subtitle,
       areaId: area.id,
+      inSafeZone: !!(area && area.safe) || (p && p.isInSafeZone ? p.isInSafeZone(this.world) : false),
       stormActive: this.world.stormTimer > 0,
       nearUme: this.isPlayerNearUme(),
       nearHarlow: this.isPlayerNearHarlow(),

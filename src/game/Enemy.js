@@ -563,15 +563,33 @@ export class Enemy {
       }
     }
 
+    const playerInSafeZone = Boolean(
+      player && (
+        player.inSafeZone ||
+        (world && typeof world.getAreaAt === 'function' && world.getAreaAt(player.x, player.y)?.safe) ||
+        (typeof player.isInSafeZone === 'function' && player.isInSafeZone(world))
+      )
+    );
+
+    if (playerInSafeZone) {
+      if (this.telegraphActive && !this.isRitualMarcher) {
+        this.telegraphActive = false;
+        this.telegraphTimer = 0;
+      }
+      this.ratTwitchTimer = 0;
+    }
+
     const dxToPlayer = player.x - this.x;
     const dyToPlayer = player.y - this.y;
     const distToPlayer = Math.hypot(dxToPlayer, dyToPlayer) || 1;
     const dirX = dxToPlayer / distToPlayer;
     const dirY = dyToPlayer / distToPlayer;
-    this.facingX = dirX >= 0 ? 1 : -1;
+    if (!playerInSafeZone) {
+      this.facingX = dirX >= 0 ? 1 : -1;
+    }
 
-    // Sump Bat screech every 6s: Slow 25% for 2s on the player
-    if (this.id === 'sumpBat' && !this.isRitualMarcher) {
+    // Sump Bat screech every 6s: Slow 25% for 2s on the player (unaware if in safe zone)
+    if (this.id === 'sumpBat' && !this.isRitualMarcher && !playerInSafeZone) {
       this.batScreechTimer -= dt;
       if (this.batScreechTimer <= 0 && distToPlayer <= 165) {
         this.batScreechTimer = 6.0;
@@ -586,7 +604,7 @@ export class Enemy {
     }
 
     // Signal Mite (Route 9 Scout): Broadcasts observed player habits to nearby allies every 3.8s
-    if (this.id === 'signalMite' && !this.isRitualMarcher) {
+    if (this.id === 'signalMite' && !this.isRitualMarcher && !playerInSafeZone) {
       this.signalTimer -= dt;
       if (this.signalTimer <= 0 && distToPlayer <= 280) {
         this.signalTimer = 3.8;
@@ -599,6 +617,9 @@ export class Enemy {
 
     // Silt Mimic (Lye Marsh Common): Feigns collapse with a subtle twitch tell; ambushes if player steps close
     if (this.id === 'siltMimic' && this.feignedDeathTimer > 0) {
+      if (playerInSafeZone) {
+        return; // Unaware while player is in safe zone
+      }
       this.feignedDeathTimer -= dt;
       this.ratTwitchTimer = 0.1; // Visual tell
       if (distToPlayer <= 72 || this.feignedDeathTimer <= 0) {
@@ -617,7 +638,7 @@ export class Enemy {
     }
 
     // Tin Rat / Rivet Tick / Cinder Crow unique crouch/dive tells before lunge
-    if ((this.id === 'tinRat' || this.id === 'rivetTick' || this.id === 'cinderCrow') && !this.isRitualMarcher) {
+    if ((this.id === 'tinRat' || this.id === 'rivetTick' || this.id === 'cinderCrow') && !this.isRitualMarcher && !playerInSafeZone) {
       if (this.ratTwitchTimer > 0) {
         this.ratTwitchTimer -= dt;
         if (this.ratTwitchTimer <= 0 && !this.statuses.cannotMove()) {
@@ -645,8 +666,8 @@ export class Enemy {
         this.y += this.actionVy * dt;
       }
 
-      // Big Axle engine fire applies Burn along its ram path
-      if (this.id === 'bigAxle' && distToPlayer <= this.radius + player.radius + 22) {
+      // Big Axle engine fire applies Burn along its ram path (blocked in safe zone)
+      if (this.id === 'bigAxle' && !playerInSafeZone && distToPlayer <= this.radius + player.radius + 22) {
         player.statuses.apply(
           'burn',
           { duration: 3.0, sourceAtk: this.damage, sourceName: 'Big Axle Exhaust' },
@@ -655,7 +676,7 @@ export class Enemy {
         );
       }
 
-      if (distToPlayer <= this.radius + player.radius + 4) {
+      if (!playerInSafeZone && distToPlayer <= this.radius + player.radius + 4) {
         const hit = player.takeDamage(
           Math.round(this.damage * 1.3),
           this.x,
@@ -767,8 +788,8 @@ export class Enemy {
       return;
     }
 
-    // 3. Check if Elite, Fusion Mid-Boss, or Boss should start a telegraphed special attack
-    if (this.tier === 'elite' || this.tier === 'fusionBoss' || this.tier === 'boss') {
+    // 3. Check if Elite, Fusion Mid-Boss, or Boss should start a telegraphed special attack (unaware if in safe zone)
+    if ((this.tier === 'elite' || this.tier === 'fusionBoss' || this.tier === 'boss') && !playerInSafeZone) {
       const cdMult =
         this.tier === 'boss'
           ? this.phase === 3
@@ -793,8 +814,13 @@ export class Enemy {
         dirX,
         dirY,
         distToPlayer,
-        spawner
+        spawner,
+        playerInSafeZone
       );
+
+      if (playerInSafeZone && Math.abs(steered.dirX) > 0.05) {
+        this.facingX = steered.dirX >= 0 ? 1 : -1;
+      }
 
       let speedMult =
         this.statuses.getMoveSpeedMultiplier() *
@@ -841,7 +867,7 @@ export class Enemy {
       this.y += (steered.dirY * moveSpeed + sepY + convVY) * dt;
     }
 
-    if (distToPlayer <= this.radius + player.radius + 2 && this.contactCooldown <= 0) {
+    if (!playerInSafeZone && distToPlayer <= this.radius + player.radius + 2 && this.contactCooldown <= 0) {
       const hit = player.takeDamage(this.damage, this.x, this.y, particles, camera, this, spawner);
       if (hit) {
         this.contactCooldown = 0.85;

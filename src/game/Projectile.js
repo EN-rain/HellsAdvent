@@ -194,7 +194,7 @@ export class ProjectilePool {
         p.tickTimer += dt;
         if (p.tickTimer >= 1.0) {
           p.tickTimer = 0;
-          if (player && !player.dead && Math.hypot(player.x - p.x, player.y - p.y) <= p.radius + player.radius) {
+          if (player && !player.dead && !player.inSafeZone && Math.hypot(player.x - p.x, player.y - p.y) <= p.radius + player.radius) {
             player.statuses.apply(
               'corrode',
               { duration: 8.0, sourceName: 'Lye Strider Puddle' },
@@ -420,6 +420,22 @@ export class ProjectilePool {
         }
       } else {
         // Enemy projectile
+        // Fizzle out if entering Kettle Safe Zone
+        const dxKettle = proj.x - 3000;
+        const dyKettle = proj.y - 3000;
+        if (dxKettle * dxKettle + dyKettle * dyKettle <= 430 * 430) {
+          proj.active = false;
+          if (particles && typeof particles.spawnDustPuff === 'function') {
+            particles.spawnDustPuff(proj.x, proj.y, 2, 0, 0);
+          }
+          continue;
+        }
+
+        // Cannot hit player while player is in Safe Zone
+        if (player && (player.inSafeZone || (player.isInSafeZone && player.isInSafeZone()))) {
+          continue;
+        }
+
         const dx = player.x - proj.x;
         const dy = player.y - proj.y;
 

@@ -35,6 +35,7 @@ export class TacticalSystem {
 
   recordPlayerDodge(player, dodgeAngle, spawner) {
     if (!player || !spawner) return;
+    if (player.inSafeZone || (player.isInSafeZone && player.isInSafeZone())) return;
     // Only record if at least one active enemy within 420px has line of sight
     const witnesses = spawner.queryRadius(player.x, player.y, 420);
     let seen = false;
@@ -176,7 +177,7 @@ export class TacticalSystem {
    * Computes bounded tactical steering for an enemy:
    * Returns { dirX, dirY, speedMult, roleLabel }
    */
-  computeSteering(enemy, player, baseDirX, baseDirY, distToPlayer, spawner) {
+  computeSteering(enemy, player, baseDirX, baseDirY, distToPlayer, spawner, playerInSafeZone = false) {
     const navOpts = {
       isFlying: !!enemy.flying,
       isBurrowed: !!(enemy.bm && enemy.bm.subsurfaceTimer > 0) || !!enemy.isBurrowed,
@@ -201,6 +202,58 @@ export class TacticalSystem {
         dirY: steered.dirY,
         speedMult: 1.0,
         role: 'MARCH',
+      };
+    }
+
+    // Safe Zone Unawareness: Mobs cannot see or target player inside Kettle Camp
+    const isPlayerInSafe = playerInSafeZone || Boolean(player && (player.inSafeZone || (player.isInSafeZone && player.isInSafeZone())));
+    if (isPlayerInSafe && !enemy.isRitualMarcher) {
+      const cx = 3000;
+      const cy = 3000;
+      const dxK = enemy.x - cx;
+      const dyK = enemy.y - cy;
+      const dK = Math.hypot(dxK, dyK) || 1;
+      const safePerimeter = 430 + 160;
+
+      // If near Kettle Safe Zone border, gently steer outward back towards wild sector
+      if (dK < safePerimeter) {
+        const outX = dxK / dK;
+        const outY = dyK / dK;
+        const steered = obstacleManager.steerDirection(
+          enemy.x,
+          enemy.y,
+          outX,
+          outY,
+          enemy.radius,
+          navOpts
+        );
+        enemy.aiRoleState = 'UNAWARE';
+        return {
+          dirX: steered.dirX,
+          dirY: steered.dirY,
+          speedMult: 0.6,
+          role: 'UNAWARE',
+        };
+      }
+
+      // Outside safe perimeter: peaceful idle wander in wild sector
+      const wanderAngle = (enemy.uid * 1.7) + (this.clock * 0.45);
+      const wanderX = Math.cos(wanderAngle);
+      const wanderY = Math.sin(wanderAngle);
+      const steered = obstacleManager.steerDirection(
+        enemy.x,
+        enemy.y,
+        wanderX,
+        wanderY,
+        enemy.radius,
+        navOpts
+      );
+      enemy.aiRoleState = 'PATROL';
+      return {
+        dirX: steered.dirX,
+        dirY: steered.dirY,
+        speedMult: 0.35,
+        role: 'PATROL',
       };
     }
 
