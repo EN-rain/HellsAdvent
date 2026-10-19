@@ -1128,6 +1128,14 @@ export class ObstacleManager {
   }
 
   /**
+   * Returns true if point (x, y) is inside any movement-blocking obstacle footprint.
+   */
+  isPointBlocked(x, y, entityRadius = 12, options = {}) {
+    const res = this.resolveEntityCollision(x, y, entityRadius, options);
+    return res.collided;
+  }
+
+  /**
    * Checks if a projectile at (x, y) hits any obstacle with `blocksProjectile: true`.
    * Preserves Rook's intended piercing abilities when projectile.piercesObstacles is true.
    */

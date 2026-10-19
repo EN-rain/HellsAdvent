@@ -69,7 +69,7 @@ export const PLAYER_CONFIG = {
     damageTakenMult: 1.0,
     dodgeCooldownReduction: 0,
   },
-  levelCap: 30,
+  levelCap: 50,
   perLevel: {
     hp: 14,
     stamina: 3,

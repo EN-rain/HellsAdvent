@@ -29,6 +29,7 @@ import { fusionManager } from './FusionManager.js';
 import { tacticalSystem } from './TacticalAI.js';
 import { obstacleManager } from './Obstacles.js';
 import { worldLedger } from './WorldLedger.js';
+import { getAllSkillsForCharacter } from '../data/classChangeData.js';
 
 const SAVE_SLOT_PREFIX = 'gravel_sky_save_slot_';
 const LEGACY_SAVE_KEY = 'gravel_sky_save_v1';
@@ -740,6 +741,18 @@ export class GameEngine {
           this.world
         );
         break;
+      case 'Digit4':
+        this.player.useSkillByIndex(
+          3,
+          this.keys.worldMouseX,
+          this.keys.worldMouseY,
+          this.spawner,
+          this.projectiles,
+          this.particles,
+          this.camera,
+          this.world
+        );
+        break;
       case 'KeyR':
         this.player.useUltimate(
           this.keys.worldMouseX,
@@ -1145,29 +1158,57 @@ export class GameEngine {
     const nearestBoss = this.spawner.getNearestUnbeatenBoss(p.x, p.y);
     const cls = p.classConfig;
 
-    const skillList = Array.isArray(cls.skills)
-      ? cls.skills
-      : (cls.skillOrder || []).map((id) => cls.skills[id]).filter(Boolean);
+    const allSkills = getAllSkillsForCharacter(p.classId);
+    const skillMap = new Map(allSkills.map((s) => [s.id, s]));
 
-    const activeSkillDefs = skillList.map((cfg, idx) => {
-      const lv = p.skills[cfg.id] || 1;
-      const stats = cfg.getStats ? cfg.getStats(lv, p.ownedNodes) : { cooldown: cfg.cooldown || 5 };
-      return {
-        id: cfg.id,
-        hotkey: String(idx + 1),
-        name: cfg.name,
-        icon: cfg.icon,
-        level: lv,
-        maxLevel: cfg.maxLevel || 5,
-        cd: p.cooldowns[`skill${idx + 1}`] ?? p.cooldowns[cfg.id] ?? 0,
-        maxCd: p.maxCooldowns[`skill${idx + 1}`] ?? stats.cooldown ?? 5,
-        cost: p.getSkillStaminaCost(cfg.id),
+    const slots = p.skillSlots && p.skillSlots.length === 4
+      ? p.skillSlots
+      : (cls.skillOrder || []).slice(0, 4);
+
+    const activeSkillDefs = [];
+    for (let idx = 0; idx < 4; idx++) {
+      const sId = slots[idx];
+      const sk = sId ? skillMap.get(sId) : null;
+      const baseSk = cls.skills && cls.skillOrder?.[idx] ? cls.skills[cls.skillOrder[idx]] : null;
+      const resolved = sk || baseSk;
+
+      if (resolved) {
+        const lv = p.skills[resolved.id] || 1;
+        const stats = resolved.getStats ? resolved.getStats(lv, p.ownedNodes) : { cooldown: resolved.cooldown || 5 };
+        const cdKey = `skill${idx + 1}`;
+        activeSkillDefs.push({
+          id: resolved.id,
+          hotkey: String(idx + 1),
+          name: resolved.name,
+          icon: resolved.icon || 'lunge',
+          level: lv,
+          maxLevel: resolved.maxLevel || 5,
+          cd: p.cooldowns[cdKey] ?? p.cooldowns[resolved.id] ?? 0,
+          maxCd: p.maxCooldowns[cdKey] ?? stats.cooldown ?? 5,
+          cost: resolved.staminaCost || (p.getSkillStaminaCost ? p.getSkillStaminaCost(resolved.id) : 10),
+          desc: resolved.desc || '',
+          source: resolved.source || 'Original',
+        });
+      }
+    }
+
+    let activeUltDef = null;
+    if (p.ultimateSlot && skillMap.has(p.ultimateSlot)) {
+      const u = skillMap.get(p.ultimateSlot);
+      activeUltDef = {
+        id: u.id,
+        name: u.name,
+        icon: u.icon || 'sevenCuts',
+        summary: u.desc || '',
+        desc: u.desc || '',
+        chargeNeeded: 100,
       };
-    });
-
-    const activeUltDef = p.ultimates
-      ? p.ultimates.getActiveUltimateDef(p)
-      : cls.ultimate;
+    }
+    if (!activeUltDef) {
+      activeUltDef = p.ultimates
+        ? p.ultimates.getActiveUltimateDef(p)
+        : cls.ultimate;
+    }
     const maxChargeNeeded =
       activeUltDef?.chargeNeeded || (p.hasNode('nineCuts') ? 85 : 100);
 
@@ -1177,6 +1218,15 @@ export class GameEngine {
       scanlinesEnabled: this.scanlinesEnabled,
       settings: { ...this.settings },
       classId: p.classId,
+      activeClassId: p.activeClassId,
+      unlockedClasses: p.unlockedClasses || [p.activeClassId],
+      skillSlots: p.skillSlots,
+      ultimateSlot: p.ultimateSlot,
+      loadoutPresets: p.loadoutPresets,
+      treeNodes: p.treeNodes,
+      treePoints: p.getAvailableTreePoints ? p.getAvailableTreePoints() : 8,
+      intrinsicTrait: p.getIntrinsicTrait ? p.getIntrinsicTrait() : null,
+      classTrait: p.getClassTrait ? p.getClassTrait() : null,
       characterName: cls.characterName,
       className: cls.className,
       classTitle: worldLedger.equippedCosmeticTitle || p.getTitle(),

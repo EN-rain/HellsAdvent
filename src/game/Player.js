@@ -33,6 +33,16 @@ import { sound } from './Audio.js';
 import { UltimateSequencer } from './Ultimates.js';
 import { obstacleManager } from './Obstacles.js';
 import { tacticalSystem } from './TacticalAI.js';
+import {
+  CHARACTERS,
+  SPECIALIZATIONS,
+  getAllSkillsForCharacter,
+  getLearnedSkillsForCharacter,
+  getDefaultSkillSlots,
+  getDefaultPresets,
+  getIntrinsicTraitRank,
+  getClassTraitRank,
+} from '../data/classChangeData.js';
 
 export class Player {
   constructor(classId = 'sena') {
@@ -94,17 +104,19 @@ export class Player {
     this.equipDamageReduction = 0;
     this.dodgeCooldownMax = PLAYER_CONFIG.dodge.cooldown;
 
-    // Cooldowns (keyed by skill1, skill2, skill3, dodge + legacy aliases)
+    // Cooldowns (keyed by skill1, skill2, skill3, skill4, dodge + legacy aliases)
     this.cooldowns = {
       skill1: 0,
       skill2: 0,
       skill3: 0,
+      skill4: 0,
       dodge: 0,
     };
     this.maxCooldowns = {
       skill1: 5.0,
       skill2: 9.0,
       skill3: 6.0,
+      skill4: 8.0,
       dodge: 1.2,
     };
 
@@ -180,6 +192,16 @@ export class Player {
     this.classBehavior = null;
     this.sprites = null;
     this.ultimates = new UltimateSequencer();
+
+    // 15 Specializations & Multi-Class Loadout System (v4.1)
+    const normalizedClassId = (classId || 'sena').toLowerCase();
+    this.activeClassId = CHARACTERS[normalizedClassId]?.startingClass || 'phantomEdge';
+    this.unlockedClasses = [this.activeClassId];
+    this.skillSlots = getDefaultSkillSlots(normalizedClassId);
+    this.ultimateSlot = CHARACTERS[normalizedClassId]?.ultimate?.id || null;
+    this.loadoutPresets = getDefaultPresets(normalizedClassId);
+    this.treeNodes = {};
+
     this._initClassData(classId, 1, null, true);
   }
 
@@ -404,9 +426,203 @@ export class Player {
     return false;
   }
 
+  // --- CLASS CHANGE & LOADOUT SYSTEM (v4.1) ---
+
+  switchClass(newClassId) {
+    if (!newClassId) return { success: false, reason: 'Invalid class ID' };
+    const spec = SPECIALIZATIONS[newClassId];
+    if (!spec) return { success: false, reason: 'Specialization not found' };
+
+    // Auto-unlock if not already in unlocked list
+    if (!this.unlockedClasses.includes(newClassId)) {
+      this.unlockedClasses.push(newClassId);
+    }
+
+    // Switch active specialization ID
+    this.activeClassId = newClassId;
+
+    // CRITICAL BRAINSTORM RULING:
+    // Character level and XP ALWAYS persist on class change (never reset to Lv 1).
+    // Gold, stats, inventory, and world progress remain intact.
+
+    // Refresh stats without altering character level or XP
+    this.recalculateStats(false);
+    return { success: true, activeClassId: this.activeClassId };
+  }
+
+  unlockClass(classId) {
+    if (!classId) return false;
+    if (!this.unlockedClasses.includes(classId)) {
+      this.unlockedClasses.push(classId);
+    }
+    return true;
+  }
+
+  assignSkillSlot(slotIdx, skillId) {
+    if (slotIdx < 0 || slotIdx > 4) return { success: false, reason: 'Invalid slot index' };
+
+    if (!skillId) {
+      if (slotIdx === 4) {
+        this.ultimateSlot = null;
+      } else {
+        this.skillSlots[slotIdx] = null;
+      }
+      return { success: true };
+    }
+
+    const allSkills = getAllSkillsForCharacter(this.classId);
+    const sk = allSkills.find((s) => s.id === skillId);
+    if (!sk) return { success: false, reason: 'Skill not found' };
+
+    const isUltimate = sk.type === 'ultimate' || sk.ultimate === true;
+
+    // Slot 4 is dedicated ultimate slot [R]
+    if (slotIdx === 4) {
+      if (!isUltimate) {
+        return { success: false, reason: 'Only ultimates can be assigned to [R]' };
+      }
+      this.ultimateSlot = skillId;
+      return { success: true };
+    }
+
+    // Slots 0..3 are active skills (1..4)
+    if (isUltimate) {
+      return { success: false, reason: 'Ultimates can only be assigned to [R]' };
+    }
+
+    // Check level & unlock requirement
+    if (sk.source !== 'Original') {
+      if (sk.classKey && !this.unlockedClasses.includes(sk.classKey)) {
+        return { success: false, reason: 'Class is locked' };
+      }
+      if (this.level < (sk.level || 15)) {
+        return { success: false, reason: 'Level requirement not met' };
+      }
+    }
+
+    // If skill is already assigned to another slot in active 0..3, swap them
+    const existingIdx = this.skillSlots.indexOf(skillId);
+    if (existingIdx !== -1 && existingIdx !== slotIdx) {
+      const prevInCurrentSlot = this.skillSlots[slotIdx];
+      this.skillSlots[existingIdx] = prevInCurrentSlot;
+    }
+    this.skillSlots[slotIdx] = skillId;
+    return { success: true };
+  }
+
+  savePreset(target) {
+    const payload = {
+      classId: this.activeClassId,
+      slots: [...this.skillSlots],
+      ultimate: this.ultimateSlot,
+    };
+
+    if (typeof target === 'number' && this.loadoutPresets[target]) {
+      this.loadoutPresets[target].classId = payload.classId;
+      this.loadoutPresets[target].slots = [...payload.slots];
+      this.loadoutPresets[target].ultimate = payload.ultimate;
+    } else if (Array.isArray(this.loadoutPresets)) {
+      let p = this.loadoutPresets.find((x) => x.name === target);
+      if (!p) {
+        p = { name: target, ...payload };
+        this.loadoutPresets.push(p);
+      } else {
+        p.classId = payload.classId;
+        p.slots = [...payload.slots];
+        p.ultimate = payload.ultimate;
+      }
+      this.loadoutPresets[target] = p;
+    } else if (this.loadoutPresets && typeof this.loadoutPresets === 'object') {
+      this.loadoutPresets[target] = { name: target, ...payload };
+    }
+    return { success: true };
+  }
+
+  loadPreset(target) {
+    let preset = null;
+    if (typeof target === 'number') {
+      preset = this.loadoutPresets[target];
+    } else if (Array.isArray(this.loadoutPresets)) {
+      preset = this.loadoutPresets.find((p) => p.name === target) || this.loadoutPresets[target];
+    } else if (this.loadoutPresets && typeof this.loadoutPresets === 'object') {
+      preset = this.loadoutPresets[target];
+    }
+
+    if (!preset) return { success: false, reason: 'Preset not found' };
+
+    if (Array.isArray(preset.slots)) {
+      this.skillSlots = [...preset.slots];
+    }
+    if (preset.ultimate) {
+      this.ultimateSlot = preset.ultimate;
+    }
+    if (preset.classId && this.unlockedClasses.includes(preset.classId)) {
+      this.switchClass(preset.classId);
+    }
+    return { success: true };
+  }
+
+  investTreeNode(skillId, choice) {
+    if (!skillId) return { success: false, reason: 'Invalid skill ID' };
+    if (!this.treeNodes) this.treeNodes = {};
+
+    // If already invested in this skill node, switching fork is free
+    if (this.treeNodes[skillId]) {
+      this.treeNodes[skillId] = choice;
+      return { success: true, switched: true };
+    }
+
+    // New node investment requires an available tree point
+    if (this.getAvailableTreePoints() <= 0) {
+      return { success: false, reason: 'No available skill tree points' };
+    }
+
+    this.treeNodes[skillId] = choice;
+    return { success: true, invested: true };
+  }
+
+  respecTree() {
+    this.treeNodes = {};
+    return { success: true };
+  }
+
+  getAvailableTreePoints() {
+    const totalPoints = Math.max(0, this.level - 1);
+    const spent = Object.keys(this.treeNodes || {}).length;
+    return Math.max(0, totalPoints - spent);
+  }
+
+  getIntrinsicTrait() {
+    const trait = getIntrinsicTraitRank(this.classId, this.level);
+    if (!trait) return null;
+    const roman = ['I', 'II', 'III', 'IV'][trait.rank - 1] || 'I';
+    return {
+      ...trait,
+      roman,
+      rankDesc: trait.text,
+    };
+  }
+
+  getClassTrait() {
+    const trait = getClassTraitRank(this.activeClassId, this.level);
+    if (!trait) return null;
+    const roman = ['I', 'II', 'III'][trait.rank - 1] || 'I';
+    return {
+      ...trait,
+      roman,
+      rankDesc: trait.text,
+    };
+  }
+
   toJSON() {
     return {
       classId: this.classId,
+      activeClassId: this.activeClassId,
+      unlockedClasses: [...(this.unlockedClasses || [this.activeClassId])],
+      skillSlots: [...(this.skillSlots || getDefaultSkillSlots(this.classId))],
+      ultimateSlot: this.ultimateSlot,
+      loadoutPresets: JSON.parse(JSON.stringify(this.loadoutPresets || getDefaultPresets(this.classId))),
+      treeNodes: { ...(this.treeNodes || {}) },
       stage: this.stage,
       branch: this.branch,
       level: this.level,
@@ -426,6 +642,20 @@ export class Player {
   fromJSON(data) {
     if (!data) return;
     this.classId = data.classId || 'sena';
+    const normalizedClassId = this.classId.toLowerCase();
+    this.activeClassId = data.activeClassId || CHARACTERS[normalizedClassId]?.startingClass || 'phantomEdge';
+    this.unlockedClasses = Array.isArray(data.unlockedClasses) && data.unlockedClasses.length
+      ? [...data.unlockedClasses]
+      : [this.activeClassId];
+    this.skillSlots = Array.isArray(data.skillSlots) && data.skillSlots.length === 4
+      ? [...data.skillSlots]
+      : getDefaultSkillSlots(normalizedClassId);
+    this.ultimateSlot = data.ultimateSlot || CHARACTERS[normalizedClassId]?.ultimate?.id || null;
+    this.loadoutPresets = Array.isArray(data.loadoutPresets) && data.loadoutPresets.length
+      ? JSON.parse(JSON.stringify(data.loadoutPresets))
+      : getDefaultPresets(normalizedClassId);
+    this.treeNodes = data.treeNodes ? { ...data.treeNodes } : {};
+
     this.stage = data.stage || 1;
     this.branch = data.branch || null;
     this.level = data.level || 1;
@@ -946,16 +1176,204 @@ export class Player {
   }
 
   useSkillByIndex(idx, worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world, onHitStop) {
-    if (idx === 0) {
+    if (idx < 0 || idx > 3) return false;
+    if (this.dead || this.statuses.cannotAct() || this.ultimateActive) return false;
+
+    const slotCdKey = `skill${idx + 1}`;
+    if (this.cooldowns[slotCdKey] > 0.05) return false;
+
+    const skillId = this.skillSlots ? this.skillSlots[idx] : null;
+    if (!skillId) {
+      if (idx === 0) return this.trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+      if (idx === 1) return this.trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+      if (idx === 2) return this.trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+      return false;
+    }
+
+    return this.executeSkillById(skillId, idx, worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world, onHitStop);
+  }
+
+  executeSkillById(skillId, slotIdx, worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world, onHitStop) {
+    if (this.dead || this.statuses.cannotAct() || this.ultimateActive) return false;
+
+    // Direct dispatches for original baseline skills
+    if (skillId.includes(':base:lunge')) {
       return this.trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
     }
-    if (idx === 1) {
+    if (skillId.includes(':base:ground-break')) {
       return this.trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
     }
-    if (idx === 2) {
+    if (skillId.includes(':base:rail-parry')) {
       return this.trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
     }
-    return false;
+    if (skillId.includes(':base:rivet-spread')) {
+      return this.trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:kickback')) {
+      return this.trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:rapid-fire')) {
+      return this.trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:pull')) {
+      return this.trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:spin-up')) {
+      return this.trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:lump')) {
+      return this.trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:naphtha-jet')) {
+      return this.trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:caustic-mortar')) {
+      return this.trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:vent-supernova')) {
+      return this.trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:tesla-pylon')) {
+      return this.trySkill1(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:seeker-swarm')) {
+      return this.trySkill2(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+    if (skillId.includes(':base:phase-blink')) {
+      return this.trySkill3(worldMouseX, worldMouseY, spawner, projectiles, particles, camera, onHitStop);
+    }
+
+    // Active Specialization Skills execution
+    const allSkills = getAllSkillsForCharacter(this.classId);
+    const skillDef = allSkills.find((s) => s.id === skillId);
+    const staminaCost = skillDef?.staminaCost || 10;
+    if (this.stamina < staminaCost) return false;
+
+    const cdKey = `skill${slotIdx + 1}`;
+    if (this.cooldowns[cdKey] > 0.05) return false;
+
+    this.stamina -= staminaCost;
+    const maxCd = skillDef?.cooldown || 6.0;
+    this.cooldowns[cdKey] = maxCd;
+    this.maxCooldowns[cdKey] = maxCd;
+
+    const dx = worldMouseX - this.x;
+    const dy = worldMouseY - this.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const angle = Math.atan2(dy, dx);
+
+    this.facingX = Math.cos(angle) >= 0 ? 1 : -1;
+    this.facingDir = angleTo4Facing(angle);
+
+    sound.playHitMelee?.();
+
+    const atkDmg = this.atk;
+    const skillName = (skillDef?.name || '').toLowerCase();
+
+    // Dash / Movement skills
+    if (
+      skillName.includes('pin') ||
+      skillName.includes('step') ||
+      skillName.includes('surf') ||
+      skillName.includes('dive') ||
+      skillName.includes('kick') ||
+      skillName.includes('northbound') ||
+      skillName.includes('harpoon')
+    ) {
+      const travelDist = Math.min(dist, 160);
+      const targetX = this.x + Math.cos(angle) * travelDist;
+      const targetY = this.y + Math.sin(angle) * travelDist;
+      const isBlocked = typeof obstacleManager?.isPointBlocked === 'function' && obstacleManager.isPointBlocked(targetX, targetY);
+      if (!isBlocked) {
+        this.x = targetX;
+        this.y = targetY;
+      }
+      if (particles) {
+        particles.spawnSlashArc(this.x, this.y, angle, 45, PALETTE.signal, 0.2);
+        particles.spawnShockwave(this.x, this.y, 65, PALETTE.signal, 0.25);
+      }
+      if (spawner && typeof spawner.queryRadius === 'function') {
+        const enemies = spawner.queryRadius(this.x, this.y, 75);
+        for (const e of enemies) {
+          if (e && e.active && e.hp > 0) {
+            e.takeDamage(Math.round(atkDmg * 2.0), angle, 90, false, this, spawner, particles, camera);
+          }
+        }
+        if (spawner.activeBoss && spawner.activeBoss.active) {
+          const bDist = Math.hypot(spawner.activeBoss.x - this.x, spawner.activeBoss.y - this.y);
+          if (bDist <= 85) {
+            spawner.activeBoss.takeDamage(Math.round(atkDmg * 2.0), this, particles, camera);
+          }
+        }
+      }
+      return true;
+    }
+
+    // Ground AoE / Mortar / Stomp / Cloud / Press skills
+    if (
+      skillName.includes('stomp') ||
+      skillName.includes('mortar') ||
+      skillName.includes('crush') ||
+      skillName.includes('press') ||
+      skillName.includes('canister') ||
+      skillName.includes('hand') ||
+      skillName.includes('cloud') ||
+      skillName.includes('storm') ||
+      skillName.includes('grid') ||
+      skillName.includes('coffin')
+    ) {
+      const impactDist = Math.min(dist, 180);
+      const impactX = this.x + Math.cos(angle) * impactDist;
+      const impactY = this.y + Math.sin(angle) * impactDist;
+
+      if (particles) {
+        particles.spawnTelegraphCircle(impactX, impactY, 75, 0.35, PALETTE.brass);
+        setTimeout(() => {
+          if (particles) {
+            particles.spawnShockwave(impactX, impactY, 90, PALETTE.rust, 0.35);
+            particles.spawnSmokePuff(impactX, impactY, 12);
+          }
+          if (spawner && typeof spawner.queryRadius === 'function') {
+            const enemies = spawner.queryRadius(impactX, impactY, 90);
+            for (const e of enemies) {
+              if (e && e.active && e.hp > 0) {
+                e.takeDamage(Math.round(atkDmg * 2.2), angle, 110, false, this, spawner, particles, camera);
+              }
+            }
+            if (spawner.activeBoss && spawner.activeBoss.active) {
+              const bDist = Math.hypot(spawner.activeBoss.x - impactX, spawner.activeBoss.y - impactY);
+              if (bDist <= 100) {
+                spawner.activeBoss.takeDamage(Math.round(atkDmg * 2.2), this, particles, camera);
+              }
+            }
+          }
+          if (camera) camera.shake(3.5, 0.15);
+        }, 150);
+      }
+      return true;
+    }
+
+    // Cone / Cleave / Beam / Projectile skills
+    if (particles) {
+      particles.spawnSlashArc(this.x, this.y, angle, 65, PALETTE.bone, 0.25);
+      particles.spawnShockwave(this.x + Math.cos(angle) * 40, this.y + Math.sin(angle) * 40, 50, PALETTE.signal, 0.2);
+    }
+    if (spawner && typeof spawner.queryRadius === 'function') {
+      const enemies = spawner.queryRadius(this.x + Math.cos(angle) * 50, this.y + Math.sin(angle) * 50, 95);
+      for (const e of enemies) {
+        if (e && e.active && e.hp > 0) {
+          e.takeDamage(Math.round(atkDmg * 1.8), angle, 95, false, this, spawner, particles, camera);
+        }
+      }
+      if (spawner.activeBoss && spawner.activeBoss.active) {
+        const bDist = Math.hypot(spawner.activeBoss.x - this.x, spawner.activeBoss.y - this.y);
+        if (bDist <= 110) {
+          spawner.activeBoss.takeDamage(Math.round(atkDmg * 1.8), this, particles, camera);
+        }
+      }
+    }
+    if (camera) camera.shake(2.5, 0.12);
+    return true;
   }
 
   tryUltimate(worldMouseX, worldMouseY, spawner, particles, camera) {

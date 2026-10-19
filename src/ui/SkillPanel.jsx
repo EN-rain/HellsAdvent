@@ -1,28 +1,163 @@
 import React, { useState } from 'react';
-import { DIALOGUE, ENEMIES_CONFIG } from '../data/config.js';
-import { SUGGESTED_BOSS_ORDER, KETTLE_ACHIEVEMENTS } from '../data/expansionConfig.js';
+import { DIALOGUE, PALETTE } from '../data/config.js';
 import { worldLedger } from '../game/WorldLedger.js';
-import { CharacterPortrait, PixelIcon, StatusIcon } from './PixelWidgets.jsx';
+import { CharacterPortrait, PixelIcon } from './PixelWidgets.jsx';
+import {
+  CHARACTERS,
+  SPECIALIZATIONS,
+  getAllSkillsForCharacter,
+  getLearnedSkillsForCharacter,
+  getDefaultSkillSlots,
+  getDefaultPresets,
+} from '../data/classChangeData.js';
 
 export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
   const [, setTick] = useState(0);
+  const [activeTab, setActiveTab] = useState('loadout'); // 'loadout' | 'tree' | 'traits'
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all'); // 'all' | 'base' | 'new' | 'ult'
+  const [selectedSkillId, setSelectedSkillId] = useState(null);
+  const [draggedSkillId, setDraggedSkillId] = useState(null);
+  const [toastMessage, setToastMessage] = useState('');
+
   const p = engine.player;
-  const cls = p.classConfig;
-  const accent = cls.accentColor;
+  const chDef = CHARACTERS[p.classId] || CHARACTERS.sena;
+  const currentSpec = SPECIALIZATIONS[p.activeClassId] || SPECIALIZATIONS[chDef.startingClass] || Object.values(SPECIALIZATIONS)[0];
+  const accent = chDef.color || PALETTE.signal;
 
   const forceRefresh = () => setTick((t) => t + 1);
 
-  const canJourneyman = p.canPromoteToJourneyman();
-  const canMaster = p.canPromoteToMaster();
-  const inKettleOrHarlow = isHarlowMode || engine.isPlayerNearHarlow() || engine.world.isInsideKettle(p.x, p.y);
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(''), 3000);
+  };
 
-  const branchEntries = Object.values(cls.branches);
+  // Ensure arrays exist
+  if (!p.skillSlots || p.skillSlots.length !== 4) {
+    p.skillSlots = getDefaultSkillSlots(p.classId);
+  }
+  if (!p.unlockedClasses || p.unlockedClasses.length === 0) {
+    p.unlockedClasses = [p.activeClassId || chDef.startingClass];
+  }
+  if (!p.loadoutPresets || p.loadoutPresets.length !== 3) {
+    p.loadoutPresets = getDefaultPresets(p.classId);
+  }
+  if (!p.treeNodes) {
+    p.treeNodes = {};
+  }
+
+  const allSkills = getAllSkillsForCharacter(p.classId);
+  const learnedSkills = getLearnedSkillsForCharacter(p.classId, p.level, p.unlockedClasses);
+
+  // Filter library skills
+  const filteredLibrary = learnedSkills.filter((sk) => {
+    const matchesSearch =
+      sk.name.toLowerCase().includes(search.toLowerCase()) ||
+      sk.source.toLowerCase().includes(search.toLowerCase()) ||
+      (sk.desc || '').toLowerCase().includes(search.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (filter === 'base') return sk.source === 'Original';
+    if (filter === 'new') return sk.source !== 'Original';
+    if (filter === 'ult') return sk.type === 'ultimate';
+    return true;
+  });
+
+  // Assign or Swap slot
+  const handleSlotClick = (slotIdx) => {
+    if (selectedSkillId) {
+      const ok = p.assignSkillSlot(slotIdx, selectedSkillId);
+      if (ok) {
+        showToast(`Equipped to slot ${slotIdx === 4 ? '[R]' : `[${slotIdx + 1}]`}. No cross-class combos created.`);
+        engine.saveProgress();
+      } else {
+        showToast(slotIdx === 4 ? 'Only ultimates can be assigned to [R].' : 'Ultimates can only be assigned to [R].');
+      }
+      setSelectedSkillId(null);
+      forceRefresh();
+      return;
+    }
+
+    // If clicking an existing filled slot without selection, select it for moving/swapping
+    const curSkillId = slotIdx === 4 ? p.ultimateSlot : p.skillSlots[slotIdx];
+    if (curSkillId) {
+      setSelectedSkillId(curSkillId);
+      showToast('Selected. Click another slot to swap or assign.');
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (e, skillId) => {
+    setDraggedSkillId(skillId);
+    e.dataTransfer.setData('text/plain', skillId);
+  };
+
+  const handleDrop = (e, slotIdx) => {
+    e.preventDefault();
+    const skillId = draggedSkillId || e.dataTransfer.getData('text/plain');
+    if (!skillId) return;
+
+    const ok = p.assignSkillSlot(slotIdx, skillId);
+    if (ok) {
+      showToast(`Assigned to slot ${slotIdx === 4 ? '[R]' : `[${slotIdx + 1}]`}.`);
+      engine.saveProgress();
+    } else {
+      showToast(slotIdx === 4 ? 'Only ultimates can be placed in [R].' : 'Ultimates can only be placed in [R].');
+    }
+    setDraggedSkillId(null);
+    setSelectedSkillId(null);
+    forceRefresh();
+  };
+
+  // Class switching
+  const handleSwitchClass = (newClassId) => {
+    const ok = p.switchClass(newClassId);
+    if (ok) {
+      showToast(`Class switched to ${SPECIALIZATIONS[newClassId]?.name}. Character level (${p.level}) and XP retained!`);
+      engine.saveProgress();
+      forceRefresh();
+    }
+  };
+
+  // Presets
+  const handleSavePreset = (idx) => {
+    p.savePreset(idx);
+    showToast(`Saved preset "${p.loadoutPresets[idx].name}".`);
+    engine.saveProgress();
+    forceRefresh();
+  };
+
+  const handleLoadPreset = (idx) => {
+    p.loadPreset(idx);
+    showToast(`Loaded preset "${p.loadoutPresets[idx].name}".`);
+    engine.saveProgress();
+    forceRefresh();
+  };
+
+  // Respec
+  const handleRespec = () => {
+    p.respecTree();
+    showToast('Tree points refunded for active class! Learned skills, level, and XP remain intact.');
+    engine.saveProgress();
+    forceRefresh();
+  };
+
+  // Tree variant toggle
+  const handleTreeChoice = (nodeKey, choiceIdx) => {
+    p.investTreeNode(nodeKey, choiceIdx);
+    engine.saveProgress();
+    forceRefresh();
+  };
+
+  // Intrinsic & Class Trait
+  const intrinsicTrait = p.getIntrinsicTrait();
+  const classTrait = p.getClassTrait();
 
   return (
-    <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/90 p-4 select-none">
-      <div className="w-full max-w-6xl bg-[#0B0D10] border-2 border-[#3A3F47] flex flex-col max-h-[92vh] overflow-y-auto">
-        {/* TOP BAR: Portrait, Name, Title & Stage, Available Skill Points */}
-        <div className="flex items-center justify-between border-b-2 border-[#3A3F47] px-4 py-2.5 bg-[#161A20]">
+    <div className="fixed inset-0 z-30 flex items-center justify-center bg-[#0B0D10]/95 p-3 select-none">
+      <div className="w-full max-w-6xl bg-[#0F151B] border-2 border-[#3A3F47] flex flex-col max-h-[94vh] shadow-2xl">
+        {/* TOP HEADER: Branding, Character Level (Permanent), XP, Points */}
+        <div className="flex flex-wrap items-center justify-between border-b-2 border-[#3A3F47] px-4 py-3 bg-[#121920]">
           <div className="flex items-center gap-3">
             <CharacterPortrait
               classId={p.classId}
@@ -34,683 +169,704 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
             />
             <div>
               <div className="flex items-center gap-2">
-                <h2
-                  className="text-sm font-bold tracking-wider uppercase"
-                  style={{ color: accent }}
+                <span className="text-base font-extrabold tracking-wider text-[#E3E8E5]">
+                  HELLS<span style={{ color: accent }}>ADVENT</span>
+                </span>
+                <span className="text-xs text-[#9BA7AF]">/ SKILL ARCHIVE</span>
+                <span
+                  className="px-2 py-0.5 text-xs font-bold bg-[#0B0D10] border"
+                  style={{ borderColor: accent, color: accent }}
                 >
-                  {p.getFullTitleLine()}
-                </h2>
-                <span className="text-xs text-[#9E9789]">
-                  · LV {p.level} {cls.className.toUpperCase()}
+                  {chDef.name.toUpperCase()} · {currentSpec.name.toUpperCase()}
                 </span>
               </div>
-              <p className="text-[11px] text-[#9E9789]">
-                {cls.mechanic.name}: {cls.mechanic.desc}
+              <p className="text-[11px] text-[#9BA7AF] mt-0.5">
+                {currentSpec.concept}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div
-              className="px-3 py-1 bg-[#0B0D10] border text-xs font-bold tabular-nums"
-              style={{ borderColor: accent, color: accent }}
-            >
-              SKILL POINTS: {p.skillPoints}
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-[10px] text-[#9BA7AF] font-bold tracking-wider">
+                CHARACTER LEVEL — ALWAYS RETAINED
+              </div>
+              <div className="text-lg font-black tabular-nums" style={{ color: accent }}>
+                LV {p.level}{' '}
+                <span className="text-xs text-[#9BA7AF] font-normal">
+                  ({p.xp.toLocaleString()} XP)
+                </span>
+              </div>
             </div>
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 bg-[#0B0D10] border border-[#3A3F47] hover:border-[#00F0FF] text-xs font-bold text-[#D9D2C3] cursor-pointer"
-            >
-              [ESC / K] CLOSE
-            </button>
+
+            <div className="flex items-center gap-2">
+              <div
+                className="px-2.5 py-1 bg-[#0B0D10] border text-xs font-bold tabular-nums"
+                style={{ borderColor: accent, color: accent }}
+              >
+                TREE POINTS: {p.getAvailableTreePoints()}/8
+              </div>
+              <button
+                onClick={onClose}
+                className="px-3 py-1.5 bg-[#19232D] border border-[#34404B] hover:border-[#00F0FF] text-xs font-bold text-[#E3E8E5] cursor-pointer"
+              >
+                [ESC / K] CLOSE
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* HARLOW'S TRADE REGISTER PROMOTION BANNER (Shown when eligible or at Harlow) */}
-        {(canJourneyman || canMaster || isHarlowMode) && (
-          <div className="border-b-2 border-[#FFC83D] bg-[#161A20] px-4 py-2.5">
-            {canJourneyman ? (
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-bold text-[#FFC83D] tracking-wider uppercase">
-                    HARLOW&apos;S TRADE REGISTER · JOURNEYMAN PROMOTION (LV 8 · +1 SP)
-                  </div>
-                  <p className="text-xs text-[#D9D2C3] mt-0.5 italic">
-                    &ldquo;{DIALOGUE.harlowJourneyman}&rdquo;
-                  </p>
+        {/* CONTROLS STRIP: Class Selector & Switcher */}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2 border-b border-[#34404B] bg-[#11171E]">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-[#9BA7AF] uppercase">
+              Specialization:
+            </span>
+            <div className="flex items-center gap-1.5">
+              {chDef.classes.map((clsKey) => {
+                const spec = SPECIALIZATIONS[clsKey];
+                const isActive = p.activeClassId === clsKey;
+                const isUnlocked = (p.unlockedClasses || []).includes(clsKey) || p.level >= 15;
+
+                return (
+                  <button
+                    key={clsKey}
+                    onClick={() => handleSwitchClass(clsKey)}
+                    className={`px-3 py-1 text-xs font-bold border transition-colors cursor-pointer ${
+                      isActive
+                        ? 'bg-[#1C303B] border-[#00F0FF] text-[#00F0FF]'
+                        : isUnlocked
+                        ? 'bg-[#19232D] border-[#34404B] text-[#E3E8E5] hover:border-[#00F0FF]'
+                        : 'bg-[#0B0D10] border-[#34404B] text-[#52616A] cursor-not-allowed'
+                    }`}
+                    title={spec.concept}
+                  >
+                    {spec.name} {isActive ? '✓' : !isUnlocked ? '🔒 (Lv 15)' : ''}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="text-[11px] text-[#9BA7AF] italic">
+            Switching class preserves character level, XP, inventory, and learned skills.
+          </div>
+        </div>
+
+        {/* TABS NAVIGATION */}
+        <div className="flex border-b border-[#34404B] bg-[#111820]">
+          <button
+            onClick={() => setActiveTab('loadout')}
+            className={`flex-1 py-2 text-xs font-extrabold tracking-wider border-r border-[#34404B] cursor-pointer transition-colors ${
+              activeTab === 'loadout'
+                ? 'bg-[#1A333E] text-[#00F0FF] border-b-2 border-b-[#00F0FF]'
+                : 'text-[#9BA7AF] hover:text-[#E3E8E5] hover:bg-[#16222B]'
+            }`}
+          >
+            INTERACTIVE LOADOUT &amp; PRESETS
+          </button>
+          <button
+            onClick={() => setActiveTab('tree')}
+            className={`flex-1 py-2 text-xs font-extrabold tracking-wider border-r border-[#34404B] cursor-pointer transition-colors ${
+              activeTab === 'tree'
+                ? 'bg-[#1A333E] text-[#00F0FF] border-b-2 border-b-[#00F0FF]'
+                : 'text-[#9BA7AF] hover:text-[#E3E8E5] hover:bg-[#16222B]'
+            }`}
+          >
+            BRANCHING SPECIALIZATION TREE
+          </button>
+          <button
+            onClick={() => setActiveTab('traits')}
+            className={`flex-1 py-2 text-xs font-extrabold tracking-wider cursor-pointer transition-colors ${
+              activeTab === 'traits'
+                ? 'bg-[#1A333E] text-[#00F0FF] border-b-2 border-b-[#00F0FF]'
+                : 'text-[#9BA7AF] hover:text-[#E3E8E5] hover:bg-[#16222B]'
+            }`}
+          >
+            AUTO-EVOLVING TRAITS
+          </button>
+        </div>
+
+        {/* TAB CONTENTS */}
+        <div className="p-4 overflow-y-auto flex-1">
+          {/* TAB 1: LOADOUT */}
+          {activeTab === 'loadout' && (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {/* Left Column: Learned Skills Library (5 cols) */}
+              <div className="lg:col-span-5 bg-[#121B22] border border-[#34404B] p-3 flex flex-col max-h-[580px]">
+                <div className="flex items-center justify-between pb-2 border-b border-[#34404B]">
+                  <span className="text-xs font-extrabold text-[#E3E8E5] tracking-wider uppercase">
+                    Learned Skill Library
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 bg-[#0B0D10] text-[#00F0FF] border border-[#00F0FF]/40">
+                    {learnedSkills.length} LEARNED
+                  </span>
                 </div>
-                {inKettleOrHarlow ? (
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    {branchEntries.map((br) => (
+
+                {/* Search & Filters */}
+                <div className="my-2.5 space-y-2">
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search learned skills..."
+                    className="w-full px-2.5 py-1.5 bg-[#0C131A] border border-[#34404B] text-xs text-[#E3E8E5] focus:outline-none focus:border-[#00F0FF]"
+                  />
+                  <div className="flex gap-1">
+                    {[
+                      { id: 'all', label: 'All' },
+                      { id: 'base', label: 'Original' },
+                      { id: 'new', label: 'Class' },
+                      { id: 'ult', label: 'Ultimates' },
+                    ].map((btn) => (
                       <button
-                        key={br.id}
-                        onClick={() => {
-                          engine.promoteToJourneyman(br.id);
-                          forceRefresh();
-                        }}
-                        className="px-3.5 py-2 bg-[#0B0D10] border-2 border-[#FFC83D] hover:bg-[#FFC83D] hover:text-[#0B0D10] text-xs font-bold text-[#FFC83D] transition-colors cursor-pointer"
+                        key={btn.id}
+                        onClick={() => setFilter(btn.id)}
+                        className={`flex-1 py-1 text-[10px] font-bold border cursor-pointer ${
+                          filter === btn.id
+                            ? 'bg-[#1C303B] border-[#00F0FF] text-[#00F0FF]'
+                            : 'bg-[#19232D] border-[#34404B] text-[#9BA7AF] hover:text-[#E3E8E5]'
+                        }`}
                       >
-                        STAMP: {br.journeymanTitle.toUpperCase()} (+1 SP)
+                        {btn.label}
                       </button>
                     ))}
                   </div>
-                ) : (
-                  <span className="text-xs font-bold text-[#FF3B3B]">
-                    Return to Harlow in Kettle to stamp your Journeyman promotion.
-                  </span>
-                )}
-              </div>
-            ) : canMaster ? (
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs font-bold text-[#FFC83D] tracking-wider uppercase">
-                    HARLOW&apos;S TRADE REGISTER · MASTER PROMOTION (LV 16 · +2 SP)
-                  </div>
-                  <p className="text-xs text-[#D9D2C3] mt-0.5 italic">
-                    &ldquo;{DIALOGUE.harlowMaster}&rdquo;
-                  </p>
                 </div>
-                {inKettleOrHarlow ? (
-                  <button
-                    onClick={() => {
-                      engine.promoteToMaster();
-                      forceRefresh();
-                    }}
-                    className="px-4 py-2 bg-[#FFC83D] text-[#0B0D10] font-bold text-xs tracking-wider hover:bg-[#D9D2C3] cursor-pointer shrink-0"
-                  >
-                    PROMOTE TO {cls.branches[p.branch]?.masterTitle?.toUpperCase()} (+2 SP)
-                  </button>
-                ) : (
-                  <span className="text-xs font-bold text-[#FF3B3B]">
-                    Return to Harlow in Kettle to stamp your Master promotion.
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center justify-between text-xs">
-                <div>
-                  <span className="font-bold text-[#FFC83D]">HARLOW · TRADE CLERK: </span>
-                  <span className="text-[#D9D2C3] italic">
-                    &ldquo;
-                    {worldLedger.getReactiveDialogue('harlow') ||
-                      (p.stage === 1
-                        ? DIALOGUE.harlowLockedJourneyman
-                        : p.stage === 2
-                        ? DIALOGUE.harlowLockedMaster
-                        : DIALOGUE.harlowDone)}
-                    &rdquo;
-                  </span>
-                </div>
-                <span className="text-[11px] text-[#9E9789]">
-                  Stage {p.stage}/3 ({p.getStageLabel()})
-                </span>
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* THREE HORIZONTAL TIERS (One screen, no scrolling) */}
-        <div className="p-4 space-y-3">
-          {/* TIER 1: HAND (3 Active Skills + 2 Passives + Ultimate Reference) */}
-          <div className="bg-[#161A20] border border-[#3A3F47] p-3">
-            <div className="flex items-center justify-between mb-2">
-              <span
-                className="text-xs font-bold tracking-wider uppercase"
-                style={{ color: accent }}
-              >
-                TIER 1 — HAND ({cls.titles.hand.toUpperCase()}) · 3 ACTIVES (MAX LV 5) &amp; 2 PASSIVES (MAX LV 3)
-              </span>
-              <span className="text-[11px] text-[#9E9789]">
-                [R] Ultimate: <strong className="text-[#D9D2C3]">{cls.ultimate.name}</strong> ({cls.ultimate.summary})
-              </span>
-            </div>
+                {/* Skill List */}
+                <div className="overflow-y-auto space-y-2 flex-1 pr-1">
+                  {filteredLibrary.map((sk) => {
+                    const isSelected = selectedSkillId === sk.id;
+                    const isUlt = sk.type === 'ultimate';
 
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
-              {/* 3 Active Skills */}
-              {cls.skillOrder.map((skillId) => {
-                const cfg = cls.skills[skillId];
-                const lv = p.skills[skillId] || 1;
-                const isMax = lv >= cfg.maxLevel;
-                const canUpg = p.skillPoints > 0 && !isMax;
-                const curStats = cfg.getStats(lv);
-
-                return (
-                  <div
-                    key={skillId}
-                    className="p-2.5 bg-[#0B0D10] border border-[#3A3F47] flex flex-col justify-between gap-2"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <PixelIcon itemId={cfg.icon} size={28} />
-                          <div>
-                            <div className="text-xs font-bold text-[#D9D2C3] leading-tight">
-                              [{cfg.hotkey}] {cfg.name}
-                            </div>
-                            <div
-                              className="text-[10px] font-bold tabular-nums"
-                              style={{ color: accent }}
+                    return (
+                      <div
+                        key={sk.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, sk.id)}
+                        onClick={() => {
+                          setSelectedSkillId(isSelected ? null : sk.id);
+                          showToast(isSelected ? 'Deselected.' : `Selected ${sk.name}. Click a slot to assign.`);
+                        }}
+                        className={`p-2.5 border rounded-sm flex items-start gap-2.5 cursor-grab active:cursor-grabbing transition-all ${
+                          isSelected
+                            ? 'bg-[#1C303B] border-[#00F0FF] ring-1 ring-[#00F0FF]'
+                            : isUlt
+                            ? 'bg-[#0E171E] border-[#FFC83D]/60 hover:border-[#FFC83D]'
+                            : 'bg-[#0E171E] border-[#34404B] hover:border-[#00F0FF]/80'
+                        }`}
+                        title={sk.desc}
+                      >
+                        <div
+                          className="w-8 h-8 rounded shrink-0 flex items-center justify-center font-bold text-xs border"
+                          style={{
+                            borderColor: isUlt ? '#FFC83D' : accent,
+                            color: isUlt ? '#FFC83D' : accent,
+                            backgroundColor: '#162128',
+                          }}
+                        >
+                          {isUlt ? 'R' : '✦'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="text-xs font-bold text-[#E3E8E5] truncate">
+                              {sk.name}
+                            </span>
+                            <span
+                              className="text-[9px] font-bold px-1.5 py-0.2 bg-[#0B0D10] border shrink-0"
+                              style={{
+                                borderColor: isUlt ? '#FFC83D' : '#34404B',
+                                color: isUlt ? '#FFC83D' : '#9BA7AF',
+                              }}
                             >
-                              Lv {lv}/{cfg.maxLevel}
-                            </div>
+                              LV {sk.level}
+                            </span>
                           </div>
-                        </div>
-                        {/* Level pips */}
-                        <div className="flex gap-0.5 pt-0.5">
-                          {Array.from({ length: cfg.maxLevel }, (_, i) => (
-                            <div
-                              key={i}
-                              className="w-2 h-2 border"
-                              style={{
-                                borderColor: i < lv ? accent : '#3A3F47',
-                                backgroundColor: i < lv ? accent : '#0B0D10',
-                              }}
-                            />
-                          ))}
+                          <div className="text-[10px] text-[#9BA7AF] truncate mt-0.5">
+                            {sk.source} · {isUlt ? 'ULTIMATE' : 'ACTIVE'}
+                          </div>
+                          <p className="text-[10px] text-[#9BA7AF] line-clamp-2 mt-1 leading-snug">
+                            {sk.desc}
+                          </p>
                         </div>
                       </div>
-                      <p className="text-[11px] text-[#9E9789] mt-1.5 leading-snug">
-                        {cfg.desc}
-                      </p>
-                      <div className="text-[10px] text-[#D9D2C3] mt-1 font-medium tabular-nums">
-                        {cfg.formatCurrent(curStats)}
-                      </div>
-                    </div>
-
-                    <button
-                      disabled={!canUpg}
-                      onClick={() => {
-                        engine.upgradeSkill(skillId);
-                        forceRefresh();
-                      }}
-                      className={`w-full py-1 text-[11px] font-bold border cursor-pointer ${
-                        isMax
-                          ? 'bg-[#0B0D10] border-[#3A3F47] text-[#9E9789] cursor-default'
-                          : canUpg
-                          ? 'bg-[#161A20] text-[#0B0D10]'
-                          : 'bg-[#0B0D10] border-[#3A3F47] text-[#3A3F47] cursor-not-allowed'
-                      }`}
-                      style={
-                        canUpg
-                          ? { backgroundColor: accent, borderColor: accent, color: '#0B0D10' }
-                          : undefined
-                      }
-                    >
-                      {isMax ? 'MAXED' : 'UPGRADE (1 SP)'}
-                    </button>
-                  </div>
-                );
-              })}
-
-              {/* 2 Tier 1 Passives */}
-              {cls.passives.map((pas) => {
-                const lv = p.passives[pas.id] || 0;
-                const isMax = lv >= pas.maxLevel;
-                const canUpg = p.skillPoints > 0 && !isMax;
-
-                return (
-                  <div
-                    key={pas.id}
-                    className="p-2.5 bg-[#0B0D10] border border-[#3A3F47] flex flex-col justify-between gap-2"
-                  >
-                    <div>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-[10px] font-bold text-[#9E9789] uppercase">
-                            PASSIVE
-                          </div>
-                          <div className="text-xs font-bold text-[#D9D2C3]">
-                            {pas.name}
-                          </div>
-                          <div
-                            className="text-[10px] font-bold tabular-nums"
-                            style={{ color: accent }}
-                          >
-                            Lv {lv}/{pas.maxLevel}
-                          </div>
-                        </div>
-                        <div className="flex gap-0.5 pt-1">
-                          {Array.from({ length: pas.maxLevel }, (_, i) => (
-                            <div
-                              key={i}
-                              className="w-2.5 h-2.5 border"
-                              style={{
-                                borderColor: i < lv ? accent : '#3A3F47',
-                                backgroundColor: i < lv ? accent : '#0B0D10',
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-[#9E9789] mt-1.5 leading-snug">
-                        {pas.desc}
-                      </p>
-                      <div className="text-[10px] text-[#D9D2C3] mt-1 font-medium tabular-nums">
-                        {pas.formatCurrent(lv)}
-                      </div>
-                    </div>
-
-                    <button
-                      disabled={!canUpg}
-                      onClick={() => {
-                        engine.upgradePassive(pas.id);
-                        forceRefresh();
-                      }}
-                      className={`w-full py-1 text-[11px] font-bold border cursor-pointer ${
-                        isMax
-                          ? 'bg-[#0B0D10] border-[#3A3F47] text-[#9E9789] cursor-default'
-                          : canUpg
-                          ? 'bg-[#161A20] text-[#0B0D10]'
-                          : 'bg-[#0B0D10] border-[#3A3F47] text-[#3A3F47] cursor-not-allowed'
-                      }`}
-                      style={
-                        canUpg
-                          ? { backgroundColor: accent, borderColor: accent, color: '#0B0D10' }
-                          : undefined
-                      }
-                    >
-                      {isMax ? 'MAXED' : 'UPGRADE (1 SP)'}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Connector Lines between Tier 1 and Tier 2 */}
-          <div className="flex items-center justify-around px-24 -my-1">
-            {branchEntries.map((br) => {
-              const isChosen = p.branch === br.id;
-              return (
-                <div
-                  key={br.id}
-                  className="h-3 w-0.5"
-                  style={{
-                    backgroundColor: isChosen ? accent : '#3A3F47',
-                  }}
-                />
-              );
-            })}
-          </div>
-
-          {/* TIER 2 (JOURNEYMAN) & TIER 3 (MASTER) SPLIT LEFT & RIGHT */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {branchEntries.map((br) => {
-              const isChosenBranch = p.branch === br.id;
-              const isLockedOut = p.branch !== null && p.branch !== br.id;
-
-              return (
-                <div
-                  key={br.id}
-                  className={`relative border-2 p-3 space-y-2.5 ${
-                    isLockedOut ? 'opacity-45 bg-[#0B0D10]' : 'bg-[#161A20]'
-                  }`}
-                  style={{
-                    borderColor: isChosenBranch ? accent : '#3A3F47',
-                  }}
-                >
-                  {/* Diagonal slash overlay if permanently locked out */}
-                  {isLockedOut && (
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-10">
-                      <div className="bg-[#0B0D10]/95 border border-[#FF3B3B] px-3 py-1 text-[11px] font-bold text-[#FF3B3B] tracking-widest uppercase">
-                        LOCKED · OTHER TRADE CHOSEN
-                      </div>
+                    );
+                  })}
+                  {filteredLibrary.length === 0 && (
+                    <div className="text-xs text-[#9BA7AF] italic text-center py-8">
+                      No learned skills match the current search or level.
                     </div>
                   )}
-
-                  {/* Branch Header */}
-                  <div className="flex items-center justify-between border-b border-[#3A3F47] pb-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="text-xs font-bold tracking-wider uppercase"
-                          style={{ color: isChosenBranch ? accent : '#D9D2C3' }}
-                        >
-                          BRANCH: {br.journeymanTitle} → {br.masterTitle}
-                        </span>
-                        {isChosenBranch && (
-                          <span
-                            className="text-[10px] font-bold px-1.5 py-0.5 bg-[#0B0D10] border"
-                            style={{ borderColor: accent, color: accent }}
-                          >
-                            STAMPED
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-[#9E9789]">{br.summary}</div>
-                    </div>
-
-                    {p.stage === 1 && p.level >= 8 && inKettleOrHarlow && (
-                      <button
-                        onClick={() => {
-                          engine.promoteToJourneyman(br.id);
-                          forceRefresh();
-                        }}
-                        className="px-2.5 py-1 bg-[#FFC83D] text-[#0B0D10] font-bold text-[11px] cursor-pointer"
-                      >
-                        CHOOSE {br.journeymanTitle.toUpperCase()}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* TIER 2: 3 Journeyman Nodes (1 SP each) */}
-                  <div>
-                    <div className="text-[10px] font-bold text-[#9E9789] uppercase mb-1.5">
-                      TIER 2 — JOURNEYMAN ({br.journeymanTitle.toUpperCase()}) · 1 SP EACH
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      {br.journeymanNodes.map((nd) => {
-                        const unlocked = p.hasNode(nd.id);
-                        const canUnlock =
-                          p.stage >= 2 &&
-                          isChosenBranch &&
-                          !unlocked &&
-                          p.skillPoints > 0;
-
-                        return (
-                          <div
-                            key={nd.id}
-                            className="p-2 bg-[#0B0D10] border flex flex-col justify-between gap-1.5"
-                            style={{
-                              borderColor: unlocked ? accent : '#3A3F47',
-                            }}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between gap-1">
-                                <span className="text-[11px] font-bold text-[#D9D2C3] leading-tight">
-                                  {nd.name}
-                                </span>
-                                {nd.statusApplied && (
-                                  <StatusIcon statusId={nd.statusApplied} size={12} />
-                                )}
-                              </div>
-                              <p className="text-[10px] text-[#9E9789] mt-1 leading-snug">
-                                {nd.desc}
-                              </p>
-                            </div>
-
-                            <button
-                              disabled={!canUnlock}
-                              onClick={() => {
-                                engine.unlockBranchNode(nd.id);
-                                forceRefresh();
-                              }}
-                              className={`w-full py-1 text-[10px] font-bold border cursor-pointer ${
-                                unlocked
-                                  ? 'bg-[#161A20] text-[#D9D2C3] cursor-default'
-                                  : canUnlock
-                                  ? 'text-[#0B0D10]'
-                                  : 'bg-[#0B0D10] border-[#3A3F47] text-[#3A3F47] cursor-not-allowed'
-                              }`}
-                              style={
-                                unlocked
-                                  ? { borderColor: accent, color: accent }
-                                  : canUnlock
-                                  ? { backgroundColor: accent, borderColor: accent }
-                                  : undefined
-                              }
-                            >
-                              {unlocked ? 'ACTIVE' : 'UNLOCK (1 SP)'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Connector Line to Tier 3 */}
-                  <div className="flex justify-center -my-1">
-                    <div
-                      className="h-2.5 w-0.5"
-                      style={{
-                        backgroundColor:
-                          isChosenBranch && p.stage >= 3 ? accent : '#3A3F47',
-                      }}
-                    />
-                  </div>
-
-                  {/* TIER 3: 2 Master Capstone Nodes (1 SP each) */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-bold text-[#9E9789] uppercase">
-                        TIER 3 — MASTER ({br.masterTitle.toUpperCase()}) · CAPSTONES (1 SP EACH)
-                      </span>
-                      {isChosenBranch && p.stage < 3 && (
-                        <span className="text-[10px] text-[#FFC83D]">
-                          Requires Lv 16 Master Stamp
-                        </span>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      {br.masterNodes.map((nd) => {
-                        const unlocked = p.hasNode(nd.id);
-                        const canUnlock =
-                          p.stage >= 3 &&
-                          isChosenBranch &&
-                          !unlocked &&
-                          p.skillPoints > 0;
-
-                        return (
-                          <div
-                            key={nd.id}
-                            className="p-2 bg-[#0B0D10] border flex flex-col justify-between gap-1.5"
-                            style={{
-                              borderColor: unlocked ? accent : '#3A3F47',
-                            }}
-                          >
-                            <div>
-                              <div className="flex items-center justify-between gap-1">
-                                <span className="text-[11px] font-bold text-[#D9D2C3]">
-                                  {nd.name}
-                                </span>
-                                {nd.statusApplied && (
-                                  <StatusIcon statusId={nd.statusApplied} size={12} />
-                                )}
-                              </div>
-                              <p className="text-[10px] text-[#9E9789] mt-1 leading-snug">
-                                {nd.desc}
-                              </p>
-                            </div>
-
-                            <button
-                              disabled={!canUnlock}
-                              onClick={() => {
-                                engine.unlockBranchNode(nd.id);
-                                forceRefresh();
-                              }}
-                              className={`w-full py-1 text-[10px] font-bold border cursor-pointer ${
-                                unlocked
-                                  ? 'bg-[#161A20] cursor-default'
-                                  : canUnlock
-                                  ? 'text-[#0B0D10]'
-                                  : 'bg-[#0B0D10] border-[#3A3F47] text-[#3A3F47] cursor-not-allowed'
-                              }`}
-                              style={
-                                unlocked
-                                  ? { borderColor: accent, color: accent }
-                                  : canUnlock
-                                  ? { backgroundColor: accent, borderColor: accent }
-                                  : undefined
-                              }
-                            >
-                              {unlocked ? 'ACTIVE' : 'UNLOCK (1 SP)'}
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </div>
-              );
-            })}
-          </div>
-
-          {/* FLOOR 1 LIBERATION LEDGER, OPTIONAL BOSS REMATCHES & KETTLE COSMETICS (D13, D15, D44, D49) */}
-          <div className="bg-[#161A20] border-2 border-[#FFC83D] p-3 space-y-3">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 border-b border-[#3A3F47] pb-2">
-              <div>
-                <div className="text-xs font-bold tracking-wider uppercase text-[#FFC83D]">
-                  HARLOW&apos;S FLOOR 1 LIBERATION LEDGER · BOSS REMATCHES &amp; KETTLE COSMETICS
-                </div>
-                <p className="text-[11px] text-[#9E9789]">
-                  Confirmed boss kills permanently liberate their territory (auto-respawn disabled). Trigger optional rematches at Kettle or equip cosmetic titles &amp; UI trim colors.
-                </p>
               </div>
-              {worldLedger.floor1Cleared ? (
-                <div className="px-3 py-1 bg-[#4FD6A0] text-[#0B0D10] text-xs font-bold tracking-wider uppercase shrink-0">
-                  ★ FLOOR 1 CLEARED (4/4 LIBERATED) ★
-                </div>
-              ) : (
-                <div className="px-3 py-1 bg-[#0B0D10] border border-[#FFC83D] text-xs font-bold text-[#FFC83D] shrink-0">
-                  LIBERATED: {Object.values(worldLedger.confirmedBossKills).filter(Boolean).length} / 4
-                </div>
-              )}
-            </div>
 
-            {/* 4 Boss Territories in Suggested Hunt Order (D49: Big Axle -> Long Dry -> Mother Sump -> The Foreman) */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5">
-              {SUGGESTED_BOSS_ORDER.map((bossId, idx) => {
-                const bossCfg = ENEMIES_CONFIG.bosses[bossId];
-                const isDefeated = !!worldLedger.confirmedBossKills[bossId];
-                const recLevels = {
-                  bigAxle: 5,
-                  theLongDry: 9,
-                  motherSump: 13,
-                  theForeman: 16,
-                };
-                const gateNotes = {
-                  bigAxle: 'Bait charges to 100% Heat & shatter exposed Engine Core.',
-                  theLongDry: 'Read real emergence tremors & break all 3 Shell Segments.',
-                  motherSump: 'Interrupt 2 Devour channels to trigger Starved vulnerability.',
-                  theForeman: 'Survive 30s Reassembly Protocol (<10 arrivals) or slay Iron Foreman.',
-                };
+              {/* Right Column: 4 Active Slots + 1 Ultimate Slot + Presets (7 cols) */}
+              <div className="lg:col-span-7 space-y-4">
+                {/* 4 Active Slots + 1 Ultimate Slot */}
+                <div className="bg-[#121B22] border border-[#34404B] p-3.5 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#34404B]">
+                    <span className="text-xs font-extrabold text-[#E3E8E5] tracking-wider uppercase">
+                      Equipped Skill Slots (Keys 1–4, Ultimate [R])
+                    </span>
+                    <span className="text-[10px] text-[#9BA7AF]">
+                      DRAG / TAP TO ASSIGN OR SWAP
+                    </span>
+                  </div>
 
-                return (
-                  <div
-                    key={bossId}
-                    className="p-2.5 bg-[#0B0D10] border flex flex-col justify-between gap-2"
-                    style={{
-                      borderColor: isDefeated ? '#4FD6A0' : '#3A3F47',
-                    }}
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px] font-bold">
-                        <span className="text-[#FFC83D]">
-                          HUNT #{idx + 1} · REC LV.{recLevels[bossId] || 5}
-                        </span>
-                        <span
-                          className={`px-1.5 py-0.5 ${
-                            isDefeated
-                              ? 'bg-[#4FD6A0] text-[#0B0D10]'
-                              : 'bg-[#161A20] text-[#FF3B3B]'
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {[0, 1, 2, 3].map((slotIdx) => {
+                      const skillId = p.skillSlots[slotIdx];
+                      const sk = allSkills.find((s) => s.id === skillId);
+                      const isSelected = selectedSkillId === skillId && skillId !== null;
+
+                      return (
+                        <div
+                          key={slotIdx}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={(e) => handleDrop(e, slotIdx)}
+                          onClick={() => handleSlotClick(slotIdx)}
+                          className={`min-h-[82px] p-3 border-2 border-dashed flex items-center gap-3 cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-[#1C303B] border-[#00F0FF]'
+                              : selectedSkillId
+                              ? 'bg-[#162128] border-[#00F0FF]/60 hover:border-[#00F0FF]'
+                              : 'bg-[#0B141B] border-[#34404B] hover:border-[#9BA7AF]'
                           }`}
                         >
-                          {isDefeated ? 'CLEARED' : 'CONTROLLED'}
-                        </span>
-                      </div>
-                      <div className="text-xs font-bold text-[#D9D2C3]">
-                        {bossCfg?.name || bossId}{' '}
-                        <span className="text-[10px] text-[#9E9789]">
-                          {bossCfg?.subtitle || ''}
-                        </span>
-                      </div>
-                      <div className="text-[10px] text-[#9E9789]">{gateNotes[bossId]}</div>
+                          <div className="w-9 h-9 bg-[#263943] border border-[#3A6572] rounded flex items-center justify-center font-black text-sm text-[#00F0FF] shrink-0">
+                            {slotIdx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[9px] font-bold text-[#9BA7AF] uppercase">
+                              SLOT {slotIdx + 1} · {sk ? 'EQUIPPED' : 'EMPTY'}
+                            </div>
+                            <div className="text-xs font-bold text-[#E3E8E5] truncate">
+                              {sk ? sk.name : '— Drop or tap skill —'}
+                            </div>
+                            <div className="text-[10px] text-[#00F0FF] truncate">
+                              {sk ? `${sk.source} · Active` : 'Click to bind'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Ultimate Slot [R] */}
+                  <div
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDrop(e, 4)}
+                    onClick={() => handleSlotClick(4)}
+                    className={`p-3 border-2 border-dashed flex items-center gap-3 cursor-pointer transition-all ${
+                      selectedSkillId === p.ultimateSlot && p.ultimateSlot !== null
+                        ? 'bg-[#1C303B] border-[#FFC83D]'
+                        : 'bg-[#0B141B] border-[#917C49] hover:border-[#FFC83D]'
+                    }`}
+                  >
+                    <div className="w-10 h-10 bg-[#2C2415] border border-[#FFC83D] rounded flex items-center justify-center font-black text-sm text-[#FFC83D] shrink-0">
+                      R
+                    </div>
+                    {(() => {
+                      const ultSk = allSkills.find((s) => s.id === p.ultimateSlot);
+                      return (
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[9px] font-bold text-[#FFC83D] uppercase">
+                            SIGNATURE ULTIMATE SLOT [R]
+                          </div>
+                          <div className="text-xs font-bold text-[#E3E8E5] truncate">
+                            {ultSk ? ultSk.name : '— Drop or tap ultimate —'}
+                          </div>
+                          <div className="text-[10px] text-[#9BA7AF] truncate">
+                            {ultSk ? `${ultSk.source} · Ultimate` : 'Select any learned ultimate'}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Loadout Preset Buttons */}
+                  <div className="pt-2 border-t border-[#34404B] space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-[#E3E8E5] uppercase">
+                        Free Loadout Presets
+                      </span>
+                      <span className="text-[10px] text-[#9BA7AF]">
+                        Saved per character · Zero costs
+                      </span>
                     </div>
 
-                    {isDefeated ? (
-                      <div className="pt-1">
-                        {inKettleOrHarlow ? (
-                          <button
-                            onClick={() => {
-                              engine.triggerBossRematch(bossId);
-                            }}
-                            className="w-full py-1.5 bg-[#8B3A1E] hover:bg-[#FF3B3B] text-[#D9D2C3] hover:text-[#0B0D10] font-bold text-[10px] tracking-wider uppercase cursor-pointer"
-                          >
-                            START OPTIONAL REMATCH
-                          </button>
-                        ) : (
-                          <div className="text-[9px] text-center text-[#9E9789]">
-                            Return to Kettle to start Rematch
+                    <div className="grid grid-cols-3 gap-2">
+                      {p.loadoutPresets.map((preset, idx) => (
+                        <div
+                          key={idx}
+                          className="p-2.5 bg-[#0B141B] border border-[#34404B] rounded flex flex-col justify-between gap-1.5"
+                        >
+                          <div>
+                            <div className="text-xs font-bold text-[#E3E8E5] truncate">
+                              {preset.name}
+                            </div>
+                            <div className="text-[10px] text-[#9BA7AF] truncate">
+                              {SPECIALIZATIONS[preset.classId]?.name || 'Specialization'}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="py-1 text-center text-[10px] text-[#9E9789] bg-[#161A20] border border-[#3A3F47]">
-                        OPEN IN WORLD ARENA
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                          <div className="flex gap-1.5">
+                            <button
+                              onClick={() => handleSavePreset(idx)}
+                              className="flex-1 py-1 text-[10px] font-bold bg-[#19232D] border border-[#34404B] hover:border-[#00F0FF] text-[#E3E8E5] cursor-pointer"
+                            >
+                              SAVE
+                            </button>
+                            <button
+                              onClick={() => handleLoadPreset(idx)}
+                              className="flex-1 py-1 text-[10px] font-bold bg-[#1A333E] border border-[#00F0FF]/60 hover:border-[#00F0FF] text-[#00F0FF] cursor-pointer"
+                            >
+                              LOAD
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
 
-            {/* Kettle Recognition Achievements & Cosmetics (D13 — Purely Cosmetic Titles & Trim Colors) */}
-            <div className="pt-2 border-t border-[#3A3F47]">
-              <div className="text-[10px] font-bold text-[#9E9789] uppercase mb-1.5">
-                KETTLE RECOGNITION ACHIEVEMENTS &amp; COSMETIC TITLES (ZERO COMBAT STAT BUFFS)
+                    <div className="flex justify-between items-center pt-1">
+                      <button
+                        onClick={() => {
+                          p.skillSlots = getDefaultSkillSlots(p.classId);
+                          forceRefresh();
+                          showToast('Reset equipped slots to defaults.');
+                        }}
+                        className="px-3 py-1 text-[11px] font-bold bg-[#19232D] border border-[#34404B] hover:border-[#FF6262] text-[#9BA7AF] hover:text-[#FF6262] cursor-pointer"
+                      >
+                        Reset Equipped Slots
+                      </button>
+                      <button
+                        onClick={() => setSelectedSkillId(null)}
+                        className="px-3 py-1 text-[11px] font-bold bg-[#19232D] border border-[#34404B] text-[#9BA7AF] hover:text-[#E3E8E5] cursor-pointer"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Non-Negotiable Rule Banner */}
+                <div className="p-3 bg-[#0C1B25] border border-[#354753] text-[11px] text-[#B1CAD4] leading-relaxed">
+                  <strong className="text-[#00F0FF]">NO CROSS-CLASS COMBOS:</strong> Skills retained from previous classes execute independently with their own parameters. Equipping skills from different classes does not create cross-class combo triggers or artificial synergy multipliers.
+                </div>
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {Object.values(KETTLE_ACHIEVEMENTS).map((ach) => {
-                  const unlocked = !!worldLedger.unlockedAchievements[ach.id];
-                  const equipped = worldLedger.equippedCosmeticTitle === ach.cosmeticTitle;
+            </div>
+          )}
+
+          {/* TAB 2: BRANCHING SPECIALIZATION TREE */}
+          {activeTab === 'tree' && (
+            <div className="max-w-4xl mx-auto space-y-4">
+              <div className="flex items-center justify-between p-3 bg-[#121B22] border border-[#34404B]">
+                <div>
+                  <h3 className="text-xs font-black tracking-wider text-[#00F0FF] uppercase">
+                    {currentSpec.name} · Branching Specialization Tree
+                  </h3>
+                  <p className="text-[11px] text-[#9BA7AF] mt-0.5">
+                    Choose one mutually exclusive fork variant per ability. Tree choices mutate only that specific skill.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 text-xs font-bold bg-[#0B0D10] border border-[#00F0FF] text-[#00F0FF]">
+                    {p.getAvailableTreePoints()} / 8 POINTS
+                  </span>
+                  <button
+                    onClick={handleRespec}
+                    className="px-3 py-1 text-xs font-bold bg-[#19232D] border border-[#FF6262] text-[#FF6262] hover:bg-[#FF6262] hover:text-[#0B0D10] cursor-pointer transition-colors"
+                  >
+                    FREE RESPEC
+                  </button>
+                </div>
+              </div>
+
+              {/* 3 Milestones */}
+              <div className="space-y-4">
+                {/* Milestone 01 — Lv 15 */}
+                <div className={`p-4 bg-[#131D26] border rounded ${p.level >= 15 ? 'border-[#34404B]' : 'border-[#34404B]/50 opacity-60'}`}>
+                  <div className="flex items-center justify-between pb-2 border-b border-[#34404B]">
+                    <span className="text-xs font-black text-[#00F0FF] uppercase">
+                      Milestone 01 — Character Level 15 · Class Entry
+                    </span>
+                    <span className={`text-[10px] font-bold ${p.level >= 15 ? 'text-[#4FD6A0]' : 'text-[#9BA7AF]'}`}>
+                      {p.level >= 15 ? '✓ UNLOCKED' : '🔒 REQUIRES LV 15'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    {currentSpec.skills.slice(0, 2).map((sk) => {
+                      const nodeKey = `${currentSpec.id}:${sk.name}`;
+                      const chosenVariant = p.treeNodes[nodeKey];
+
+                      return (
+                        <div key={sk.id} className="p-3 bg-[#0A151D] border border-[#405361] rounded space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#E3E8E5]">{sk.name}</span>
+                            <span className="text-[9px] text-[#9BA7AF]">Active Skill</span>
+                          </div>
+                          <p className="text-[11px] text-[#9BA7AF] leading-snug">{sk.desc}</p>
+                          <div className="pt-2 border-t border-[#34404B] space-y-1.5">
+                            <span className="text-[9px] font-bold text-[#9BA7AF] uppercase">
+                              Fork Variants (Exclusive):
+                            </span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {sk.fork.map((variantText, vIdx) => {
+                                const isPicked = chosenVariant === vIdx;
+                                return (
+                                  <button
+                                    key={vIdx}
+                                    disabled={p.level < 15}
+                                    onClick={() => handleTreeChoice(nodeKey, vIdx)}
+                                    className={`p-2 text-[10px] font-bold border text-left cursor-pointer transition-colors ${
+                                      isPicked
+                                        ? 'bg-[#1C303B] border-[#00F0FF] text-[#00F0FF]'
+                                        : 'bg-[#111820] border-[#34404B] text-[#9BA7AF] hover:text-[#E3E8E5] hover:border-[#00F0FF]/60'
+                                    }`}
+                                  >
+                                    <div>Variant {vIdx === 0 ? 'A' : 'B'} {isPicked ? '✓' : ''}</div>
+                                    <div className="font-normal text-[9px] text-[#E3E8E5] mt-0.5 line-clamp-2">
+                                      {variantText}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Milestone 02 — Lv 30 */}
+                <div className={`p-4 bg-[#131D26] border rounded ${p.level >= 30 ? 'border-[#34404B]' : 'border-[#34404B]/50 opacity-60'}`}>
+                  <div className="flex items-center justify-between pb-2 border-b border-[#34404B]">
+                    <span className="text-xs font-black text-[#00F0FF] uppercase">
+                      Milestone 02 — Character Level 30 · Advanced Mastery
+                    </span>
+                    <span className={`text-[10px] font-bold ${p.level >= 30 ? 'text-[#4FD6A0]' : 'text-[#9BA7AF]'}`}>
+                      {p.level >= 30 ? '✓ UNLOCKED' : '🔒 REQUIRES LV 30'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                    {currentSpec.skills.slice(2, 4).map((sk) => {
+                      const nodeKey = `${currentSpec.id}:${sk.name}`;
+                      const chosenVariant = p.treeNodes[nodeKey];
+
+                      return (
+                        <div key={sk.id} className="p-3 bg-[#0A151D] border border-[#405361] rounded space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-[#E3E8E5]">{sk.name}</span>
+                            <span className="text-[9px] text-[#9BA7AF]">Mastery Skill</span>
+                          </div>
+                          <p className="text-[11px] text-[#9BA7AF] leading-snug">{sk.desc}</p>
+                          <div className="pt-2 border-t border-[#34404B] space-y-1.5">
+                            <span className="text-[9px] font-bold text-[#9BA7AF] uppercase">
+                              Fork Variants (Exclusive):
+                            </span>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {sk.fork.map((variantText, vIdx) => {
+                                const isPicked = chosenVariant === vIdx;
+                                return (
+                                  <button
+                                    key={vIdx}
+                                    disabled={p.level < 30}
+                                    onClick={() => handleTreeChoice(nodeKey, vIdx)}
+                                    className={`p-2 text-[10px] font-bold border text-left cursor-pointer transition-colors ${
+                                      isPicked
+                                        ? 'bg-[#1C303B] border-[#00F0FF] text-[#00F0FF]'
+                                        : 'bg-[#111820] border-[#34404B] text-[#9BA7AF] hover:text-[#E3E8E5] hover:border-[#00F0FF]/60'
+                                    }`}
+                                  >
+                                    <div>Variant {vIdx === 0 ? 'A' : 'B'} {isPicked ? '✓' : ''}</div>
+                                    <div className="font-normal text-[9px] text-[#E3E8E5] mt-0.5 line-clamp-2">
+                                      {variantText}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Milestone 03 — Lv 45 */}
+                {(() => {
+                  const ult = currentSpec.skills[4];
+                  const ultNodeKey = `${currentSpec.id}:${ult.name}`;
+                  const chosenUltVariant = p.treeNodes[ultNodeKey];
 
                   return (
-                    <div
-                      key={ach.id}
-                      className="p-2 bg-[#0B0D10] border flex flex-col justify-between gap-1.5"
-                      style={{
-                        borderColor: unlocked ? ach.trimColor : '#3A3F47',
-                        opacity: unlocked ? 1 : 0.55,
-                      }}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between text-[10px] font-bold">
-                          <span style={{ color: unlocked ? ach.trimColor : '#9E9789' }}>
-                            {ach.title}
-                          </span>
-                          <span className="text-[9px] text-[#9E9789]">
-                            {unlocked ? 'UNLOCKED' : 'LOCKED'}
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-[#9E9789] mt-0.5 leading-snug">
-                          {ach.desc}
-                        </p>
+                    <div className={`p-4 bg-[#131D26] border rounded ${p.level >= 45 ? 'border-[#FFC83D]' : 'border-[#34404B]/50 opacity-60'}`}>
+                      <div className="flex items-center justify-between pb-2 border-b border-[#34404B]">
+                        <span className="text-xs font-black text-[#FFC83D] uppercase">
+                          Milestone 03 — Character Level 45 · Class Awakening
+                        </span>
+                        <span className={`text-[10px] font-bold ${p.level >= 45 ? 'text-[#FFC83D]' : 'text-[#9BA7AF]'}`}>
+                          {p.level >= 45 ? '✓ AWAKENED' : '🔒 REQUIRES LV 45'}
+                        </span>
                       </div>
 
-                      {unlocked && (
-                        <button
-                          onClick={() => {
-                            engine.equipCosmetic(equipped ? null : ach.id);
-                            forceRefresh();
-                          }}
-                          className="w-full py-1 text-[10px] font-bold border cursor-pointer"
-                          style={
-                            equipped
-                              ? {
-                                  backgroundColor: ach.trimColor,
-                                  borderColor: ach.trimColor,
-                                  color: '#0B0D10',
-                                }
-                              : {
-                                  backgroundColor: '#161A20',
-                                  borderColor: '#3A3F47',
-                                  color: ach.trimColor,
-                                }
-                          }
-                        >
-                          {equipped ? `EQUIPPED: ${ach.cosmeticTitle}` : `EQUIP: ${ach.cosmeticTitle}`}
-                        </button>
-                      )}
+                      <div className="p-3.5 bg-[#0A151D] border border-[#FFC83D]/50 rounded mt-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-black text-[#FFC83D]">{ult.name}</span>
+                          <span className="text-[10px] font-bold text-[#FFC83D]">SIGNATURE ULTIMATE</span>
+                        </div>
+                        <p className="text-xs text-[#E3E8E5] leading-relaxed">{ult.desc}</p>
+                        <div className="pt-2 border-t border-[#34404B] space-y-1.5">
+                          <span className="text-[9px] font-bold text-[#FFC83D] uppercase">
+                            Ultimate Fork (Exclusive):
+                          </span>
+                          <div className="grid grid-cols-2 gap-2">
+                            {ult.fork.map((vText, vIdx) => {
+                              const isPicked = chosenUltVariant === vIdx;
+                              return (
+                                <button
+                                  key={vIdx}
+                                  disabled={p.level < 45}
+                                  onClick={() => handleTreeChoice(ultNodeKey, vIdx)}
+                                  className={`p-2.5 text-[10px] font-bold border text-left cursor-pointer transition-colors ${
+                                    isPicked
+                                      ? 'bg-[#2B2313] border-[#FFC83D] text-[#FFC83D]'
+                                      : 'bg-[#111820] border-[#34404B] text-[#9BA7AF] hover:text-[#E3E8E5] hover:border-[#FFC83D]/60'
+                                  }`}
+                                >
+                                  <div>Fork {vIdx === 0 ? 'A' : 'B'} {isPicked ? '✓' : ''}</div>
+                                  <div className="font-normal text-[9px] text-[#E3E8E5] mt-0.5 line-clamp-2">
+                                    {vText}
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
-                })}
+                })()}
               </div>
             </div>
-          </div>
+          )}
+
+          {/* TAB 3: AUTO TRAITS */}
+          {activeTab === 'traits' && (
+            <div className="max-w-4xl mx-auto space-y-4">
+              <div className="p-3 bg-[#0C1B25] border border-[#354753] text-[11px] text-[#B1CAD4]">
+                Traits upgrade <strong className="text-[#00F0FF]">AUTOMATICALLY</strong> at character milestones (Levels 1, 15, 30, 45). They cost zero skill points and never reset when switching specializations.
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Character Intrinsic Trait */}
+                {intrinsicTrait && (
+                  <div className="p-4 bg-[#101B24] border border-[#34404B] rounded space-y-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-[#9BA7AF] uppercase">
+                        Permanent Intrinsic Trait (Character-Wide)
+                      </span>
+                      <h4 className="text-sm font-black text-[#00F0FF] mt-0.5">
+                        {intrinsicTrait.name} · Rank {intrinsicTrait.roman}
+                      </h4>
+                      <p className="text-[11px] text-[#9BA7AF] mt-1 leading-snug">
+                        {intrinsicTrait.desc}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-[#34404B]">
+                      {[
+                        { lv: 1, rank: 'I', desc: chDef.intrinsic.ranks[1] },
+                        { lv: 15, rank: 'II', desc: chDef.intrinsic.ranks[15] },
+                        { lv: 30, rank: 'III', desc: chDef.intrinsic.ranks[30] },
+                        { lv: 45, rank: 'IV', desc: chDef.intrinsic.ranks[45] },
+                      ].map((tier) => {
+                        const active = p.level >= tier.lv;
+                        return (
+                          <div
+                            key={tier.lv}
+                            className={`p-2 border rounded text-xs ${
+                              active
+                                ? 'bg-[#14232C] border-[#00F0FF]/50 text-[#E3E8E5]'
+                                : 'bg-[#0B1218] border-[#34404B]/40 text-[#52616A]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between font-bold text-[10px]">
+                              <span>LV {tier.lv} · RANK {tier.rank}</span>
+                              <span style={{ color: active ? '#4FD6A0' : '#52616A' }}>
+                                {active ? '✓ ACTIVE' : 'LOCKED'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] mt-1 leading-snug">{tier.desc}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Active Class Trait */}
+                {classTrait && (
+                  <div className="p-4 bg-[#101B24] border border-[#34404B] rounded space-y-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-[#9BA7AF] uppercase">
+                        Active Specialization Trait
+                      </span>
+                      <h4 className="text-sm font-black text-[#FFC83D] mt-0.5">
+                        {classTrait.name} · Rank {classTrait.roman}
+                      </h4>
+                      <p className="text-[11px] text-[#9BA7AF] mt-1 leading-snug">
+                        {classTrait.desc}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-[#34404B]">
+                      {[
+                        { lv: 15, rank: 'I', desc: currentSpec.trait.ranks[15] },
+                        { lv: 30, rank: 'II', desc: currentSpec.trait.ranks[30] },
+                        { lv: 45, rank: 'III', desc: currentSpec.trait.ranks[45] },
+                      ].map((tier) => {
+                        const active = p.level >= tier.lv;
+                        return (
+                          <div
+                            key={tier.lv}
+                            className={`p-2 border rounded text-xs ${
+                              active
+                                ? 'bg-[#221F14] border-[#FFC83D]/50 text-[#E3E8E5]'
+                                : 'bg-[#0B1218] border-[#34404B]/40 text-[#52616A]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between font-bold text-[10px]">
+                              <span>LV {tier.lv} · RANK {tier.rank}</span>
+                              <span style={{ color: active ? '#FFC83D' : '#52616A' }}>
+                                {active ? '✓ ACTIVE' : 'LOCKED'}
+                              </span>
+                            </div>
+                            <div className="text-[10px] mt-1 leading-snug">{tier.desc}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* BOTTOM STATUS / TOAST BAR */}
+        <div className="px-4 py-2 bg-[#0C131A] border-t border-[#34404B] flex items-center justify-between text-xs">
+          <span className="text-[#00F0FF] font-bold">
+            {toastMessage || 'Ready. Click or drag to assign abilities.'}
+          </span>
+          <span className="text-[#9BA7AF] text-[11px]">
+            HellsAdvent Class Specialization System (v4.1)
+          </span>
         </div>
       </div>
     </div>
   );
 }
-
-export default SkillPanel;
