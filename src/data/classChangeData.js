@@ -130,14 +130,14 @@ export const CHARACTERS = {
       { id: 'kaelen:base:vent-supernova', name: 'Vent Supernova', level: 1, hotkey: '3', icon: 'ventSupernova', cooldown: 6.5, staminaCost: 10, desc: 'Discharge boiler steam for a 360-degree thermobaric shockwave and stun blast.' }
     ],
     ultimate: {
-      id: 'kaelen:base:sunfall-cataclysm',
-      name: 'Sunfall Cataclysm',
+      id: 'kaelen:base:supercritical-meltdown',
+      name: 'Supercritical Meltdown',
       level: 1,
       hotkey: 'R',
-      icon: 'sunfallCataclysm',
+      icon: 'supercriticalMeltdown',
       cooldown: 0,
       staminaCost: 0,
-      desc: 'Unleash 8 rotating solar flare beams and 14 slag meteors into a colossal crater blast.'
+      desc: 'Lock boiler valves for 8s of Supercritical Overdrive: +40% Speed, +50% DR, continuous flame torrent, molten slag footsteps, and a 240px thermobaric finale.'
     },
     classes: ['cinderCorsair', 'crucibleArchitect', 'cryoSaboteur'],
     intrinsic: {
@@ -165,14 +165,14 @@ export const CHARACTERS = {
       { id: 'vespera:base:phase-blink', name: 'Phase Blink', level: 1, hotkey: '3', icon: 'phaseBlink', cooldown: 5.0, staminaCost: 8, desc: 'Teleport along cursor vector, emitting departure and arrival lightning shockwaves.' }
     ],
     ultimate: {
-      id: 'vespera:base:orbital-ion-singularity',
-      name: 'Orbital Ion Singularity',
+      id: 'vespera:base:overclocked-armada',
+      name: 'Overclocked Armada',
       level: 1,
       hotkey: 'R',
-      icon: 'ionSingularity',
+      icon: 'overclockedArmada',
       cooldown: 0,
       staminaCost: 0,
-      desc: 'Form a geometric laser matrix calling down massive cascading ion strike pillars.'
+      desc: 'Deploy 12 concentric Arc-Drones for 8s: active point-defense projectile zapping, continuous dual neon tracer beams, and a 12-drone kamikaze dive-bomb finale.'
     },
     classes: ['voltReaver', 'ironPuppeteer', 'stormCartographer'],
     intrinsic: {

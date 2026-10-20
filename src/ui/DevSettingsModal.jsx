@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { PALETTE, WORLD_CONFIG, PLAYER_CONFIG } from '../data/config.js';
-import { CharacterPortrait } from './PixelWidgets.jsx';
+import { CharacterPortrait, PixelIcon } from './PixelWidgets.jsx';
 import { CHARACTERS, SPECIALIZATIONS } from '../data/classChangeData.js';
 import { worldLedger } from '../game/WorldLedger.js';
 import { sound } from '../game/Audio.js';
@@ -46,6 +46,11 @@ export function DevSettingsModal({ engine, onClose }) {
     const newLvl = p.setLevel(lvl, engine.particles);
     engine.saveProgress();
     engine.notifyUi();
+    if (p.pendingClassChoice) {
+      onClose();
+      engine.setUiState('classChoice');
+      return;
+    }
     showToast(`Level set to Lv ${newLvl}! Stats & XP threshold recalculated.`);
     forceRefresh();
   };
@@ -54,6 +59,11 @@ export function DevSettingsModal({ engine, onClose }) {
     const newLvl = p.addLevel(count, engine.particles);
     engine.saveProgress();
     engine.notifyUi();
+    if (p.pendingClassChoice) {
+      onClose();
+      engine.setUiState('classChoice');
+      return;
+    }
     showToast(`Leveled up +${count}! (Now Lv ${newLvl})`);
     forceRefresh();
   };
@@ -62,6 +72,11 @@ export function DevSettingsModal({ engine, onClose }) {
     p.gainXp(amount, engine.particles);
     engine.saveProgress();
     engine.notifyUi();
+    if (p.pendingClassChoice) {
+      onClose();
+      engine.setUiState('classChoice');
+      return;
+    }
     showToast(`Gained +${amount.toLocaleString()} XP! (Current: ${p.xp} / ${p.xpToNext})`);
     forceRefresh();
   };
@@ -71,8 +86,20 @@ export function DevSettingsModal({ engine, onClose }) {
     p.gainXp(needed, engine.particles);
     engine.saveProgress();
     engine.notifyUi();
+    if (p.pendingClassChoice) {
+      onClose();
+      engine.setUiState('classChoice');
+      return;
+    }
     showToast(`XP Bar filled! Leveled up to Lv ${p.level}.`);
     forceRefresh();
+  };
+
+  const handleTriggerClassChoice = () => {
+    p.triggerClassChoice();
+    engine.notifyUi();
+    onClose();
+    engine.setUiState('classChoice');
   };
 
   const handleAddSkillPoints = (amount) => {
@@ -163,12 +190,25 @@ export function DevSettingsModal({ engine, onClose }) {
     forceRefresh();
   };
 
+  const handleSwitchCharacter = (charId) => {
+    const res = p.switchCharacter(charId);
+    if (res.success) {
+      engine.saveProgress();
+      engine.notifyUi();
+      const charName = CHARACTERS[charId]?.name || charId;
+      showToast(`Switched runner to ${charName}! Level (${p.level}) & XP preserved.`);
+      forceRefresh();
+    }
+  };
+
   const handleSwitchClass = (specId) => {
     p.unlockClass(specId);
     p.switchClass(specId);
     engine.saveProgress();
     engine.notifyUi();
-    showToast(`Switched active class to ${SPECIALIZATIONS[specId]?.name}! Level (${p.level}) & XP preserved.`);
+    const spec = SPECIALIZATIONS[specId];
+    const char = CHARACTERS[spec?.char];
+    showToast(`Switched class to ${char?.name ? `${char.name} — ` : ''}${spec?.name}! Level (${p.level}) & XP preserved.`);
     forceRefresh();
   };
 
@@ -672,66 +712,259 @@ export function DevSettingsModal({ engine, onClose }) {
           {/* TAB 3: CLASSES & SKILLS */}
           {activeTab === 'classes' && (
             <div className="space-y-4">
+              {/* SECTION 1: RUNNER SELECTOR (5 BASE CHARACTERS) */}
               <div className="p-3.5 bg-[#171420] border border-[#4B325C] rounded space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-[#352542]">
                   <div>
-                    <h3 className="text-xs font-extrabold text-[#C042FF] uppercase tracking-wider">
-                      Specialization &amp; Skill Tree Cheats
+                    <h3 className="text-xs font-extrabold text-[#C042FF] uppercase tracking-wider flex items-center gap-1.5">
+                      <span>👤</span> 1. Select Active Runner (5 Base Characters)
                     </h3>
                     <p className="text-[11px] text-[#A69AA8]">
-                      Unlock all 15 classes across characters or switch immediately without visiting Harlow.
+                      Each character commands a distinct weapon style, class mechanic, intrinsic trait, and 3 dedicated specializations. Abilities do not cross over between characters.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-[#A69AA8] uppercase">Active Runner:</span>
+                    <div className="text-sm font-black text-white" style={{ color: accent }}>
+                      {chDef.name}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                  {['sena', 'rook', 'ines', 'kaelen', 'vespera'].map((cId) => {
+                    const cDef = CHARACTERS[cId];
+                    const isCurrent = p.classId === cId;
+                    const cColor = cDef.color || '#D9D2C3';
+
+                    return (
+                      <div
+                        key={cId}
+                        onClick={() => handleSwitchCharacter(cId)}
+                        className={`p-2.5 rounded-lg border-2 flex flex-col justify-between space-y-2 cursor-pointer transition-all select-none ${
+                          isCurrent
+                            ? 'bg-[#1E1929] shadow-[0_0_15px_rgba(192,66,255,0.3)]'
+                            : 'bg-[#100D16] border-[#31233D] hover:border-[#C042FF]/70 hover:bg-[#181322]'
+                        }`}
+                        style={{ borderColor: isCurrent ? cColor : undefined }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <CharacterPortrait
+                            classId={cId}
+                            expression="normal"
+                            equipped={isCurrent ? p.equipped : {}}
+                            stage={1}
+                            size={32}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <h4 className="text-xs font-black truncate" style={{ color: isCurrent ? cColor : '#E3E8E5' }}>
+                              {cDef.name.split(' ')[0]}
+                            </h4>
+                            <span
+                              className="text-[9px] font-black uppercase px-1 py-0.2 rounded inline-block"
+                              style={{ backgroundColor: `${cColor}22`, color: cColor }}
+                            >
+                              {cDef.role}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-1.5 border-t border-[#261B30] flex items-center justify-between text-[10px]">
+                          {isCurrent ? (
+                            <span className="font-black text-[#00F0FF] flex items-center gap-1">
+                              <span>✓</span> ACTIVE
+                            </span>
+                          ) : (
+                            <span className="text-[#8C7D93] group-hover:text-white font-semibold">
+                              Switch ►
+                            </span>
+                          )}
+                          <span className="text-[9px] text-[#6E6075]">3 Classes</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 2: ACTIVE RUNNER'S 3 SPECIALIZATIONS */}
+              <div className="p-3.5 bg-[#171420] border border-[#4B325C] rounded space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#352542]">
+                  <div>
+                    <h3 className="text-xs font-extrabold text-[#00F0FF] uppercase tracking-wider flex items-center gap-1.5">
+                      <span>⚔</span> 2. {chDef.name.toUpperCase()}'s 3 Specializations
+                    </h3>
+                    <p className="text-[11px] text-[#A69AA8]">
+                      Switching specialization automatically equips its signature Level 45 Awakening Ultimate to <strong className="text-white">[R]</strong>.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleUnlockAllSpecializations}
+                      className="px-2.5 py-1 bg-[#251A31] border border-[#C042FF] text-[#ECA6FF] hover:bg-[#3D2B52] text-[10px] font-bold rounded cursor-pointer transition-colors"
+                    >
+                      Unlock All 15 Classes
+                    </button>
+                    <button
+                      onClick={handleRespec}
+                      className="px-2.5 py-1 bg-[#1A1224] border border-[#FF3B3B] text-[#FF8282] hover:bg-[#331414] text-[10px] font-bold rounded cursor-pointer transition-colors"
+                    >
+                      Respec Active Tree
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(chDef.classes || []).map((specKey) => {
+                    const spec = SPECIALIZATIONS[specKey];
+                    if (!spec) return null;
+                    const isActive = p.activeClassId === spec.id;
+                    const specUlt = spec.skills?.find((s) => s.ultimate);
+                    const skill0 = spec.skills?.[0];
+
+                    return (
+                      <div
+                        key={spec.id}
+                        onClick={() => handleSwitchClass(spec.id)}
+                        className={`p-3 rounded-lg border-2 flex flex-col justify-between space-y-2.5 cursor-pointer transition-all ${
+                          isActive
+                            ? 'bg-[#1C1628] shadow-[0_0_15px_rgba(0,240,255,0.25)]'
+                            : 'bg-[#100D16] border-[#2C2138] hover:border-[#00F0FF]/60 hover:bg-[#161220]'
+                        }`}
+                        style={{ borderColor: isActive ? '#00F0FF' : undefined }}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-black" style={{ color: isActive ? '#00F0FF' : '#E3E8E5' }}>
+                              {spec.name}
+                            </h4>
+                            {isActive && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-[#0A262C] text-[#00F0FF] border border-[#00F0FF]/40">
+                                EQUIPPED
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-[#9A8FA0] leading-snug line-clamp-2">
+                            {spec.concept}
+                          </p>
+                        </div>
+
+                        {/* Active Art + Signature Ultimate Teaser */}
+                        <div className="space-y-1 pt-1.5 border-t border-[#251B30] text-[10px]">
+                          {skill0 && (
+                            <div className="flex items-center gap-1.5 text-[#C4B7CC]">
+                              <PixelIcon itemId={skill0.icon || 'lunge'} size={14} />
+                              <span className="truncate">Art: <strong>{skill0.name}</strong></span>
+                            </div>
+                          )}
+                          {specUlt && (
+                            <div className="flex items-center gap-1.5 text-[#FFC83D]">
+                              <PixelIcon itemId={specUlt.icon || 'sevenCuts'} size={14} />
+                              <span className="truncate">Ult: <strong>{specUlt.name}</strong></span>
+                            </div>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSwitchClass(spec.id);
+                          }}
+                          className={`w-full py-1.5 px-2 rounded text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                            isActive
+                              ? 'bg-[#0E282E] text-[#00F0FF] border border-[#00F0FF]'
+                              : 'bg-[#251936] text-[#ECA6FF] hover:bg-[#3D2856] border border-[#C042FF]/40'
+                          }`}
+                        >
+                          {isActive ? '✓ Active Class' : `Switch to ${spec.name}`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 3: ALL 15 SPECIALIZATIONS DIRECTORY (GROUPED BY CHARACTER) */}
+              <div className="p-3.5 bg-[#171420] border border-[#4B325C] rounded space-y-3">
+                <div className="pb-2 border-b border-[#352542] flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-extrabold text-[#FFC83D] uppercase tracking-wider flex items-center gap-1.5">
+                      <span>★</span> 3. All 15 Specializations Directory (Grouped by Character)
+                    </h3>
+                    <p className="text-[11px] text-[#A69AA8]">
+                      Clicking any specialization from another character automatically switches your runner and equips that class cleanly.
                     </p>
                   </div>
                   <button
-                    onClick={handleUnlockAllSpecializations}
-                    className="px-3 py-1.5 bg-[#C042FF] text-[#FFFFFF] text-xs font-bold rounded cursor-pointer hover:bg-[#D56BFF]"
+                    onClick={handleTriggerClassChoice}
+                    className="px-2.5 py-1 bg-gradient-to-r from-[#D4931C] to-[#F0B232] text-[#080B0F] font-black text-[10px] rounded cursor-pointer hover:brightness-110 whitespace-nowrap"
                   >
-                    Unlock All 15 Classes
+                    ⚡ Test 3-Card Choice Modal
                   </button>
                 </div>
 
-                {/* Instant Class Switcher */}
-                <div>
-                  <span className="text-[10px] font-bold text-[#A69AA8] uppercase">
-                    Immediate Class Switcher (Level &amp; XP Preserved):
-                  </span>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                    {Object.values(SPECIALIZATIONS).map((spec) => {
-                      const isActive = p.activeClassId === spec.id;
-                      const char = CHARACTERS[spec.char];
-                      return (
-                        <button
-                          key={spec.id}
-                          onClick={() => handleSwitchClass(spec.id)}
-                          className={`p-2 border text-left rounded cursor-pointer transition-colors ${
-                            isActive
-                              ? 'bg-[#2A163B] border-[#00F0FF] text-[#00F0FF]'
-                              : 'bg-[#120F1A] border-[#372744] text-[#A69AA8] hover:border-[#C042FF] hover:text-[#D9D2C3]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs">{spec.name}</span>
-                            <span className="text-[9px] uppercase px-1 py-0.5 rounded bg-[#0B0912] font-semibold" style={{ color: char?.color || '#D9D2C3' }}>
-                              {char?.name || spec.char}
+                <div className="space-y-3">
+                  {Object.values(CHARACTERS).map((char) => {
+                    const isCharActive = p.classId === char.id;
+                    const charColor = char.color || '#D9D2C3';
+
+                    return (
+                      <div
+                        key={char.id}
+                        className={`p-2.5 rounded border ${
+                          isCharActive ? 'bg-[#1B1626] border-[#553C68]' : 'bg-[#100D16] border-[#261B30]'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-[#241B2D]">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: charColor }} />
+                            <span className="text-xs font-black text-white">{char.name}</span>
+                            <span
+                              className="text-[9px] font-bold uppercase px-1 py-0.2 rounded"
+                              style={{ backgroundColor: `${charColor}22`, color: charColor }}
+                            >
+                              {char.role}
                             </span>
                           </div>
-                          <div className="text-[10px] text-[#7F7488] line-clamp-1 mt-0.5">{spec.concept}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                          {isCharActive && (
+                            <span className="text-[9px] font-black text-[#00F0FF] uppercase">
+                              Active Character
+                            </span>
+                          )}
+                        </div>
 
-                <div className="pt-2 border-t border-[#352542] flex items-center justify-between">
-                  <span className="text-xs text-[#A69AA8]">
-                    Active Specialization: <strong className="text-[#00F0FF]">{specDef.name}</strong> ({p.unlockedClasses?.length || 1} unlocked)
-                  </span>
-                  <button
-                    onClick={handleRespec}
-                    className="px-3 py-1 bg-[#1A1224] border border-[#FF3B3B] text-[#FF8282] hover:bg-[#331414] text-xs font-bold cursor-pointer"
-                  >
-                    Free Respec Active Tree
-                  </button>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          {char.classes.map((clsId) => {
+                            const spec = SPECIALIZATIONS[clsId];
+                            if (!spec) return null;
+                            const isSpecActive = p.activeClassId === spec.id && isCharActive;
+                            const ult = spec.skills?.find((s) => s.ultimate);
+
+                            return (
+                              <button
+                                key={spec.id}
+                                onClick={() => handleSwitchClass(spec.id)}
+                                className={`p-2 border text-left rounded cursor-pointer transition-colors ${
+                                  isSpecActive
+                                    ? 'bg-[#2A163B] border-[#00F0FF] text-[#00F0FF]'
+                                    : 'bg-[#14101B] border-[#2C2138] text-[#A69AA8] hover:border-[#C042FF] hover:text-[#D9D2C3]'
+                                }`}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-xs">{spec.name}</span>
+                                  {isSpecActive && <span className="text-[9px] text-[#00F0FF]">✓ Active</span>}
+                                </div>
+                                <div className="text-[10px] text-[#7F7488] line-clamp-1 mt-0.5">
+                                  Ult: {ult?.name || 'Awakening'}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

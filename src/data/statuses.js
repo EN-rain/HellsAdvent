@@ -919,6 +919,74 @@ export const STATUSES = {
       return '+20% critical hit chance.';
     },
   },
+
+  supercriticalOverdrive: {
+    id: 'supercriticalOverdrive',
+    name: 'Supercritical Overdrive',
+    kind: 'buff',
+    color: PALETTE.ember,
+    defaultDuration: 8.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    flags: {
+      hardCCImmune: true,
+      knockbackImmune: true,
+    },
+    statModifiers: {
+      moveSpeedPct: 0.40,
+      damageReduction: 0.50,
+    },
+    cleansable: false,
+    icon: 'supercriticalMeltdown',
+    tags: ['ultimate', 'juggernaut', 'buff'],
+    getTooltip() {
+      return '+40% Move Speed, +50% Damage Reduction, Knockback & Stun Immunity.';
+    },
+  },
+
+  moltenJuggernaut: {
+    id: 'moltenJuggernaut',
+    name: 'Molten Juggernaut',
+    kind: 'buff',
+    color: PALETTE.ember,
+    defaultDuration: 8.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    flags: {
+      hardCCImmune: true,
+      knockbackImmune: true,
+    },
+    statModifiers: {
+      moveSpeedPct: 0.40,
+      damageReduction: 0.50,
+    },
+    cleansable: false,
+    icon: 'supercriticalMeltdown',
+    tags: ['ultimate', 'juggernaut', 'buff'],
+    getTooltip() {
+      return '+40% Move Speed, +50% Damage Reduction, Knockback & Stun Immunity.';
+    },
+  },
+
+  overclockedArmada: {
+    id: 'overclockedArmada',
+    name: 'Overclocked Armada',
+    kind: 'buff',
+    color: PALETTE.volt,
+    defaultDuration: 8.0,
+    stacking: 'refresh',
+    maxStacks: 1,
+    statModifiers: {
+      moveSpeedPct: 0.15,
+      attackSpeedPct: 0.25,
+    },
+    cleansable: false,
+    icon: 'overclockedArmada',
+    tags: ['ultimate', 'buff'],
+    getTooltip() {
+      return '12 Arc-Drones Escort active. Point-Defense & twin continuous tracer lasers.';
+    },
+  },
 };
 
 // Map convenient ID aliases so any caller ID works seamlessly

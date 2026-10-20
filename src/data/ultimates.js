@@ -854,11 +854,11 @@ export const ULTIMATES = {
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 5.5,
-    radius: 160,
+    totalDamageMult: 6.0,
+    radius: 170,
     stunDuration: 2.0,
-    summary: '8s Floating Junkyard · 3 Waves · 2s Stun/Wave',
-    desc: 'Forms an 8s hovering magnetic junkyard over a 160px zone that slams down 3 times for 550% total ATK and a 2s Stun per wave.',
+    summary: '8s Overhead Gantry Crane · 3 Heavy Scrap Compactor Slams',
+    desc: 'Deploys an industrial magnetic gantry crane with yellow/black hazard girders and suspension cables that drops an 80-ton scrap compactor block 3 times across an 8s duration for 600% total ATK and 2s Stun per slam.',
     steps: [
       {
         t: 0,
@@ -893,13 +893,11 @@ export const ULTIMATES = {
       },
       {
         t: 330,
-        action: 'inesLevitateScrap',
+        action: 'inesDeployGantryCrane',
         nonGameplay: false,
         params: {
-          radius: 160,
-          gatherRadius: 400,
-          levitateDurationMs: 8000,
-          wreckPieceCount: 16,
+          radius: 170,
+          durationMs: 8000,
         },
       },
       {
@@ -913,17 +911,15 @@ export const ULTIMATES = {
       },
       {
         t: 1330,
-        action: 'inesSlamScrapWave',
+        action: 'inesGantryCraneDrop',
         nonGameplay: false,
         params: {
           waveIndex: 1,
-          radius: 160,
-          damageMult: 5.5 / 3,
+          radius: 170,
+          damageMult: 2.0,
           stunDuration: 2.0,
-          whiteFlashFrames: 1,
-          shakePx: 5,
+          shakePx: 7,
           spawnCrater: true,
-          keepLevitating: true,
           impactFrame: {
             kind: 'crush',
             frames: 3,
@@ -933,17 +929,15 @@ export const ULTIMATES = {
       },
       {
         t: 4330,
-        action: 'inesSlamScrapWave',
+        action: 'inesGantryCraneDrop',
         nonGameplay: false,
         params: {
           waveIndex: 2,
-          radius: 160,
-          damageMult: 5.5 / 3,
+          radius: 170,
+          damageMult: 2.0,
           stunDuration: 2.0,
-          whiteFlashFrames: 1,
-          shakePx: 5,
+          shakePx: 7,
           spawnCrater: true,
-          keepLevitating: true,
           impactFrame: {
             kind: 'crush',
             frames: 3,
@@ -953,17 +947,15 @@ export const ULTIMATES = {
       },
       {
         t: 7330,
-        action: 'inesSlamScrapWave',
+        action: 'inesGantryCraneDrop',
         nonGameplay: false,
         params: {
           waveIndex: 3,
-          radius: 160,
-          damageMult: 5.5 / 3,
+          radius: 170,
+          damageMult: 2.0,
           stunDuration: 2.0,
-          whiteFlashFrames: 1,
-          shakePx: 6,
+          shakePx: 8,
           spawnCrater: true,
-          keepLevitating: false,
           impactFrame: {
             kind: 'crush',
             frames: 4,
@@ -985,19 +977,19 @@ export const ULTIMATES = {
     classId: 'ines',
     branch: 'slinger',
     nodeRequired: 'junkyardRain',
-    name: 'Junkyard Rain',
-    titleCard: 'JUNKYARD RAIN',
+    name: 'Zero-Point Reversal',
+    titleCard: 'ZERO-POINT REVERSAL',
     hotkey: 'R',
     icon: 'junkyardRain',
     accent: PALETTE.verdigris,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: false,
-    totalDamageMult: 7.5,
-    radius: 260,
-    stunDuration: 1.5,
-    summary: '750% Total ATK · 260px Radius · 3 Heavy Waves',
-    desc: 'Expands Scrapfall to a 260px magnetic tempest that slams 3 heavy waves of scrap for 750% total ATK and a 1.5s Stun.',
+    totalDamageMult: 8.0,
+    radius: 270,
+    stunDuration: 2.0,
+    summary: '800% Total ATK · Dual-Polarity Singularity Vortex · Polar Inversion Detonation',
+    desc: 'Spins up counter-rotating positive (+) cyan and negative (-) magenta magnetic particle streams into a dense 270px central singularity, dragging in enemies and metal debris (360% ATK across 2 pulses), before violently inverting polarity in a screen-wide repulsion detonation for 440% ATK and 2.0s Stun.',
     steps: [
       {
         t: 0,
@@ -1017,7 +1009,7 @@ export const ULTIMATES = {
         action: 'cutInEnter',
         nonGameplay: true,
         params: {
-          titleCard: 'JUNKYARD RAIN',
+          titleCard: 'ZERO-POINT REVERSAL',
           slideFromRight: true,
           speedLines8Dir: true,
         },
@@ -1032,48 +1024,23 @@ export const ULTIMATES = {
       },
       {
         t: 330,
-        action: 'inesLevitateScrap',
+        action: 'inesDeployPolarityVortex',
         nonGameplay: false,
         params: {
-          radius: 260,
-          gatherRadius: 440,
-          levitateDurationMs: 1350,
-          wreckPieceCount: 24,
+          radius: 270,
+          durationMs: 1550,
         },
       },
       {
-        t: 930,
-        action: 'inesSlamScrapWave',
+        t: 750,
+        action: 'inesPolarityPulse',
         nonGameplay: false,
         params: {
-          waveIndex: 1,
+          pulseIndex: 1,
           radius: 260,
-          damageMult: 2.5, // Wave 1: 250% ATK
-          stunDuration: 0.5,
-          whiteFlashFrames: 1,
-          shakePx: 5,
-          spawnCrater: true,
-          keepLevitating: true,
-          impactFrame: {
-            kind: 'crush',
-            frames: 3,
-            color: PALETTE.verdigris,
-          },
-        },
-      },
-      {
-        t: 1280,
-        action: 'inesSlamScrapWave',
-        nonGameplay: false,
-        params: {
-          waveIndex: 2,
-          radius: 260,
-          damageMult: 2.5, // Wave 2: 250% ATK
-          stunDuration: 0.5,
-          whiteFlashFrames: 1,
+          damageMult: 1.8,
+          pullInwardPx: 75,
           shakePx: 6,
-          spawnCrater: true,
-          keepLevitating: true,
           impactFrame: {
             kind: 'crush',
             frames: 3,
@@ -1082,18 +1049,32 @@ export const ULTIMATES = {
         },
       },
       {
-        t: 1630,
-        action: 'inesSlamScrapWave',
+        t: 1150,
+        action: 'inesPolarityPulse',
         nonGameplay: false,
         params: {
-          waveIndex: 3,
-          radius: 260,
-          damageMult: 2.5, // Wave 3: 250% ATK (750% total)
-          stunDuration: 1.5,
-          whiteFlashFrames: 1,
-          shakePx: 8,
+          pulseIndex: 2,
+          radius: 265,
+          damageMult: 1.8,
+          pullInwardPx: 85,
+          shakePx: 7,
+          impactFrame: {
+            kind: 'crush',
+            frames: 3,
+            color: PALETTE.verdigris,
+          },
+        },
+      },
+      {
+        t: 1580,
+        action: 'inesPolarityInversionBurst',
+        nonGameplay: false,
+        params: {
+          radius: 270,
+          damageMult: 4.4,
+          stunDuration: 2.0,
+          shakePx: 12,
           spawnCrater: true,
-          keepLevitating: false,
           impactFrame: {
             kind: 'crush',
             frames: 4,
@@ -1102,7 +1083,7 @@ export const ULTIMATES = {
         },
       },
       {
-        t: 1900,
+        t: 1950,
         action: 'endCast',
         nonGameplay: true,
         params: {},
@@ -1113,6 +1094,83 @@ export const ULTIMATES = {
   // ============================================================================
   // KAELEN VOS — THERMO-LANCER / PYRO-ALCHEMIST ULTIMATES
   // ============================================================================
+
+  supercriticalMeltdown: {
+    id: 'supercriticalMeltdown',
+    classId: 'kaelen',
+    branch: null,
+    nodeRequired: null,
+    name: 'Supercritical Meltdown',
+    titleCard: 'MELTDOWN OVERDRIVE',
+    hotkey: 'R',
+    icon: 'supercriticalMeltdown',
+    accent: PALETTE.ember,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 14.5,
+    radius: 240,
+    stunDuration: 2.0,
+    duration: 8.0,
+    summary: '8.0s Continuous Juggernaut · Molten Slag Trail · Flame Torrent · Thermobaric Vent Finale',
+    desc: 'Locks boiler valves into a 200% Supercritical Overdrive for 8.0s of continuous real-time combat (+40% Move Speed, +50% DR, Stun & Knockback immunity). Drops bubbling molten slag footsteps, unleashes a continuous 160px flamethrower torrent toward the cursor, grants 0-cooldown Steam Vents, and concludes with a 240px thermobaric shockwave (750% ATK + Stun/Corrode/Burn) on timeout or recast [R].',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: false,
+          twoToneWorld: false,
+          letterbox: 0.08,
+          untouchable: false,
+          lockMovement: false,
+        },
+      },
+      {
+        t: 40,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'MELTDOWN OVERDRIVE',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 260,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.06,
+          unfreezeWorld: true,
+        },
+      },
+      {
+        t: 280,
+        action: 'kaelenStartMeltdown',
+        nonGameplay: false,
+        params: {
+          duration: 8.0,
+          returnControl: true,
+          letterboxOut: true,
+          zoom: 1.0,
+        },
+      },
+      {
+        t: 8280,
+        action: 'kaelenTimeoutFinale',
+        nonGameplay: false,
+        params: {},
+      },
+      {
+        t: 8600,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
 
   sunfallFurnace: {
     id: 'sunfallFurnace',
@@ -1246,19 +1304,19 @@ export const ULTIMATES = {
     classId: 'kaelen',
     branch: 'furnace',
     nodeRequired: 'tectonicKiln',
-    name: 'Tectonic Kiln',
-    titleCard: 'TECTONIC KILN',
+    name: 'Cathedral of Iron',
+    titleCard: 'CATHEDRAL OF IRON',
     hotkey: 'R',
     icon: 'tectonicKiln',
     accent: PALETTE.ember,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 8.2,
+    totalDamageMult: 8.5,
     radius: 260,
     stunDuration: 2.5,
-    summary: '820% Total ATK · 8 Magma Fissures · Molten Juggernaut (+40% DEF)',
-    desc: 'Splits the battlefield with 8 radiating magma fissures while dropping 16 slag meteors across 260px, dealing 820% total ATK and granting Kaelen Molten Juggernaut (+40% DEF, 100% Pressure) for 8s.',
+    summary: '850% Total ATK · 4 Foundry Pillars · 80-Ton Forge Press Slam · Lava Lake',
+    desc: 'Summons an open-sided industrial forge cathedral: 4 steel girder pillars crash into 4 corners of the arena connected by searing slag channels (220% ATK), clamping down an 80-ton hydraulic forge press that crushes the center for 400% ATK, 2.5s Stun, and leaves a bubbling molten lava lake.',
     steps: [
       {
         t: 0,
@@ -1277,7 +1335,7 @@ export const ULTIMATES = {
         action: 'cutInEnter',
         nonGameplay: true,
         params: {
-          titleCard: 'TECTONIC KILN',
+          titleCard: 'CATHEDRAL OF IRON',
           slideFromRight: true,
           speedLines8Dir: true,
         },
@@ -1287,34 +1345,29 @@ export const ULTIMATES = {
         action: 'cutInExit',
         nonGameplay: true,
         params: {
-          zoom: 1.2,
+          zoom: 1.20,
           twoToneWorld: false,
         },
       },
       {
         t: 340,
-        action: 'kaelenIgniteSolarCore',
+        action: 'kaelenDeployFoundryRibs',
         nonGameplay: false,
         params: {
           radius: 260,
-          durationMs: 1450,
-          rayCount: 8,
-          meteorCount: 16,
-          corrosiveRain: false,
-          tectonicFissures: true,
+          durationMs: 1550,
           grantMoltenJuggernaut: true,
         },
       },
       {
-        t: 680,
-        action: 'kaelenSolarPulseWave',
+        t: 700,
+        action: 'kaelenFoundryRibPulse',
         nonGameplay: false,
         params: {
           waveIndex: 1,
           radius: 250,
           damageMult: 2.2,
           burnDuration: 6.0,
-          corrodeStacks: 1,
           shakePx: 7,
           impactFrame: {
             kind: 'explosion',
@@ -1324,15 +1377,14 @@ export const ULTIMATES = {
         },
       },
       {
-        t: 1100,
-        action: 'kaelenSolarPulseWave',
+        t: 1120,
+        action: 'kaelenFoundryRibPulse',
         nonGameplay: false,
         params: {
           waveIndex: 2,
           radius: 255,
-          damageMult: 2.4,
+          damageMult: 2.3,
           burnDuration: 6.0,
-          corrodeStacks: 1,
           shakePx: 8,
           impactFrame: {
             kind: 'explosion',
@@ -1343,16 +1395,16 @@ export const ULTIMATES = {
       },
       {
         t: 1580,
-        action: 'kaelenSolarCataclysmSlam',
+        action: 'kaelenFoundryPressSlam',
         nonGameplay: false,
         params: {
           radius: 260,
-          damageMult: 3.6,
+          damageMult: 4.0,
           stunDuration: 2.5,
-          burnDuration: 7.0,
-          corrodeStacks: 2,
-          shakePx: 12,
+          burnDuration: 8.0,
+          shakePx: 14,
           spawnCrater: true,
+          spawnLavaLake: true,
           impactFrame: {
             kind: 'explosion',
             frames: 4,
@@ -1361,7 +1413,7 @@ export const ULTIMATES = {
         },
       },
       {
-        t: 1920,
+        t: 1950,
         action: 'endCast',
         nonGameplay: true,
         params: {},
@@ -1374,19 +1426,19 @@ export const ULTIMATES = {
     classId: 'kaelen',
     branch: 'alchemist',
     nodeRequired: 'blightHurricane',
-    name: 'Blight Hurricane',
-    titleCard: 'BLIGHT HURRICANE',
+    name: 'Whiteout Rupture',
+    titleCard: 'WHITEOUT RUPTURE',
     hotkey: 'R',
     icon: 'blightHurricane',
-    accent: PALETTE.lye,
+    accent: PALETTE.signal,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 7.4,
-    radius: 260,
-    stunDuration: 2.0,
-    summary: '740% Total ATK · Vortex Pull + 5 Corrode Stacks · Acid Firestorm',
-    desc: 'Turns Sunfall Cataclysm into a swirling green-and-ember chemical firestorm that vacuums enemies inward, inflicts 5 max Corrode stacks + White-Hot Burn, and detonates for 740% total ATK.',
+    totalDamageMult: 8.0,
+    radius: 270,
+    stunDuration: 2.5,
+    summary: '800% Total ATK · Subzero Chemical Blizzard · Koch Snowflake Fractals · Ice Knife Rupture',
+    desc: 'Unleashes an endothermic cryogenic blizzard across 270px: sprawling hexagonal ice fractals and creeping frost needles freeze the earth (-200°C), pulling enemies inward, dealing 440% ATK across 2 subzero pulses + 5 Brittle stacks, before violently detonating into a screen-clearing shatter of razor ice knives for 360% ATK and 2.5s Freeze/Stun.',
     steps: [
       {
         t: 0,
@@ -1405,7 +1457,7 @@ export const ULTIMATES = {
         action: 'cutInEnter',
         nonGameplay: true,
         params: {
-          titleCard: 'BLIGHT HURRICANE',
+          titleCard: 'WHITEOUT RUPTURE',
           slideFromRight: true,
           speedLines8Dir: true,
         },
@@ -1415,82 +1467,74 @@ export const ULTIMATES = {
         action: 'cutInExit',
         nonGameplay: true,
         params: {
-          zoom: 1.18,
+          zoom: 1.20,
           twoToneWorld: false,
         },
       },
       {
         t: 340,
-        action: 'kaelenIgniteSolarCore',
+        action: 'kaelenDeployCryoBlizzard',
         nonGameplay: false,
         params: {
-          radius: 260,
-          durationMs: 1450,
-          rayCount: 8,
-          meteorCount: 14,
-          corrosiveRain: true,
-          tectonicFissures: false,
+          radius: 270,
+          durationMs: 1550,
         },
       },
       {
         t: 680,
-        action: 'kaelenSolarPulseWave',
+        action: 'kaelenCryoFractalPulse',
         nonGameplay: false,
         params: {
-          waveIndex: 1,
-          radius: 250,
-          damageMult: 2.0,
-          burnDuration: 6.0,
-          corrodeStacks: 3,
-          pullInwardPx: 65,
+          pulseIndex: 1,
+          radius: 260,
+          damageMult: 2.1,
+          pullInwardPx: 60,
           shakePx: 6,
+          freezeDuration: 1.5,
           impactFrame: {
-            kind: 'explosion',
-            frames: 2,
-            color: PALETTE.lye,
+            kind: 'slash',
+            frames: 3,
+            color: PALETTE.signal,
           },
         },
       },
       {
         t: 1100,
-        action: 'kaelenSolarPulseWave',
+        action: 'kaelenCryoFractalPulse',
         nonGameplay: false,
         params: {
-          waveIndex: 2,
-          radius: 255,
-          damageMult: 2.2,
-          burnDuration: 6.0,
-          corrodeStacks: 3,
-          pullInwardPx: 75,
+          pulseIndex: 2,
+          radius: 265,
+          damageMult: 2.3,
+          pullInwardPx: 70,
           shakePx: 7,
+          freezeDuration: 1.5,
           impactFrame: {
-            kind: 'explosion',
+            kind: 'slash',
             frames: 3,
-            color: PALETTE.lye,
+            color: PALETTE.signal,
           },
         },
       },
       {
         t: 1580,
-        action: 'kaelenSolarCataclysmSlam',
+        action: 'kaelenCryoShrapnelBurst',
         nonGameplay: false,
         params: {
-          radius: 260,
-          damageMult: 3.2,
-          stunDuration: 2.0,
-          burnDuration: 7.0,
-          corrodeStacks: 5,
-          shakePx: 11,
+          radius: 270,
+          damageMult: 3.6,
+          stunDuration: 2.5,
+          shakePx: 12,
           spawnCrater: true,
           impactFrame: {
-            kind: 'explosion',
+            kind: 'slash',
             frames: 4,
-            color: PALETTE.lye,
+            color: PALETTE.signal,
           },
         },
       },
       {
-        t: 1920,
+        t: 1950,
         action: 'endCast',
         nonGameplay: true,
         params: {},
@@ -1501,6 +1545,83 @@ export const ULTIMATES = {
   // ============================================================================
   // VESPERA LOCKE — ARC-DRONE ARTIFICER / SUMMONER ULTIMATES
   // ============================================================================
+
+  overclockedArmada: {
+    id: 'overclockedArmada',
+    classId: 'vespera',
+    branch: null,
+    nodeRequired: null,
+    name: 'Overclocked Armada',
+    titleCard: 'OVERCLOCKED ARMADA',
+    hotkey: 'R',
+    icon: 'overclockedArmada',
+    accent: PALETTE.volt,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 15.0,
+    radius: 260,
+    stunDuration: 2.0,
+    duration: 8.0,
+    summary: '8.0s Continuous Escort · 12 Orbiting Arc-Drones · Point Defense · Kamikaze Cluster Finale',
+    desc: 'Deploys an escort of 12 autonomous Arc-Drones in a concentric double ring for 8.0s of continuous combat. Drones auto-zap incoming projectiles within 140px, fire continuous twin neon laser beams at enemies near the cursor, and on timeout or recast [R] dive-bomb the cursor in a 12-drone cluster nuke + 240px EMP shockwave.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: false,
+          twoToneWorld: false,
+          letterbox: 0.08,
+          untouchable: false,
+          lockMovement: false,
+        },
+      },
+      {
+        t: 40,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'OVERCLOCKED ARMADA',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 260,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.05,
+          unfreezeWorld: true,
+        },
+      },
+      {
+        t: 280,
+        action: 'vesperaStartArmada',
+        nonGameplay: false,
+        params: {
+          duration: 8.0,
+          returnControl: true,
+          letterboxOut: true,
+          zoom: 1.0,
+        },
+      },
+      {
+        t: 8280,
+        action: 'vesperaTimeoutFinale',
+        nonGameplay: false,
+        params: {},
+      },
+      {
+        t: 8600,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
 
   orbitalSingularity: {
     id: 'orbitalSingularity',
@@ -1629,19 +1750,19 @@ export const ULTIMATES = {
     classId: 'vespera',
     branch: 'swarm',
     nodeRequired: 'valkyrieSwarm',
-    name: 'Valkyrie Swarm Protocol',
-    titleCard: 'VALKYRIE PROTOCOL',
+    name: 'Colossus Directive',
+    titleCard: 'COLOSSUS DIRECTIVE',
     hotkey: 'R',
     icon: 'valkyrieSwarm',
     accent: PALETTE.volt,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 8.0,
-    radius: 260,
-    stunDuration: 2.2,
-    summary: '800% Total ATK · +16 Seeker Micro-Drones · 6-Point Hexagram Matrix',
-    desc: 'Projects a 6-point hexagram drone matrix across 260px for 800% total ATK while launching 16 autonomous Seeker Micro-Drones and granting Vespera Arc Overcharge for 8s.',
+    totalDamageMult: 8.8,
+    radius: 270,
+    stunDuration: 2.5,
+    summary: '880% Total ATK · War Colossus Automaton · Puppet Wires · Pneumatic Fist & Core Slam',
+    desc: 'Vespera channels control wires from her gloves to direct a massive 68x80px War Colossus automaton. The iron construct drops in with thruster jets, executes a 220px pneumatic left fist sweep (220% ATK), stomps a hydraulic right foot shockwave (240% ATK + Stun), and locks both fists overhead for a colossal double-hammer core slam (420% ATK + 2.5s Stun + volt discharge crater).',
     steps: [
       {
         t: 0,
@@ -1660,7 +1781,7 @@ export const ULTIMATES = {
         action: 'cutInEnter',
         nonGameplay: true,
         params: {
-          titleCard: 'VALKYRIE PROTOCOL',
+          titleCard: 'COLOSSUS DIRECTIVE',
           slideFromRight: true,
           speedLines8Dir: true,
         },
@@ -1670,34 +1791,29 @@ export const ULTIMATES = {
         action: 'cutInExit',
         nonGameplay: true,
         params: {
-          zoom: 1.2,
+          zoom: 1.18,
           twoToneWorld: false,
         },
       },
       {
-        t: 340,
-        action: 'vesperaDeployIonMatrix',
+        t: 350,
+        action: 'vesperaSpawnColossus',
         nonGameplay: false,
         params: {
-          radius: 260,
-          durationMs: 1450,
-          vertexCount: 6,
-          spawnValkyrieSwarm: true,
-          thunderheadStorm: false,
+          radius: 270,
+          durationMs: 1580,
         },
       },
       {
         t: 680,
-        action: 'vesperaIonMatrixPulse',
+        action: 'vesperaColossusFistSweep',
         nonGameplay: false,
         params: {
-          pulseIndex: 1,
-          radius: 250,
+          radius: 240,
           damageMult: 2.2,
-          pullInwardPx: 55,
-          shakePx: 7,
+          shakePx: 8,
           impactFrame: {
-            kind: 'beam',
+            kind: 'groundSlam',
             frames: 3,
             color: PALETTE.volt,
           },
@@ -1705,16 +1821,15 @@ export const ULTIMATES = {
       },
       {
         t: 1100,
-        action: 'vesperaIonMatrixPulse',
+        action: 'vesperaColossusStomp',
         nonGameplay: false,
         params: {
-          pulseIndex: 2,
-          radius: 255,
-          damageMult: 2.3,
-          pullInwardPx: 65,
-          shakePx: 8,
+          radius: 250,
+          damageMult: 2.4,
+          stunDuration: 1.5,
+          shakePx: 9,
           impactFrame: {
-            kind: 'beam',
+            kind: 'groundSlam',
             frames: 3,
             color: PALETTE.volt,
           },
@@ -1722,23 +1837,23 @@ export const ULTIMATES = {
       },
       {
         t: 1580,
-        action: 'vesperaIonSingularityCollapse',
+        action: 'vesperaColossusGrandSlam',
         nonGameplay: false,
         params: {
-          radius: 260,
-          damageMult: 3.5,
-          stunDuration: 2.2,
-          shakePx: 11,
+          radius: 270,
+          damageMult: 4.2,
+          stunDuration: 2.5,
+          shakePx: 14,
           spawnCrater: true,
           impactFrame: {
-            kind: 'beam',
+            kind: 'groundSlam',
             frames: 4,
             color: PALETTE.volt,
           },
         },
       },
       {
-        t: 1920,
+        t: 1960,
         action: 'endCast',
         nonGameplay: true,
         params: {},
@@ -1751,19 +1866,19 @@ export const ULTIMATES = {
     classId: 'vespera',
     branch: 'dynamo',
     nodeRequired: 'zenithThunderhead',
-    name: 'Zenith Thunderhead',
-    titleCard: 'ZENITH THUNDERHEAD',
+    name: 'Worldstorm Atlas',
+    titleCard: 'WORLDSTORM ATLAS',
     hotkey: 'R',
     icon: 'zenithThunderhead',
-    accent: PALETTE.volt,
+    accent: PALETTE.signal,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 8.6,
+    totalDamageMult: 9.0,
     radius: 280,
     stunDuration: 2.6,
-    summary: '860% Total ATK · 8-Point Octagram Storm · 24 Sky-Lightning Bolts',
-    desc: 'Expands the Ion Singularity into a 280px 8-point octagram storm that calls down 24 sequential sky-lightning bolts and supercharges all deployed Tesla Pylons for 860% total ATK.',
+    summary: '900% Total ATK · Holographic Weather Radar · Isobar Contour Fronts · Sky-Lightning Cascade',
+    desc: 'Projects a cyan holographic atmospheric radar grid on the floor across 280px: undulating isobar pressure bands (1013 hPa, 995 hPa, 970 hPa EYE), swirling cyclonic wind vectors, and diagonal rain squalls. Calls down 4 cascading sky-lightning bolts into opposite pressure fronts (480% ATK total) before detonating a 40px supercell ion sky pillar directly into the eye for 420% ATK and 2.6s Stun.',
     steps: [
       {
         t: 0,
@@ -1782,7 +1897,7 @@ export const ULTIMATES = {
         action: 'cutInEnter',
         nonGameplay: true,
         params: {
-          titleCard: 'ZENITH THUNDERHEAD',
+          titleCard: 'WORLDSTORM ATLAS',
           slideFromRight: true,
           speedLines8Dir: true,
         },
@@ -1798,69 +1913,401 @@ export const ULTIMATES = {
       },
       {
         t: 340,
-        action: 'vesperaDeployIonMatrix',
+        action: 'vesperaDeployStormAtlas',
         nonGameplay: false,
         params: {
           radius: 280,
-          durationMs: 1480,
-          vertexCount: 8,
-          spawnValkyrieSwarm: false,
-          thunderheadStorm: true,
+          durationMs: 1580,
         },
       },
       {
         t: 680,
-        action: 'vesperaIonMatrixPulse',
+        action: 'vesperaSkyLightningCascade',
         nonGameplay: false,
         params: {
-          pulseIndex: 1,
+          boltWave: 1,
           radius: 270,
           damageMult: 2.4,
-          pullInwardPx: 65,
+          pullInwardPx: 60,
           shakePx: 8,
           impactFrame: {
             kind: 'beam',
             frames: 3,
-            color: PALETTE.volt,
+            color: PALETTE.signal,
           },
         },
       },
       {
         t: 1100,
-        action: 'vesperaIonMatrixPulse',
+        action: 'vesperaSkyLightningCascade',
         nonGameplay: false,
         params: {
-          pulseIndex: 2,
+          boltWave: 2,
           radius: 275,
-          damageMult: 2.5,
-          pullInwardPx: 75,
+          damageMult: 2.4,
+          pullInwardPx: 70,
           shakePx: 9,
           impactFrame: {
             kind: 'beam',
             frames: 3,
-            color: PALETTE.volt,
+            color: PALETTE.signal,
           },
         },
       },
       {
         t: 1580,
-        action: 'vesperaIonSingularityCollapse',
+        action: 'vesperaSupercellBurst',
         nonGameplay: false,
         params: {
           radius: 280,
-          damageMult: 3.7,
+          damageMult: 4.2,
           stunDuration: 2.6,
-          shakePx: 12,
+          shakePx: 13,
           spawnCrater: true,
           impactFrame: {
             kind: 'beam',
             frames: 4,
+            color: PALETTE.signal,
+          },
+        },
+      },
+      {
+        t: 1960,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  worldsplitter: {
+    id: 'worldsplitter',
+    classId: 'sena',
+    branch: 'anvil',
+    nodeRequired: 'worldsplitter',
+    name: 'Worldsplitter',
+    titleCard: 'WORLDSPLITTER',
+    hotkey: 'R',
+    icon: 'holdTheLine',
+    accent: PALETTE.ember,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 9.0, // 350% quake + 550% eruption
+    radius: 240,
+    summary: '900% Total ATK · 3 Concentric Fault Rings · Searing Magma Fissures · Tectonic Eruption',
+    desc: 'Smashes both hydraulic gauntlets into the bedrock, tearing 3 expanding concentric fault rings (80px, 160px, 240px) into the earth with incandescent magma fissures (350% ATK). Magma geysers erupt from the fracture intersections for 550% ATK and 2.8s Stun.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 80,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'WORLDSPLITTER',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.18,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 360,
+        action: 'senaWorldsplitterStart',
+        nonGameplay: false,
+        params: {
+          radius: 240,
+          shakePx: 12,
+          impactFrame: {
+            kind: 'groundSlam',
+            frames: 3,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 720,
+        action: 'senaWorldsplitterQuake',
+        nonGameplay: false,
+        params: {
+          damageMult: 3.5,
+          radius: 200,
+          knockbackPx: 120,
+          shakePx: 10,
+          impactFrame: {
+            kind: 'groundSlam',
+            frames: 3,
+            color: PALETTE.brass,
+          },
+        },
+      },
+      {
+        t: 1200,
+        action: 'senaWorldsplitterEruption',
+        nonGameplay: false,
+        params: {
+          damageMult: 5.5,
+          radius: 240,
+          stunDuration: 2.8,
+          shakePx: 15,
+          impactFrame: {
+            kind: 'groundSlam',
+            frames: 4,
+            color: PALETTE.ember,
+          },
+        },
+      },
+      {
+        t: 1680,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  perfectFrequency: {
+    id: 'perfectFrequency',
+    classId: 'sena',
+    branch: 'cutter',
+    nodeRequired: 'perfectFrequency',
+    name: 'Perfect Frequency',
+    titleCard: 'PERFECT FREQUENCY',
+    hotkey: 'R',
+    icon: 'nineCuts',
+    accent: PALETTE.signal,
+    chargeNeeded: 85,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 11.0, // 180% beat1 + 220% beat2 + 280% crescendo + 420% forte
+    radius: 260,
+    summary: '1100% Total ATK · 8-Band Equalizer Soundstage · 4 Rhythm Beats · Forte Finale',
+    desc: 'Steps into a holographic 8-band audio visualizer stage on the floor. Executes timed rhythmic shock pulses on Beats 1 & 2 (400% ATK total), spins a dual conductive ribbon vortex on Beat 3 (280% ATK), and triggers Max Harmony Forte on Beat 4 for a 420% ATK 360-degree sonic-electro detonation and 2.5s Stun.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 80,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'PERFECT FREQUENCY',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.15,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 340,
+        action: 'senaStartSoundstage',
+        nonGameplay: false,
+        params: {
+          radius: 250,
+          durationMs: 1700,
+        },
+      },
+      {
+        t: 660,
+        action: 'senaBeatWindowDrop',
+        nonGameplay: false,
+        params: {
+          beatIndex: 1,
+          radius: 140,
+          damageMult: 1.8,
+          shakePx: 6,
+          color: PALETTE.signal,
+          impactFrame: {
+            kind: 'beam',
+            frames: 2,
+            color: PALETTE.signal,
+          },
+        },
+      },
+      {
+        t: 990,
+        action: 'senaBeatWindowDrop',
+        nonGameplay: false,
+        params: {
+          beatIndex: 2,
+          radius: 190,
+          damageMult: 2.2,
+          shakePx: 8,
+          color: PALETTE.volt,
+          impactFrame: {
+            kind: 'beam',
+            frames: 2,
             color: PALETTE.volt,
           },
         },
       },
       {
-        t: 1920,
+        t: 1320,
+        action: 'senaHarmonicCrescendo',
+        nonGameplay: false,
+        params: {
+          radius: 220,
+          damageMult: 2.8,
+          shakePx: 10,
+          impactFrame: {
+            kind: 'beam',
+            frames: 3,
+            color: PALETTE.signal,
+          },
+        },
+      },
+      {
+        t: 1680,
+        action: 'senaForteResonanceBurst',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          damageMult: 4.2,
+          stunDuration: 2.5,
+          shakePx: 14,
+          impactFrame: {
+            kind: 'beam',
+            frames: 4,
+            color: PALETTE.bone,
+          },
+        },
+      },
+      {
+        t: 2050,
+        action: 'endCast',
+        nonGameplay: true,
+        params: {},
+      },
+    ],
+  },
+
+  blackoutCascade: {
+    id: 'blackoutCascade',
+    classId: 'rook',
+    branch: 'longhand',
+    nodeRequired: 'blackoutCascade',
+    name: 'Blackout Cascade',
+    titleCard: 'BLACKOUT CASCADE',
+    hotkey: 'R',
+    icon: 'longCount',
+    accent: PALETTE.signal,
+    chargeNeeded: 100,
+    requiresTargetWithinPx: 0,
+    pauseChargeWhileActive: false,
+    totalDamageMult: 10.0, // 380% grid + 620% collapse
+    radius: 260,
+    summary: '1000% Total ATK · 3 Tesla Relay Pylons · High-Voltage Laser Grid · Superconductor EMP',
+    desc: 'Deploys 3 high-voltage Tesla relay pylons in an equilateral triangle. High-voltage laser wires connect the pylons into a power grid zapping trapped hostiles for 380% ATK total. All 3 pylons overload inward into a blinding 260px superconductor EMP blackout detonation dealing 620% ATK and 2.8s Stun with digital matrix glitch lines.',
+    steps: [
+      {
+        t: 0,
+        action: 'startCast',
+        nonGameplay: true,
+        params: {
+          freezeWorld: true,
+          twoToneWorld: true,
+          letterbox: 0.12,
+          untouchable: true,
+          lockMovement: true,
+        },
+      },
+      {
+        t: 80,
+        action: 'cutInEnter',
+        nonGameplay: true,
+        params: {
+          titleCard: 'BLACKOUT CASCADE',
+          slideFromRight: true,
+          speedLines8Dir: true,
+        },
+      },
+      {
+        t: 330,
+        action: 'cutInExit',
+        nonGameplay: true,
+        params: {
+          zoom: 1.18,
+          twoToneWorld: false,
+        },
+      },
+      {
+        t: 350,
+        action: 'rookDeployRelayPylons',
+        nonGameplay: false,
+        params: {
+          radius: 220,
+          durationMs: 1400,
+        },
+      },
+      {
+        t: 720,
+        action: 'rookChargeCircuitGrid',
+        nonGameplay: false,
+        params: {
+          radius: 220,
+          damageMult: 3.8,
+          pullInwardPx: 45,
+          shakePx: 9,
+          impactFrame: {
+            kind: 'beam',
+            frames: 3,
+            color: PALETTE.signal,
+          },
+        },
+      },
+      {
+        t: 1250,
+        action: 'rookSuperconductorCollapse',
+        nonGameplay: false,
+        params: {
+          radius: 260,
+          damageMult: 6.2,
+          stunDuration: 2.8,
+          shakePx: 15,
+          impactFrame: {
+            kind: 'beam',
+            frames: 4,
+            color: PALETTE.bone,
+          },
+        },
+      },
+      {
+        t: 1680,
         action: 'endCast',
         nonGameplay: true,
         params: {},
@@ -1869,10 +2316,93 @@ export const ULTIMATES = {
   },
 };
 
+// Specialization ultimate aliases
+ULTIMATES.colossusDirective = ULTIMATES.valkyrieSwarm;
+ULTIMATES.worldstormAtlas = ULTIMATES.zenithThunderhead;
+ULTIMATES.cathedralOfIron = ULTIMATES.tectonicKiln;
+ULTIMATES.whiteoutRupture = ULTIMATES.blightHurricane;
+ULTIMATES.zeroPointReversal = ULTIMATES.junkyardRain;
+
 /**
- * Resolves the active Ultimate definition for a given player class & unlocked Master nodes.
+ * Resolves the active Ultimate definition for a given player class, active specialization, equipped ultimate slot, & unlocked Master nodes.
  */
-export function getActiveUltimateForPlayer(classId = 'sena', ownedNodes = []) {
+export function getActiveUltimateForPlayer(
+  classId = 'sena',
+  ownedNodes = [],
+  activeClassId = null,
+  ultimateSlot = null
+) {
+  // 1. Direct ultimateSlot resolution if equipped
+  const ultKey = (ultimateSlot || '').toLowerCase();
+  if (ultKey) {
+    if (ultKey.includes('meltdown') || ultKey.includes('flyover') || ultKey.includes('broadside')) {
+      return ULTIMATES.supercriticalMeltdown;
+    }
+    if (ultKey.includes('cathedral') || ultKey.includes('tectonic') || ultKey.includes('kiln')) {
+      return ULTIMATES.tectonicKiln;
+    }
+    if (ultKey.includes('whiteout') || ultKey.includes('rupture') || ultKey.includes('blight')) {
+      return ULTIMATES.blightHurricane;
+    }
+    if (ultKey.includes('armada') || ultKey.includes('cleaver') || ultKey.includes('cataclysm-edge')) {
+      return ULTIMATES.overclockedArmada;
+    }
+    if (ultKey.includes('colossus') || ultKey.includes('valkyrie') || ultKey.includes('puppeteer')) {
+      return ULTIMATES.valkyrieSwarm;
+    }
+    if (ultKey.includes('worldstorm') || ultKey.includes('thunderhead') || ultKey.includes('supercell')) {
+      return ULTIMATES.zenithThunderhead;
+    }
+    if (ultKey.includes('corridor') || ultKey.includes('phantom')) {
+      return ULTIMATES.sevenCuts;
+    }
+    if (ultKey.includes('worldsplitter') || ultKey.includes('cataclysm-fissure') || ultKey.includes('riftbreaker')) {
+      return ULTIMATES.worldsplitter;
+    }
+    if (ultKey.includes('frequency') || ultKey.includes('crescendo') || ultKey.includes('pulsedancer')) {
+      return ULTIMATES.perfectFrequency;
+    }
+    if (ultKey.includes('meridian') || ultKey.includes('curtain') || ultKey.includes('railhunter')) {
+      return ULTIMATES.railSlug;
+    }
+    if (ultKey.includes('weather') || ultKey.includes('battery') || ultKey.includes('siegegunner')) {
+      return ULTIMATES.deadGround;
+    }
+    if (ultKey.includes('blackout') || ultKey.includes('static-grid') || ultKey.includes('circuitwarden')) {
+      return ULTIMATES.blackoutCascade;
+    }
+    if (ultKey.includes('press') || ultKey.includes('polarity-collapse') || ultKey.includes('magnetcrusher')) {
+      return ULTIMATES.craneDrop;
+    }
+    if (ultKey.includes('typhoon') || ultKey.includes('scrap-maelstrom') || ultKey.includes('scrapstorm')) {
+      return ULTIMATES.scrapfall;
+    }
+    if (ultKey.includes('reversal') || ultKey.includes('flux-implosion') || ultKey.includes('polaritybreaker')) {
+      return ULTIMATES.junkyardRain;
+    }
+  }
+
+  // 2. Active Specialization ID resolution
+  const specKey = (activeClassId || '').toLowerCase();
+  if (specKey) {
+    if (specKey === 'cindercorsair') return ULTIMATES.supercriticalMeltdown;
+    if (specKey === 'cruciblearchitect') return ULTIMATES.tectonicKiln;
+    if (specKey === 'cryosaboteur') return ULTIMATES.blightHurricane;
+    if (specKey === 'voltreaver') return ULTIMATES.overclockedArmada;
+    if (specKey === 'ironpuppeteer') return ULTIMATES.valkyrieSwarm;
+    if (specKey === 'stormcartographer') return ULTIMATES.zenithThunderhead;
+    if (specKey === 'phantomedge') return ULTIMATES.sevenCuts;
+    if (specKey === 'riftbreaker') return ULTIMATES.worldsplitter;
+    if (specKey === 'pulsedancer') return ULTIMATES.perfectFrequency;
+    if (specKey === 'railhunter') return ULTIMATES.railSlug;
+    if (specKey === 'siegegunner') return ULTIMATES.deadGround;
+    if (specKey === 'circuitwarden') return ULTIMATES.blackoutCascade;
+    if (specKey === 'magnetcrusher') return ULTIMATES.craneDrop;
+    if (specKey === 'scrapstorm') return ULTIMATES.scrapfall;
+    if (specKey === 'polaritybreaker') return ULTIMATES.junkyardRain;
+  }
+
+  // 3. Fallback: Base Character ID + Master Tree Nodes
   if (classId === 'sena') {
     if (ownedNodes.includes('nineCuts')) return ULTIMATES.nineCuts;
     if (ownedNodes.includes('holdTheLine')) return ULTIMATES.holdTheLine;
@@ -1891,12 +2421,12 @@ export function getActiveUltimateForPlayer(classId = 'sena', ownedNodes = []) {
   if (classId === 'kaelen') {
     if (ownedNodes.includes('tectonicKiln')) return ULTIMATES.tectonicKiln;
     if (ownedNodes.includes('blightHurricane')) return ULTIMATES.blightHurricane;
-    return ULTIMATES.sunfallFurnace;
+    return ULTIMATES.supercriticalMeltdown || ULTIMATES.sunfallFurnace;
   }
   if (classId === 'vespera') {
     if (ownedNodes.includes('valkyrieSwarm')) return ULTIMATES.valkyrieSwarm;
     if (ownedNodes.includes('zenithThunderhead')) return ULTIMATES.zenithThunderhead;
-    return ULTIMATES.orbitalSingularity;
+    return ULTIMATES.overclockedArmada || ULTIMATES.orbitalSingularity;
   }
   return ULTIMATES.sevenCuts;
 }

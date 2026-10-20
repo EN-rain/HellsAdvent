@@ -444,6 +444,67 @@ test('Backward compatibility: Legacy save files without class change fields load
   assert.strictEqual(Object.keys(player.treeNodes).length, 0);
 });
 
+console.log('\n--- 8. 3-CARD LEVEL-UP SPECIALIZATION POPUP CHOICE SYSTEM ---');
+
+test('Reaching Level 15 milestone automatically triggers pendingClassChoice modal flag', () => {
+  const player = new Player('sena');
+  assert.strictEqual(player.level, 1);
+  assert.strictEqual(player.pendingClassChoice, false);
+  assert.strictEqual(player.chosenClassAtLevel15, null);
+
+  // Level up to 14
+  player.setLevel(14);
+  assert.strictEqual(player.level, 14);
+  assert.strictEqual(player.pendingClassChoice, false);
+
+  // Level up to 15
+  player.setLevel(15);
+  assert.strictEqual(player.level, 15);
+  assert.strictEqual(player.pendingClassChoice, true);
+  assert.strictEqual(player.chosenClassAtLevel15, null);
+});
+
+test('Selecting a specialization card locks choice, updates class/stance, and preserves Level & XP', () => {
+  const player = new Player('sena');
+  player.setLevel(14);
+  player.gainXp(player.xpToNext + 100); // Level 15 with overflow XP
+
+  assert.strictEqual(player.level, 15);
+  assert.strictEqual(player.pendingClassChoice, true);
+  const preservedLevel = player.level;
+  const preservedXp = player.xp;
+
+  // Player must choose 1 of the 3 cards (e.g., 'pulseDancer')
+  const chosenClass = 'pulseDancer';
+  player.switchClass(chosenClass);
+  player.chosenClassAtLevel15 = chosenClass;
+  player.pendingClassChoice = false;
+
+  // Verify class change
+  assert.strictEqual(player.activeClassId, 'pulseDancer');
+  assert.strictEqual(player.chosenClassAtLevel15, 'pulseDancer');
+  assert.strictEqual(player.pendingClassChoice, false);
+
+  // STRICT RULING: Level & XP invariant
+  assert.strictEqual(player.level, preservedLevel);
+  assert.strictEqual(player.xp, preservedXp);
+
+  // Subsequent levels do NOT re-trigger pendingClassChoice
+  player.setLevel(16);
+  assert.strictEqual(player.level, 16);
+  assert.strictEqual(player.pendingClassChoice, false);
+});
+
+test('Manual triggerClassChoice method enables re-prompting choice on demand', () => {
+  const player = new Player('sena');
+  player.setLevel(15);
+  player.chosenClassAtLevel15 = 'phantomEdge';
+  player.pendingClassChoice = false;
+
+  player.triggerClassChoice();
+  assert.strictEqual(player.pendingClassChoice, true);
+});
+
 console.log('\n================================================================');
 console.log(`ALL TESTS PASSED! (${passedTests}/${totalTests} tests successful)`);
 console.log('================================================================\n');

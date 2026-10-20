@@ -43,6 +43,7 @@ import {
   getIntrinsicTraitRank,
   getClassTraitRank,
 } from '../data/classChangeData.js';
+import { CLASS_TREES, getSpecTree } from '../data/talentTreeData.js';
 
 export class Player {
   constructor(classId = 'sena') {
@@ -212,6 +213,8 @@ export class Player {
     this.ultimateSlot = CHARACTERS[normalizedClassId]?.ultimate?.id || null;
     this.loadoutPresets = getDefaultPresets(normalizedClassId);
     this.treeNodes = {};
+    this.chosenClassAtLevel15 = null;
+    this.pendingClassChoice = false;
 
     this._initClassData(classId, 1, null, true);
   }
@@ -397,6 +400,7 @@ export class Player {
   }
 
   setLevel(targetLevel, particles = null) {
+    const prevLevel = this.level;
     const newLevel = Math.max(1, Math.min(PLAYER_CONFIG.levelCap || 50, Math.round(targetLevel)));
     const diff = newLevel - this.level;
     this.level = newLevel;
@@ -408,6 +412,11 @@ export class Player {
     this.recalculateStats(false);
     this.hp = this.maxHp;
     this.stamina = this.maxStamina;
+
+    if (prevLevel < 15 && this.level >= 15 && !this.chosenClassAtLevel15) {
+      this.pendingClassChoice = true;
+    }
+
     sound.playLevelUp?.();
     if (particles) {
       particles.spawnShockwave?.(this.x, this.y, 85, PALETTE.brass, 0.35);
@@ -538,12 +547,66 @@ export class Player {
     return false;
   }
 
-  // --- CLASS CHANGE & LOADOUT SYSTEM (v4.1) ---
+  // --- CHARACTER & CLASS CHANGE SYSTEM (v4.1) ---
 
-  switchClass(newClassId) {
+  switchCharacter(newCharId, targetSpecId = null) {
+    if (!newCharId) return { success: false, reason: 'Invalid character ID' };
+    const normalizedCharId = newCharId.toLowerCase();
+    const ch = CHARACTERS[normalizedCharId];
+    if (!ch) return { success: false, reason: 'Character definition not found' };
+
+    // Clear active temporary combat statuses
+    this.statuses.clearAll();
+
+    // Reinitialize base class data, behavior, sprites, and base stats
+    this._initClassData(normalizedCharId, this.stage || 1, this.branch || null, false);
+
+    // Pick active specialization: if targetSpecId belongs to this character, use it; else starting class
+    const chosenSpec = targetSpecId && SPECIALIZATIONS[targetSpecId]?.char === normalizedCharId
+      ? targetSpecId
+      : ch.startingClass || 'phantomEdge';
+
+    this.activeClassId = chosenSpec;
+    this.unlockedClasses = [this.activeClassId];
+    this.skillSlots = getDefaultSkillSlots(normalizedCharId);
+
+    const specDef = SPECIALIZATIONS[this.activeClassId];
+    const specUlt = specDef?.skills?.find((s) => s.ultimate);
+    this.ultimateSlot = specUlt?.id || ch.ultimate?.id || null;
+
+    this.loadoutPresets = getDefaultPresets(normalizedCharId);
+    this.treeNodes = {};
+    this.chosenClassAtLevel15 = null;
+    this.pendingClassChoice = false;
+
+    // Reset ultimate meter sequencer state
+    if (this.ultimates) {
+      this.ultimates.reset();
+    }
+
+    // Recalculate stats with the new character's base scaling
+    this.recalculateStats(false);
+    this.hp = Math.min(this.hp, this.maxHp);
+    this.stamina = Math.min(this.stamina, this.maxStamina);
+
+    return {
+      success: true,
+      characterId: normalizedCharId,
+      activeClassId: this.activeClassId,
+      ultimateSlot: this.ultimateSlot
+    };
+  }
+
+  switchClass(newClassId, autoEquipUlt = true) {
     if (!newClassId) return { success: false, reason: 'Invalid class ID' };
     const spec = SPECIALIZATIONS[newClassId];
     if (!spec) return { success: false, reason: 'Specialization not found' };
+
+    // If switching to a specialization of a DIFFERENT character,
+    // seamlessly switch character first so base sprites, behaviors, and skills remain 100% in sync!
+    if (spec.char && spec.char !== this.classId) {
+      return this.switchCharacter(spec.char, newClassId);
+    }
 
     // Auto-unlock if not already in unlocked list
     if (!this.unlockedClasses.includes(newClassId)) {
@@ -553,13 +616,21 @@ export class Player {
     // Switch active specialization ID
     this.activeClassId = newClassId;
 
+    // Automatically equip the specialization's signature Level 45 Awakening Ultimate
+    if (autoEquipUlt) {
+      const specUlt = spec.skills?.find((s) => s.ultimate);
+      if (specUlt) {
+        this.ultimateSlot = specUlt.id;
+      }
+    }
+
     // CRITICAL BRAINSTORM RULING:
     // Character level and XP ALWAYS persist on class change (never reset to Lv 1).
     // Gold, stats, inventory, and world progress remain intact.
 
     // Refresh stats without altering character level or XP
     this.recalculateStats(false);
-    return { success: true, activeClassId: this.activeClassId };
+    return { success: true, activeClassId: this.activeClassId, ultimateSlot: this.ultimateSlot };
   }
 
   unlockClass(classId) {
@@ -567,6 +638,11 @@ export class Player {
     if (!this.unlockedClasses.includes(classId)) {
       this.unlockedClasses.push(classId);
     }
+    return true;
+  }
+
+  triggerClassChoice() {
+    this.pendingClassChoice = true;
     return true;
   }
 
@@ -662,14 +738,14 @@ export class Player {
 
     if (!preset) return { success: false, reason: 'Preset not found' };
 
+    if (preset.classId && this.unlockedClasses.includes(preset.classId)) {
+      this.switchClass(preset.classId, false);
+    }
     if (Array.isArray(preset.slots)) {
       this.skillSlots = [...preset.slots];
     }
     if (preset.ultimate) {
       this.ultimateSlot = preset.ultimate;
-    }
-    if (preset.classId && this.unlockedClasses.includes(preset.classId)) {
-      this.switchClass(preset.classId);
     }
     return { success: true };
   }
@@ -700,6 +776,75 @@ export class Player {
     return { success: true, invested: true };
   }
 
+  investTalent(nodeId, maxRank = 1, choice = undefined, nodeType = 'passive') {
+    if (!nodeId) return { success: false, reason: 'Invalid node ID' };
+    if (!this.treeNodes) this.treeNodes = {};
+
+    const cur = this.treeNodes[nodeId];
+
+    if (nodeType === 'choice' || choice !== undefined) {
+      const targetChoice = choice !== undefined ? choice : 0;
+      if (cur !== undefined) {
+        // Already invested, switching variant is free!
+        const existingChoice = typeof cur === 'object' ? cur.choice : cur;
+        const newChoice = choice !== undefined ? choice : (existingChoice === 0 ? 1 : 0);
+        this.treeNodes[nodeId] = { choice: newChoice, rank: 1 };
+        this.recalculateStats(false);
+        sound.playCoin?.();
+        return { success: true, switched: true, choice: newChoice };
+      }
+      // First investment costs 1 point
+      if (this.getAvailableTreePoints() <= 0) {
+        return { success: false, reason: 'No available skill points' };
+      }
+      this.treeNodes[nodeId] = { choice: targetChoice, rank: 1 };
+      this.recalculateStats(false);
+      sound.playStamp?.();
+      return { success: true, invested: true, choice: targetChoice };
+    }
+
+    // Passive or Active node
+    if (cur !== undefined) {
+      const currentRank = typeof cur === 'number' ? cur : (cur?.rank || 1);
+      if (currentRank < maxRank) {
+        if (this.getAvailableTreePoints() <= 0) {
+          return { success: false, reason: 'No available skill points' };
+        }
+        this.treeNodes[nodeId] = currentRank + 1;
+        this.recalculateStats(false);
+        sound.playCoin?.();
+        return { success: true, rank: currentRank + 1 };
+      }
+      return { success: true, maxed: true };
+    }
+
+    if (this.getAvailableTreePoints() <= 0) {
+      return { success: false, reason: 'No available skill points' };
+    }
+
+    this.treeNodes[nodeId] = 1;
+    this.recalculateStats(false);
+    sound.playStamp?.();
+    return { success: true, invested: true };
+  }
+
+  refundTalent(nodeId) {
+    if (!this.treeNodes || this.treeNodes[nodeId] === undefined) {
+      return { success: false, reason: 'Not learned' };
+    }
+
+    const cur = this.treeNodes[nodeId];
+    if (typeof cur === 'number' && cur > 1) {
+      this.treeNodes[nodeId] = cur - 1;
+    } else {
+      delete this.treeNodes[nodeId];
+    }
+
+    this.recalculateStats(false);
+    sound.playHit?.(false);
+    return { success: true, refunded: true };
+  }
+
   respecTree() {
     this.treeNodes = {};
     this.recalculateStats(false);
@@ -707,20 +852,32 @@ export class Player {
   }
 
   getAvailableTreePoints() {
-    const totalPoints = Math.max(0, this.level - 1);
-    const spent = Object.keys(this.treeNodes || {}).length;
+    const totalPoints = Math.max(0, this.level - 1) + (this.bonusSkillPoints || 0);
+    let spent = 0;
+    for (const val of Object.values(this.treeNodes || {})) {
+      if (typeof val === 'number') {
+        spent += Math.max(1, val);
+      } else if (val && typeof val.rank === 'number') {
+        spent += Math.max(1, val.rank);
+      } else {
+        spent += 1;
+      }
+    }
     return Math.max(0, totalPoints - spent);
   }
 
   getSkillFork(skillNameOrId) {
     if (!this.treeNodes || !skillNameOrId) return null;
-    if (this.treeNodes[skillNameOrId] !== undefined) return this.treeNodes[skillNameOrId];
+    if (this.treeNodes[skillNameOrId] !== undefined) {
+      const v = this.treeNodes[skillNameOrId];
+      return typeof v === 'object' ? v.choice ?? 0 : v;
+    }
 
     const target = String(skillNameOrId).toLowerCase().replace(/[^a-z0-9]/g, '');
     for (const [k, v] of Object.entries(this.treeNodes)) {
       const kNorm = k.toLowerCase().replace(/[^a-z0-9]/g, '');
       if (kNorm === target || kNorm.includes(target) || target.includes(kNorm)) {
-        return v;
+        return typeof v === 'object' ? v.choice ?? 0 : v;
       }
     }
     return null;
@@ -770,6 +927,8 @@ export class Player {
       ownedEquipment: [...this.ownedEquipment],
       supplies: { ...this.supplies },
       ultimateCharge: this.ultimateCharge,
+      chosenClassAtLevel15: this.chosenClassAtLevel15,
+      pendingClassChoice: Boolean(this.pendingClassChoice),
     };
   }
 
@@ -789,6 +948,8 @@ export class Player {
       ? JSON.parse(JSON.stringify(data.loadoutPresets))
       : getDefaultPresets(normalizedClassId);
     this.treeNodes = data.treeNodes ? { ...data.treeNodes } : {};
+    this.chosenClassAtLevel15 = data.chosenClassAtLevel15 || null;
+    this.pendingClassChoice = Boolean(data.pendingClassChoice);
 
     this.stage = data.stage || 1;
     this.branch = data.branch || null;
@@ -892,6 +1053,31 @@ export class Player {
       dodgeCdRed += (this.passives.servoLubricant || 0) * 0.10;
     }
 
+    // Dual Talent Tree node bonuses
+    if (this.treeNodes && typeof CLASS_TREES !== 'undefined') {
+      const classTree = CLASS_TREES[this.classId];
+      const specTree = getSpecTree(this.activeClassId);
+      const allNodes = [...(classTree?.nodes || []), ...(specTree?.nodes || [])];
+      const nodeMap = new Map(allNodes.map((n) => [n.id, n]));
+
+      for (const [nodeId, val] of Object.entries(this.treeNodes)) {
+        const nodeDef = nodeMap.get(nodeId);
+        if (nodeDef && nodeDef.stats) {
+          const rank = typeof val === 'number'
+            ? (nodeDef.type === 'choice' ? 1 : Math.max(1, val))
+            : (val?.rank || 1);
+          if (nodeDef.stats.hp) maxHp += nodeDef.stats.hp * rank;
+          if (nodeDef.stats.stamina) maxStamina += nodeDef.stats.stamina * rank;
+          if (nodeDef.stats.atk) atk += nodeDef.stats.atk * rank;
+          if (nodeDef.stats.def) def += nodeDef.stats.def * rank;
+          if (nodeDef.stats.speed) speed += nodeDef.stats.speed * rank;
+          if (nodeDef.stats.critChance) critChance += nodeDef.stats.critChance * rank;
+          if (nodeDef.stats.dodgeCdReduction) dodgeCdRed += nodeDef.stats.dodgeCdReduction * rank;
+          if (nodeDef.stats.damageReduction) equipDr += nodeDef.stats.damageReduction * rank;
+        }
+      }
+    }
+
     // Status Effect modifiers
     maxHp = Math.round(maxHp * this.statuses.getMaxHpMultiplier());
     this.baseAtkForPipeline = atk;
@@ -984,11 +1170,16 @@ export class Player {
 
     this.xp += Math.max(0, finalXp);
     while (this.level < PLAYER_CONFIG.levelCap && this.xp >= this.xpToNext) {
+      const prevLevel = this.level;
       this.xp -= this.xpToNext;
       this.level += 1;
       this.skillPoints += 1; // +1 point per level from level 2 to 30 (29 points total)
       this.xpToNext = PLAYER_CONFIG.xpForNextLevel(this.level);
       this.recalculateStats(false);
+
+      if (prevLevel < 15 && this.level >= 15 && !this.chosenClassAtLevel15) {
+        this.pendingClassChoice = true;
+      }
 
       const healAmt = Math.ceil(this.maxHp * PLAYER_CONFIG.perLevel.healRatio);
       this.hp = Math.min(this.maxHp, this.hp + healAmt);

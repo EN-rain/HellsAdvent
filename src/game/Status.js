@@ -821,6 +821,12 @@ export class StatusSystem {
     if (this.map.has('riposteSurge')) {
       mult *= 1.25; // +25% Move Speed on Riposte Surge
     }
+    if (this.map.has('supercriticalOverdrive') || this.map.has('moltenJuggernaut')) {
+      mult *= 1.40; // +40% Move Speed on Supercritical Juggernaut
+    }
+    if (this.map.has('overclockedArmada')) {
+      mult *= 1.15; // +15% Move Speed on Overclocked Armada
+    }
     return mult;
   }
 
@@ -835,6 +841,7 @@ export class StatusSystem {
     if (this.map.has('overspun')) mult *= 1.25;
     if (this.map.has('rapidFire')) mult *= 2.0;
     if (this.map.has('riposteSurge')) mult *= 1.35; // +35% Attack Speed on Riposte Surge
+    if (this.map.has('overclockedArmada')) mult *= 1.25; // +25% Attack Speed on Overclocked Armada
     if (this.map.has('slow')) mult *= 0.70; // Slow plays animation at 70% speed
     return mult;
   }
@@ -845,6 +852,7 @@ export class StatusSystem {
     if (this.map.has('dugIn')) dr += 0.60;
     if (this.map.has('secondSkin')) dr += 0.25;
     if (this.map.has('heavyLanding')) dr += 0.15;
+    if (this.map.has('supercriticalOverdrive') || this.map.has('moltenJuggernaut')) dr += 0.50; // +50% DR
     return Math.min(0.75, dr);
   }
 

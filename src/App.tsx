@@ -9,6 +9,7 @@ import { HUD } from './ui/HUD.jsx';
 import { ShopModal } from './ui/ShopModal.jsx';
 import { InventoryModal } from './ui/InventoryModal.jsx';
 import { SkillPanel } from './ui/SkillPanel.jsx';
+import { ClassChoiceModal } from './ui/ClassChoiceModal.jsx';
 import { DevSettingsModal } from './ui/DevSettingsModal.jsx';
 import { GalleryView } from './ui/GalleryView.jsx';
 import {
@@ -155,6 +156,20 @@ export default function App() {
           engine={engine}
           isHarlowMode={uiState === 'harlow'}
           onClose={() => engine.setUiState('playing')}
+        />
+      )}
+
+      {/* 3-Card Level-Up Specialization Selection Modal */}
+      {!galleryOpen && uiState === 'classChoice' && engine && (
+        <ClassChoiceModal
+          engine={engine}
+          onSelectClass={(chosenClassId: string) => {
+            engine.player.switchClass(chosenClassId);
+            engine.player.chosenClassAtLevel15 = chosenClassId;
+            engine.player.pendingClassChoice = false;
+            engine.saveProgress();
+            engine.setUiState('playing');
+          }}
         />
       )}
 

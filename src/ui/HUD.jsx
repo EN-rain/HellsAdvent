@@ -346,8 +346,139 @@ function ClassMechanicBar({ mech, accentColor, engine }) {
   return null;
 }
 
+function SkillTooltip({ skill, accent, inSafeZone, currentStamina }) {
+  if (!skill) return null;
+  const isUlt = skill.isUlt;
+  const onCd = skill.cd > 0.05;
+  const lowStam = !isUlt && currentStamina !== undefined && currentStamina < skill.cost;
+
+  return (
+    <div
+      className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 pointer-events-none z-50 w-72 sm:w-80 bg-[#0B0D10]/95 border-2 p-3 text-left shadow-[0_8px_32px_rgba(0,0,0,0.95),0_0_16px_rgba(0,240,255,0.25)] backdrop-blur-md select-none"
+      style={{ borderColor: accent }}
+    >
+      {/* Downward indicator arrow */}
+      <div
+        className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#0B0D10] border-b-2 border-r-2 rotate-45"
+        style={{ borderColor: accent }}
+      />
+
+      {/* Header: Icon + Category Badge + Hotkey */}
+      <div className="flex items-start justify-between gap-2 pb-2 border-b border-[#2B3542]">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className="w-8 h-8 rounded bg-[#161A20] border flex items-center justify-center shrink-0 shadow-inner"
+            style={{ borderColor: accent }}
+          >
+            <PixelIcon itemId={skill.icon || 'lunge'} size={24} />
+          </div>
+          <div className="min-w-0">
+            <div className="text-xs font-black tracking-wide text-[#E3E8E5] truncate">
+              {skill.name}
+            </div>
+            <div
+              className="text-[9px] font-bold uppercase tracking-wider truncate"
+              style={{ color: accent }}
+            >
+              {skill.category || (isUlt ? 'Ultimate Awakening' : 'Active Technique')}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
+          <span
+            className="px-1.5 py-0.5 rounded bg-[#161A20] border text-[10px] font-black text-white tabular-nums"
+            style={{ borderColor: accent }}
+          >
+            [{skill.hotkey}]
+          </span>
+          {skill.level && (
+            <span className="px-1.5 py-0.5 rounded bg-[#161A20] border border-[#3A3F47] text-[10px] font-bold text-[#D9D2C3]">
+              L{skill.level}{skill.maxLevel ? `/${skill.maxLevel}` : ''}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="flex flex-wrap items-center gap-1.5 my-2">
+        {isUlt ? (
+          <>
+            <span className="px-2 py-0.5 bg-[#161A20] border border-[#3A3F47] text-[10px] font-bold text-[#FFC83D]">
+              ★ {skill.cost}
+            </span>
+            <span
+              className={`px-2 py-0.5 border text-[10px] font-bold ${
+                skill.ultReady
+                  ? 'bg-[#4FD6A0]/20 border-[#4FD6A0] text-[#4FD6A0]'
+                  : 'bg-[#161A20] border-[#3A3F47] text-[#D9D2C3]'
+              }`}
+            >
+              {skill.ultReady ? '⚡ READY TO CAST' : `${skill.ultPct}% CHARGED`}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="px-2 py-0.5 bg-[#161A20] border border-[#3A3F47] text-[10px] font-bold text-[#FFC83D]">
+              ⚡ {skill.cost > 0 ? `${skill.cost} SP` : 'Free'}
+            </span>
+            <span className="px-2 py-0.5 bg-[#161A20] border border-[#3A3F47] text-[10px] font-bold text-[#00F0FF]">
+              ⏱ {skill.maxCd > 0 ? `${skill.maxCd}s CD` : 'No CD'}
+            </span>
+            {skill.source && (
+              <span className="px-1.5 py-0.5 bg-[#161A20] border border-[#3A3F47] text-[9px] font-semibold text-[#8C9CA9]">
+                {skill.source}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Real-time Status Banners */}
+      {onCd && (
+        <div className="mb-2 flex items-center justify-between px-2 py-1 bg-[#FF3B3B]/10 border border-[#FF3B3B]/40 text-[#FF5252] text-[10px] font-bold">
+          <span className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#FF3B3B] animate-pulse" />
+            RECHARGING
+          </span>
+          <span className="tabular-nums font-mono">
+            {skill.cd.toFixed(1)}s remaining
+          </span>
+        </div>
+      )}
+
+      {lowStam && !onCd && (
+        <div className="mb-2 flex items-center justify-between px-2 py-1 bg-[#FFC83D]/10 border border-[#FFC83D]/40 text-[#FFC83D] text-[10px] font-bold">
+          <span>⚠ LOW STAMINA</span>
+          <span className="tabular-nums font-mono">
+            {currentStamina} / {skill.cost} SP
+          </span>
+        </div>
+      )}
+
+      {inSafeZone && (
+        <div className="mb-2 px-2 py-0.5 bg-[#4FD6A0]/10 border border-[#4FD6A0]/30 text-[#4FD6A0] text-[9px] font-bold uppercase tracking-wider">
+          🛡 Safe Zone · Weapons Sheathed
+        </div>
+      )}
+
+      {/* Description Body */}
+      <div className="text-xs text-[#D9D2C3] leading-relaxed font-normal">
+        {skill.desc || 'No description available for this technique.'}
+      </div>
+
+      {/* Footer hint */}
+      <div className="mt-2 pt-1.5 border-t border-[#1F2733] flex items-center justify-between text-[9px] text-[#7E8E9B] font-bold">
+        <span>{isUlt ? 'Trigger: Key [R]' : `Trigger: Key [${skill.hotkey}]`}</span>
+        <span style={{ color: accent }}>HELLSADVENT</span>
+      </div>
+    </div>
+  );
+}
+
 export function HUD({ snapshot, engine }) {
   const [hoveredStatus, setHoveredStatus] = useState(null);
+  const [hoveredSkillId, setHoveredSkillId] = useState(null);
 
   if (!snapshot) return null;
 
@@ -853,24 +984,75 @@ export function HUD({ snapshot, engine }) {
               SAFE ZONE · WEAPONS SHEATHED
             </div>
           )}
-          <div className={`flex items-center gap-3 bg-[#0B0D10]/90 border-2 px-3.5 py-2 ${
-            snapshot.inSafeZone ? 'border-[#4FD6A0]/40' : 'border-[#3A3F47]'
-          }`}>
+          <div
+            data-hud-interactive="true"
+            className={`pointer-events-auto flex items-center gap-3 bg-[#0B0D10]/90 border-2 px-3.5 py-2 ${
+              snapshot.inSafeZone ? 'border-[#4FD6A0]/40' : 'border-[#3A3F47]'
+            }`}
+          >
           {skillList.map((sk) => {
             const onCd = sk.cd > 0.05;
             const cdRatio = sk.maxCd > 0 ? Math.min(1, sk.cd / sk.maxCd) : 0;
             const lowStam = snapshot.stamina < sk.cost;
+            const isHovered = hoveredSkillId === sk.id;
+
+            const skDef = {
+              id: sk.id,
+              name: sk.name,
+              hotkey: sk.hotkey,
+              icon: sk.icon,
+              level: sk.level,
+              maxLevel: sk.maxLevel,
+              cost: sk.cost,
+              cd: sk.cd,
+              maxCd: sk.maxCd,
+              desc: sk.desc,
+              source: sk.source || 'Class Art',
+              category: sk.source === 'Original' ? 'Core Class Art' : sk.source ? `${sk.source} Specialization` : 'Active Technique',
+            };
 
             return (
-              <div key={sk.id} className="flex flex-col items-center">
+              <div
+                key={sk.id}
+                onMouseEnter={() => setHoveredSkillId(sk.id)}
+                onMouseLeave={() => setHoveredSkillId(null)}
+                onClick={() => {
+                  const slotIdx = parseInt(sk.hotkey, 10) - 1;
+                  if (!isNaN(slotIdx) && slotIdx >= 0 && slotIdx < 4) {
+                    engine.player.useSkillByIndex(
+                      slotIdx,
+                      engine.keys.worldMouseX,
+                      engine.keys.worldMouseY,
+                      engine.spawner,
+                      engine.projectiles,
+                      engine.particles,
+                      engine.camera,
+                      engine.world,
+                      engine.triggerHitStop
+                    );
+                  }
+                }}
+                className="relative flex flex-col items-center cursor-pointer group"
+              >
+                {isHovered && (
+                  <SkillTooltip
+                    skill={skDef}
+                    accent={accent}
+                    inSafeZone={snapshot.inSafeZone}
+                    currentStamina={snapshot.stamina}
+                  />
+                )}
                 <div
-                  className="relative w-13 h-13 bg-[#161A20] border-2 flex items-center justify-center"
+                  className="relative w-13 h-13 bg-[#161A20] border-2 flex items-center justify-center transition-all duration-75 group-hover:scale-105 group-hover:brightness-110"
                   style={{
                     borderColor: onCd
                       ? '#3A3F47'
                       : lowStam
                       ? PALETTE.rust
+                      : isHovered
+                      ? '#00F0FF'
                       : accent,
+                    boxShadow: isHovered ? `0 0 12px ${accent}66` : undefined,
                   }}
                 >
                   <PixelIcon itemId={sk.icon} size={32} />
@@ -897,7 +1079,9 @@ export function HUD({ snapshot, engine }) {
                     L{sk.level}
                   </span>
                 </div>
-                <span className="text-[10px] text-[#D9D2C3] mt-1 font-medium whitespace-nowrap">
+                <span className={`text-[10px] mt-1 font-medium whitespace-nowrap transition-colors ${
+                  isHovered ? 'text-white font-bold' : 'text-[#D9D2C3]'
+                }`}>
                   {sk.name}
                 </span>
               </div>
@@ -905,98 +1089,194 @@ export function HUD({ snapshot, engine }) {
           })}
 
           {/* Dodge Indicator */}
-          <div className="flex flex-col items-center">
-            <div
-              className={`relative w-13 h-13 bg-[#161A20] border-2 flex items-center justify-center ${
-                snapshot.cooldowns.dodge > 0.05 ? 'border-[#3A3F47]' : 'border-[#D9D2C3]'
-              }`}
-            >
-              <span className="text-[11px] font-bold text-[#D9D2C3]">ROLL</span>
-              {snapshot.cooldowns.dodge > 0.05 && (
+          {(() => {
+            const isHovered = hoveredSkillId === 'dodge';
+            const onCd = snapshot.cooldowns.dodge > 0.05;
+            const dodgeDef = {
+              id: 'dodge',
+              name: 'Roll (Evasion)',
+              hotkey: 'SPACE',
+              icon: 'dodge',
+              cost: 0,
+              cd: snapshot.cooldowns.dodge || 0,
+              maxCd: snapshot.maxCooldowns.dodge || 1.2,
+              desc: 'Perform a rapid evasive dash with invulnerability frames (i-frames) to avoid all incoming attacks and environmental hazards.',
+              source: 'Universal Evasion',
+              category: 'Mobility & I-Frames',
+            };
+
+            return (
+              <div
+                onMouseEnter={() => setHoveredSkillId('dodge')}
+                onMouseLeave={() => setHoveredSkillId(null)}
+                className="relative flex flex-col items-center cursor-pointer group"
+              >
+                {isHovered && (
+                  <SkillTooltip
+                    skill={dodgeDef}
+                    accent={accent}
+                    inSafeZone={snapshot.inSafeZone}
+                    currentStamina={snapshot.stamina}
+                  />
+                )}
                 <div
-                  className="absolute bottom-0 left-0 right-0 bg-[#0B0D10]/85 flex items-center justify-center"
+                  className={`relative w-13 h-13 bg-[#161A20] border-2 flex items-center justify-center transition-all duration-75 group-hover:scale-105 group-hover:brightness-110 ${
+                    onCd ? 'border-[#3A3F47]' : isHovered ? 'border-[#00F0FF]' : 'border-[#D9D2C3]'
+                  }`}
                   style={{
-                    height: `${Math.min(
-                      100,
-                      (snapshot.cooldowns.dodge / snapshot.maxCooldowns.dodge) * 100
-                    )}%`,
+                    boxShadow: isHovered ? '0 0 12px rgba(0,240,255,0.4)' : undefined,
                   }}
                 >
-                  <span className="text-xs font-bold text-[#D9D2C3] tabular-nums">
-                    {snapshot.cooldowns.dodge.toFixed(1)}
+                  <span className="text-[11px] font-bold text-[#D9D2C3]">ROLL</span>
+                  {onCd && (
+                    <div
+                      className="absolute bottom-0 left-0 right-0 bg-[#0B0D10]/85 flex items-center justify-center"
+                      style={{
+                        height: `${Math.min(
+                          100,
+                          (snapshot.cooldowns.dodge / snapshot.maxCooldowns.dodge) * 100
+                        )}%`,
+                      }}
+                    >
+                      <span className="text-xs font-bold text-[#D9D2C3] tabular-nums">
+                        {snapshot.cooldowns.dodge.toFixed(1)}
+                      </span>
+                    </div>
+                  )}
+                  <span className="absolute top-0.5 left-1 text-[9px] font-bold text-[#9E9789]">
+                    SPC
                   </span>
                 </div>
-              )}
-              <span className="absolute top-0.5 left-1 text-[9px] font-bold text-[#9E9789]">
-                SPC
-              </span>
-            </div>
-            <span className="text-[10px] text-[#9E9789] mt-1 whitespace-nowrap">Dodge</span>
-          </div>
+                <span className={`text-[10px] mt-1 whitespace-nowrap transition-colors ${
+                  isHovered ? 'text-white font-bold' : 'text-[#9E9789]'
+                }`}>
+                  Dodge
+                </span>
+              </div>
+            );
+          })()}
 
           <div className="h-12 w-px bg-[#3A3F47] mx-1" />
 
           {/* Ultimate Charge Ring [R] */}
-          <div className="flex flex-col items-center">
-            <div
-              onClick={() => {
-                engine.player.useUltimate(
-                  engine.keys.worldMouseX,
-                  engine.keys.worldMouseY,
-                  engine.spawner,
-                  engine.projectiles,
-                  engine.particles,
-                  engine.camera,
-                  engine.world,
-                  engine.settings
-                );
-              }}
-              className={`relative w-14 h-14 flex items-center justify-center cursor-pointer transition-transform ${
-                snapshot.invalidUltShake ? 'translate-x-1 duration-75 text-[#FF3B3B]' : ''
-              } ${snapshot.ultReadyFlash ? 'scale-105' : ''}`}
-              title={
-                ultReady
-                  ? `[R] ${snapshot.ultimateDef?.name || 'Ultimate'} Ready!`
-                  : `Charging ${snapshot.ultimateDef?.name || 'Ultimate'} (${Math.floor(ultPct)}%)`
-              }
-            >
-              <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
-                <circle
-                  cx="28"
-                  cy="28"
-                  r="23"
-                  fill="#0B0D10"
-                  stroke="#3A3F47"
-                  strokeWidth="4"
-                />
-                <circle
-                  cx="28"
-                  cy="28"
-                  r="23"
-                  fill="none"
-                  stroke={ultReady ? accent : snapshot.invalidUltShake ? PALETTE.blood : PALETTE.brass}
-                  strokeWidth="4"
-                  strokeDasharray={2 * Math.PI * 23}
-                  strokeDashoffset={2 * Math.PI * 23 * (1 - ultPct / 100)}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span
-                  className="text-xs font-bold tabular-nums"
-                  style={{ color: ultReady ? accent : PALETTE.bone }}
+          {(() => {
+            const isHovered = hoveredSkillId === 'ultimate';
+            const ultDef = {
+              id: 'ultimate',
+              name: snapshot.ultimateDef?.name || 'Ultimate Awakening',
+              hotkey: 'R',
+              icon: snapshot.ultimateDef?.icon || 'sevenCuts',
+              cost: `${neededCharge} Charge`,
+              cd: ultReady ? 0 : Math.max(0, neededCharge - snapshot.ultimateCharge),
+              maxCd: neededCharge,
+              desc: snapshot.ultimateDef?.desc || snapshot.ultimateDef?.summary || 'Channel accumulated combat charge into a devastating signature technique.',
+              source: 'Awakening Technique',
+              category: 'Ultimate Awakening',
+              isUlt: true,
+              ultPct: Math.floor(ultPct),
+              ultReady,
+            };
+
+            return (
+              <div
+                onMouseEnter={() => setHoveredSkillId('ultimate')}
+                onMouseLeave={() => setHoveredSkillId(null)}
+                className="relative flex flex-col items-center group cursor-pointer"
+              >
+                {isHovered && (
+                  <SkillTooltip
+                    skill={ultDef}
+                    accent={accent}
+                    inSafeZone={snapshot.inSafeZone}
+                    currentStamina={snapshot.stamina}
+                  />
+                )}
+                <div
+                  onClick={() => {
+                    engine.player.useUltimate(
+                      engine.keys.worldMouseX,
+                      engine.keys.worldMouseY,
+                      engine.spawner,
+                      engine.projectiles,
+                      engine.particles,
+                      engine.camera,
+                      engine.world,
+                      engine.settings
+                    );
+                  }}
+                  className={`relative w-14 h-14 flex items-center justify-center cursor-pointer transition-transform duration-75 group-hover:scale-105 ${
+                    snapshot.invalidUltShake ? 'translate-x-1 duration-75 text-[#FF3B3B]' : ''
+                  } ${snapshot.ultReadyFlash ? 'scale-105' : ''}`}
+                  title={
+                    ultReady
+                      ? `[R] ${snapshot.ultimateDef?.name || 'Ultimate'} Ready!`
+                      : `Charging ${snapshot.ultimateDef?.name || 'Ultimate'} (${Math.floor(ultPct)}%)`
+                  }
                 >
-                  {ultReady ? 'READY' : `${Math.floor(ultPct)}%`}
+                  <svg className="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
+                    <circle
+                      cx="28"
+                      cy="28"
+                      r="23"
+                      fill="#0B0D10"
+                      stroke="#3A3F47"
+                      strokeWidth="4"
+                    />
+                    <circle
+                      cx="28"
+                      cy="28"
+                      r="23"
+                      fill="none"
+                      stroke={
+                        snapshot.ultimateContinuousTimer > 0
+                          ? '#00F0FF'
+                          : ultReady
+                          ? accent
+                          : snapshot.invalidUltShake
+                          ? PALETTE.blood
+                          : PALETTE.brass
+                      }
+                      strokeWidth="4"
+                      strokeDasharray={2 * Math.PI * 23}
+                      strokeDashoffset={
+                        snapshot.ultimateContinuousTimer > 0
+                          ? 2 * Math.PI * 23 * (1 - snapshot.ultimateContinuousTimer / 8.0)
+                          : 2 * Math.PI * 23 * (1 - ultPct / 100)
+                      }
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span
+                      className="text-xs font-bold tabular-nums"
+                      style={{
+                        color:
+                          snapshot.ultimateContinuousTimer > 0
+                            ? '#00F0FF'
+                            : ultReady
+                            ? accent
+                            : PALETTE.bone,
+                      }}
+                    >
+                      {snapshot.ultimateContinuousTimer > 0
+                        ? `${snapshot.ultimateContinuousTimer.toFixed(1)}s`
+                        : ultReady
+                        ? 'READY'
+                        : `${Math.floor(ultPct)}%`}
+                    </span>
+                    <span className="text-[9px] font-bold text-[#FFC83D]">
+                      {snapshot.ultimateContinuousTimer > 0 ? '[R] RECAST' : '[R]'}
+                    </span>
+                  </div>
+                </div>
+                <span
+                  className="text-[10px] font-bold mt-0.5 whitespace-nowrap transition-colors group-hover:text-white"
+                  style={{ color: isHovered ? '#FFFFFF' : accent }}
+                >
+                  {snapshot.ultimateDef?.name || 'Ultimate'}
                 </span>
-                <span className="text-[9px] font-bold text-[#FFC83D]">[R]</span>
               </div>
-            </div>
-            <span
-              className="text-[10px] font-bold mt-0.5 whitespace-nowrap"
-              style={{ color: accent }}
-            >
-              {snapshot.ultimateDef?.name || 'Ultimate'}
-            </span>
-          </div>
+            );
+          })()}
         </div>
       </div>
 

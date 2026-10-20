@@ -85,12 +85,29 @@ export class UltimateSequencer {
     // Ines Scrapfall / Crane Drop / Junkyard Rain runtime state
     this.levitationZone = null; // { x, y, radius, elapsedMs, durationMs, pieces: [...] }
     this.slamStreaks = []; // [{ x, y, radius, life, maxLife, color }]
+    this.craneDropState = null; // { x, y, radius, elapsedMs, durationMs, currentDropIndex, blocks: [...] }
+    this.polarityVortex = null; // { x, y, radius, elapsedMs, durationMs, particles: [...] }
 
-    // Kaelen Sunfall Cataclysm / Tectonic Kiln / Blight Hurricane runtime state
+    // Kaelen Sunfall Cataclysm / Cathedral of Iron / Whiteout Rupture runtime state
     this.solarCataclysm = null; // { x, y, radius, elapsedMs, durationMs, rayCount, corrosiveRain, tectonicFissures, meteors: [...] }
+    this.foundryCathedral = null; // { x, y, radius, elapsedMs, durationMs, pressY, pillars: [...] }
+    this.cryoBlizzard = null; // { x, y, radius, elapsedMs, durationMs, fractalRings, iceNeedles: [...] }
 
-    // Vespera Orbital Ion Singularity / Valkyrie Swarm / Zenith Thunderhead runtime state
+    // Vespera Orbital Ion Singularity / Colossus Directive / Worldstorm Atlas runtime state
     this.ionSingularity = null; // { x, y, radius, elapsedMs, durationMs, vertexCount, thunderheadStorm, pillars: [...] }
+    this.colossusState = null; // { x, y, radius, elapsedMs, durationMs, stage, sweepProgress, stompShockwave, hammerProgress }
+    this.stormAtlas = null; // { x, y, radius, elapsedMs, durationMs, bolts: [...], supercellActive, radarAngle }
+
+    // Sena Worldsplitter & Perfect Frequency runtime state
+    this.worldsplitterState = null; // { x, y, radius, elapsedMs, durationMs, fissures: [...], spikes: [...], stage }
+    this.soundstageState = null; // { x, y, radius, elapsedMs, durationMs, bars: 8, beat: 0, ribbonAngle: 0, rings: [] }
+
+    // Rook Blackout Cascade runtime state
+    this.relayPylonsState = null; // { x, y, radius, elapsedMs, durationMs, pylons: [...], gridActive, collapsing }
+
+    // Continuous Flashy Ultimates runtime state
+    this.meltdownState = null; // { active, timer, duration, slagTimer, flameTimer, venting, flameAngle, slagFootprints }
+    this.armadaState = null; // { active, timer, duration, drones, zapTimer, laserTimer, diving, diveDrones, diveTarget, empTriggered }
 
     this.lastPlayerRef = null;
     this.lastSpawnerRef = null;
@@ -120,12 +137,29 @@ export class UltimateSequencer {
     this.slamStreaks = [];
     this.aimLineActive = false;
     this.levitationZone = null;
+    this.craneDropState = null;
+    this.polarityVortex = null;
     this.solarCataclysm = null;
+    this.foundryCathedral = null;
+    this.cryoBlizzard = null;
     this.ionSingularity = null;
+    this.colossusState = null;
+    this.stormAtlas = null;
+    this.meltdownState = null;
+    this.armadaState = null;
+    this.worldsplitterState = null;
+    this.soundstageState = null;
+    this.relayPylonsState = null;
   }
 
   getActiveUltimateDef(player) {
-    return getActiveUltimateForPlayer(player.classId, player.ownedNodes);
+    if (!player) return ULTIMATES.sevenCuts;
+    return getActiveUltimateForPlayer(
+      player.classId,
+      player.ownedNodes,
+      player.activeClassId,
+      player.ultimateSlot
+    );
   }
 
   getChargeNeeded(player) {
@@ -245,12 +279,24 @@ export class UltimateSequencer {
   ) {
     if (!player || player.dead) return false;
 
+    // Recast handling during active continuous states (allows early finale trigger on [R])
+    if (this.active) {
+      if (this.armadaState && this.armadaState.active && !this.armadaState.diving) {
+        this.triggerArmadaDiveBomb(player, worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world);
+        return true;
+      }
+      if (this.meltdownState && this.meltdownState.active && !this.meltdownState.venting) {
+        this.triggerMeltdownVent(player, spawner, projectiles, particles, camera, world);
+        return true;
+      }
+      return false;
+    }
+
     // Not castable while stunned, lifted, or mid-cinematic
     if (
       player.statuses.has('stun') ||
       player.statuses.has('lifted') ||
-      this.isCinematicActive() ||
-      this.active
+      this.isCinematicActive()
     ) {
       return false;
     }
@@ -672,6 +718,361 @@ export class UltimateSequencer {
       this.ionSingularity.pillars = this.ionSingularity.pillars.filter((pil) => pil.life > 0);
       if (this.ionSingularity.elapsedMs >= this.ionSingularity.durationMs) {
         this.ionSingularity = null;
+      }
+    }
+
+    // Update Ines Crane Drop overhead gantry crane
+    if (this.craneDropState) {
+      this.craneDropState.elapsedMs += dt * 1000;
+      for (let i = this.craneDropState.blocks.length - 1; i >= 0; i--) {
+        const blk = this.craneDropState.blocks[i];
+        blk.life -= dt;
+        if (blk.life <= 0) {
+          this.craneDropState.blocks.splice(i, 1);
+        }
+      }
+      if (this.craneDropState.elapsedMs >= this.craneDropState.durationMs) {
+        this.craneDropState = null;
+      }
+    }
+
+    // Update Ines Zero-Point Reversal polarity vortex
+    if (this.polarityVortex) {
+      this.polarityVortex.elapsedMs += dt * 1000;
+      for (const pt of this.polarityVortex.particles) {
+        pt.angle += pt.speed * dt;
+      }
+      if (this.polarityVortex.elapsedMs >= this.polarityVortex.durationMs) {
+        this.polarityVortex = null;
+      }
+    }
+
+    // Update Kaelen Foundry Cathedral (press descend and lava lake)
+    if (this.foundryCathedral) {
+      this.foundryCathedral.elapsedMs += dt * 1000;
+      if (!this.foundryCathedral.pressSlammed) {
+        this.foundryCathedral.pressY = Math.min(0, this.foundryCathedral.pressY + dt * 120);
+      }
+      if (this.foundryCathedral.elapsedMs >= this.foundryCathedral.durationMs) {
+        this.foundryCathedral = null;
+      }
+    }
+
+    // Update Kaelen Cryo Blizzard (ice needles growth and frost mist)
+    if (this.cryoBlizzard) {
+      this.cryoBlizzard.elapsedMs += dt * 1000;
+      for (const needle of this.cryoBlizzard.iceNeedles) {
+        needle.grown = Math.min(1, needle.grown + dt * 2.5);
+      }
+      if (this.cryoBlizzard.elapsedMs >= this.cryoBlizzard.durationMs) {
+        this.cryoBlizzard = null;
+      }
+    }
+
+    // Update Vespera Colossus Automaton
+    if (this.colossusState) {
+      this.colossusState.elapsedMs += dt * 1000;
+      if (this.colossusState.stage === 'sweep') {
+        this.colossusState.sweepAngle += dt * 8.0;
+      }
+      if (this.colossusState.elapsedMs >= this.colossusState.durationMs) {
+        this.colossusState = null;
+      }
+    }
+
+    // Update Vespera Worldstorm Atlas
+    if (this.stormAtlas) {
+      this.stormAtlas.elapsedMs += dt * 1000;
+      this.stormAtlas.radarAngle = (this.stormAtlas.radarAngle + dt * 3.8) % (Math.PI * 2);
+      for (let i = this.stormAtlas.bolts.length - 1; i >= 0; i--) {
+        const b = this.stormAtlas.bolts[i];
+        b.life -= dt;
+        if (b.life <= 0) {
+          this.stormAtlas.bolts.splice(i, 1);
+        }
+      }
+      if (this.stormAtlas.elapsedMs >= this.stormAtlas.durationMs) {
+        this.stormAtlas = null;
+      }
+    }
+
+    // Update Sena Worldsplitter (faultline tremor & magma glow)
+    if (this.worldsplitterState) {
+      this.worldsplitterState.elapsedMs += dt * 1000;
+      if (this.worldsplitterState.elapsedMs >= this.worldsplitterState.durationMs) {
+        this.worldsplitterState = null;
+      }
+    }
+
+    // Update Sena Soundstage (equalizer bar pulse & spinning ribbons)
+    if (this.soundstageState) {
+      this.soundstageState.elapsedMs += dt * 1000;
+      this.soundstageState.ribbonAngle = (this.soundstageState.ribbonAngle + dt * 4.2) % (Math.PI * 2);
+      for (let i = this.soundstageState.rings.length - 1; i >= 0; i--) {
+        const r = this.soundstageState.rings[i];
+        r.rad += dt * 180;
+        r.life -= dt;
+        if (r.life <= 0) {
+          this.soundstageState.rings.splice(i, 1);
+        }
+      }
+      if (this.soundstageState.elapsedMs >= this.soundstageState.durationMs) {
+        this.soundstageState = null;
+      }
+    }
+
+    // Update Rook Blackout Cascade (Tesla pylon discharge & laser wires)
+    if (this.relayPylonsState) {
+      this.relayPylonsState.elapsedMs += dt * 1000;
+      if (this.relayPylonsState.elapsedMs >= this.relayPylonsState.durationMs) {
+        this.relayPylonsState = null;
+      }
+    }
+
+    // 7. Update Kaelen's continuous Supercritical Meltdown (molten slag footsteps & flame torrent)
+    if (this.meltdownState) {
+      const ms = this.meltdownState;
+
+      // Update lingering molten slag footprints regardless of active flag
+      for (let i = ms.slagFootprints.length - 1; i >= 0; i--) {
+        const fp = ms.slagFootprints[i];
+        fp.life -= dt;
+        fp.tickTimer -= dt;
+        if (fp.tickTimer <= 0) {
+          fp.tickTimer = 0.16;
+          if (spawner && typeof spawner.queryRadius === 'function' && player) {
+            const near = spawner.queryRadius(fp.x, fp.y, fp.radius + 16);
+            for (const e of near) {
+              if (!e.active || e.hp <= 0) continue;
+              if (Math.hypot(e.x - fp.x, e.y - fp.y) <= fp.radius + (e.radius || 12)) {
+                e.takeDamage(Math.max(1, Math.round(player.atk * 0.35)), 0, 0, false, player, spawner, particles, camera);
+                if (e.active && e.hp > 0) {
+                  e.statuses.apply('slow', { duration: 1.5, value: 0.40, sourceName: 'Molten Slag' }, e, particles);
+                  e.statuses.apply('burn', { duration: 2.5, sourceAtk: player.atk * 0.5, sourceName: 'Molten Slag' }, e, particles);
+                }
+              }
+            }
+          }
+        }
+        if (fp.life <= 0) {
+          ms.slagFootprints.splice(i, 1);
+        }
+      }
+
+      if (ms.active && !ms.venting && player) {
+        ms.timer -= dt;
+
+        // Keep boiler pressure pegged to 200 during meltdown
+        if (player.classBehavior && player.classBehavior.pressure !== undefined) {
+          player.classBehavior.pressure = 200;
+        }
+
+        // Track cursor aimAngle
+        if (input && input.worldMouseX !== undefined && input.worldMouseY !== undefined) {
+          const ang = Math.atan2(input.worldMouseY - player.y, input.worldMouseX - player.x);
+          if (Number.isFinite(ang)) ms.flameAngle = ang;
+        } else {
+          ms.flameAngle = player.facingX >= 0 ? 0 : Math.PI;
+        }
+
+        // Footprint slag pools: drop every 0.16s
+        ms.slagTimer -= dt;
+        if (ms.slagTimer <= 0) {
+          ms.slagTimer = 0.16;
+          ms.slagFootprints.push({
+            x: player.x,
+            y: player.y + 4,
+            radius: 28,
+            life: 3.5,
+            maxLife: 3.5,
+            tickTimer: 0.12,
+          });
+          if (particles) {
+            particles.spawnBurst(player.x, player.y + 4, 3, PALETTE.ember, 10, 45, 1, 0.2);
+          }
+        }
+
+        // Roaring Flamethrower Jet: continuous 160px cone damage every 0.08s
+        ms.flameTimer -= dt;
+        if (ms.flameTimer <= 0) {
+          ms.flameTimer = 0.08;
+          const flameReach = 160;
+          const halfArc = 0.52; // ~30 deg
+
+          if (spawner && typeof spawner.queryRadius === 'function') {
+            const targets = spawner.queryRadius(player.x, player.y, flameReach + 24);
+            for (const e of targets) {
+              if (!e.active || e.hp <= 0) continue;
+              const dx = e.x - player.x;
+              const dy = e.y - player.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist > 0 && dist <= flameReach + (e.radius || 12)) {
+                const angDiff = Math.abs(Math.atan2(dy, dx) - ms.flameAngle);
+                const normDiff = Math.atan2(Math.sin(angDiff), Math.cos(angDiff));
+                if (Math.abs(normDiff) <= halfArc) {
+                  const pipe = computeDamagePipeline({
+                    baseDamage: player.baseAtkForPipeline * 0.45,
+                    atkBuffPct: this._getUltimateAtkBuffPct(player),
+                    isCrit: false,
+                    critMult: 1.0,
+                    targetStatuses: e.statuses,
+                    targetBaseDef: e.def || 0,
+                    sourceName: 'Supercritical Meltdown',
+                    targetName: e.name,
+                  });
+                  e.takeDamage(pipe.finalDamage, ms.flameAngle, 30, false, player, spawner, particles, camera);
+                  if (e.active && e.hp > 0) {
+                    e.statuses.apply('burn', { duration: 4.0, sourceAtk: player.atk * 0.8, sourceName: 'Supercritical Meltdown' }, e, particles);
+                  }
+                }
+              }
+            }
+          }
+
+          if (particles) {
+            const sprayDist = 35 + Math.random() * (flameReach - 35);
+            const sprayAng = ms.flameAngle + (Math.random() - 0.5) * halfArc;
+            const fx = player.x + Math.cos(sprayAng) * sprayDist;
+            const fy = player.y + Math.sin(sprayAng) * sprayDist;
+            particles.spawnBurst(fx, fy, 2, Math.random() > 0.4 ? PALETTE.ember : PALETTE.brass, 15, 60, 2, 0.22);
+          }
+        }
+
+        if (ms.timer <= 0) {
+          this.triggerMeltdownVent(player, spawner, projectiles, particles, camera, world);
+        }
+      }
+    }
+
+    // 8. Update Vespera's continuous Overclocked Armada (12 orbiting drones, point-defense, dual lasers)
+    if (this.armadaState && player) {
+      const arm = this.armadaState;
+
+      if (arm.active) {
+        arm.timer -= dt;
+
+        // Rotate orbiting drones
+        for (let i = 0; i < arm.drones.length; i++) {
+          const d = arm.drones[i];
+          d.angle += d.speed * dt;
+          d.x = player.x + Math.cos(d.angle) * d.radius;
+          d.y = player.y - 6 + Math.sin(d.angle) * (d.radius * 0.65);
+        }
+
+        // Point-Defense System: auto-zaps incoming enemy projectiles within 145px every 0.12s
+        arm.zapTimer -= dt;
+        if (arm.zapTimer <= 0 && projectiles && Array.isArray(projectiles.pool)) {
+          arm.zapTimer = 0.12;
+          for (let i = 0; i < projectiles.pool.length; i++) {
+            const pr = projectiles.pool[i];
+            if (!pr.active || pr.isPlayer) continue;
+            const distToPlayer = Math.hypot(pr.x - player.x, pr.y - player.y);
+            if (distToPlayer <= 145) {
+              pr.active = false;
+              let closestDrone = arm.drones[0];
+              let minDist = 9999;
+              for (const d of arm.drones) {
+                const dd = Math.hypot(d.x - pr.x, d.y - pr.y);
+                if (dd < minDist) {
+                  minDist = dd;
+                  closestDrone = d;
+                }
+              }
+              if (particles) {
+                particles.spawnLaserBeam(closestDrone.x, closestDrone.y, pr.x, pr.y, PALETTE.volt, 0.12);
+                particles.spawnShockwave(pr.x, pr.y, 22, PALETTE.volt, 0.16);
+                particles.spawnBurst(pr.x, pr.y, 6, PALETTE.signal, 30, 95, 1, 0.2);
+              }
+              sound.playHitMetal();
+              break;
+            }
+          }
+        }
+
+        // Twin Neon Laser Saturation: fires continuous tracer beams locking onto targets near cursor
+        arm.laserTimer -= dt;
+        if (arm.laserTimer <= 0) {
+          arm.laserTimer = 0.08;
+          const targetPointX = (input && input.worldMouseX !== undefined) ? input.worldMouseX : player.x;
+          const targetPointY = (input && input.worldMouseY !== undefined) ? input.worldMouseY : player.y;
+
+          if (spawner && typeof spawner.queryRadius === 'function') {
+            const nearbyEnemies = spawner.queryRadius(targetPointX, targetPointY, 260)
+              .filter((e) => e && e.active && e.hp > 0)
+              .sort((a, b) => Math.hypot(a.x - targetPointX, a.y - targetPointY) - Math.hypot(b.x - targetPointX, b.y - targetPointY));
+
+            const targets = nearbyEnemies.slice(0, 2);
+            arm.activeLaserTargets = [];
+            for (let ti = 0; ti < targets.length; ti++) {
+              const tgt = targets[ti];
+              const drone = arm.drones[(ti * 3 + Math.floor(this.elapsedMs * 0.01)) % arm.drones.length];
+              arm.activeLaserTargets.push({
+                fromX: drone.x,
+                fromY: drone.y,
+                toX: tgt.x,
+                toY: tgt.y,
+                color: ti === 0 ? PALETTE.volt : PALETTE.signal,
+              });
+
+              const pipe = computeDamagePipeline({
+                baseDamage: player.baseAtkForPipeline * 0.32,
+                atkBuffPct: this._getUltimateAtkBuffPct(player),
+                isCrit: false,
+                critMult: 1.0,
+                targetStatuses: tgt.statuses,
+                targetBaseDef: tgt.def || 0,
+                sourceName: 'Overclocked Armada',
+                targetName: tgt.name,
+              });
+              tgt.takeDamage(pipe.finalDamage, Math.atan2(tgt.y - drone.y, tgt.x - drone.x), 15, false, player, spawner, particles, camera);
+              if (tgt.active && tgt.hp > 0) {
+                tgt.statuses.apply('marked', { duration: 3.0, sourceName: 'Overclocked Armada' }, tgt, particles);
+              }
+              if (particles) {
+                particles.spawnBurst(tgt.x, tgt.y, 1, PALETTE.volt, 10, 50, 1, 0.15);
+              }
+            }
+          }
+        }
+
+        // Dive-bomb cluster animation & progression
+        if (arm.diving) {
+          let allImpacted = true;
+          for (let i = 0; i < arm.diveDrones.length; i++) {
+            const dd = arm.diveDrones[i];
+            if (dd.impacted) continue;
+            allImpacted = false;
+            dd.progress += dt / Math.max(0.05, dd.duration);
+            if (dd.progress >= 1) {
+              dd.progress = 1;
+              dd.impacted = true;
+              if (camera) camera.shake(4, 0.10);
+              if (particles) {
+                particles.spawnShockwave(dd.targetX, dd.targetY, 38, PALETTE.volt, 0.2);
+                particles.spawnBurst(dd.targetX, dd.targetY, 8, PALETTE.volt, 25, 110, 2, 0.25);
+              }
+              if (spawner && typeof spawner.queryRadius === 'function') {
+                const near = spawner.queryRadius(dd.targetX, dd.targetY, 45);
+                for (const e of near) {
+                  if (e.active && e.hp > 0) {
+                    e.takeDamage(Math.max(1, Math.round(player.atk * 0.50)), 0, 25, false, player, spawner, particles, camera);
+                  }
+                }
+              }
+            }
+          }
+
+          if (allImpacted && !arm.empTriggered) {
+            arm.empTriggered = true;
+            this.detonateArmadaEmp(player, arm.diveTarget.x, arm.diveTarget.y, spawner, particles, camera, world);
+          }
+        }
+
+        if (arm.timer <= 0 && !arm.diving) {
+          const tx = (input && input.worldMouseX !== undefined) ? input.worldMouseX : player.x;
+          const ty = (input && input.worldMouseY !== undefined) ? input.worldMouseY : player.y;
+          this.triggerArmadaDiveBomb(player, tx, ty, spawner, projectiles, particles, camera, world);
+        }
       }
     }
 
@@ -1886,6 +2287,1335 @@ export class UltimateSequencer {
         break;
       }
 
+      case 'inesDeployGantryCrane': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 170;
+        this.craneDropState = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 8000,
+          currentDropIndex: 0,
+          blocks: [],
+        };
+        sound.playUltimateStart();
+        break;
+      }
+
+      case 'inesGantryCraneDrop': {
+        const rad = p.radius || 170;
+        const zx = this.craneDropState ? this.craneDropState.x : player.x;
+        const zy = this.craneDropState ? this.craneDropState.y : player.y;
+        const wave = p.waveIndex || 1;
+
+        if (this.craneDropState) {
+          this.craneDropState.currentDropIndex = wave;
+          this.craneDropState.blocks.push({
+            x: zx + (wave === 1 ? -28 : wave === 2 ? 28 : 0),
+            y: zy,
+            radius: rad,
+            life: 0.55,
+            maxLife: 0.55,
+          });
+        }
+
+        sound.playHitMetal();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 7, 0.22);
+
+        this.slamStreaks.push({
+          x: zx,
+          y: zy,
+          radius: rad,
+          life: 0.38,
+          maxLife: 0.38,
+          color: PALETTE.verdigris,
+        });
+
+        if (particles) {
+          particles.spawnGroundBreakEffect(zx, zy, rad);
+          particles.spawnShockwave(zx, zy, rad, PALETTE.verdigris, 0.32);
+          particles.spawnDebris(zx, zy, 'canLid', 6);
+          particles.spawnDebris(zx, zy, 'shardRust', 6);
+          if (p.spawnCrater && particles.spawnCraterDecal) {
+            particles.spawnCraterDecal(zx, zy, Math.min(85, Math.round(rad * 0.45)));
+          }
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.0),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Crane Drop',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 160, false, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Crane Drop' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'inesDeployPolarityVortex': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 270;
+        this.polarityVortex = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1550,
+          particles: [],
+        };
+        for (let i = 0; i < 32; i++) {
+          const a = (i / 32) * Math.PI * 2;
+          this.polarityVortex.particles.push({
+            angle: a,
+            distRatio: 0.28 + (i % 5) * 0.14,
+            speed: (i % 2 === 0 ? 1 : -1) * (2.8 + (i % 3) * 0.8),
+            polarity: i % 2 === 0 ? '+' : '-',
+            color: i % 2 === 0 ? PALETTE.signal : PALETTE.verdigris,
+          });
+        }
+        sound.playUltimateStart();
+        break;
+      }
+
+      case 'inesPolarityPulse': {
+        const rad = p.radius || 260;
+        const zx = this.polarityVortex ? this.polarityVortex.x : player.x;
+        const zy = this.polarityVortex ? this.polarityVortex.y : player.y;
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 6, 0.16);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.verdigris, 0.28);
+          particles.spawnBurst(zx, zy, 20, PALETTE.verdigris, 40, 160, 2, 0.30);
+          particles.spawnBurst(zx, zy, 14, PALETTE.signal, 30, 130, 2, 0.25);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          const dist = Math.hypot(e.x - zx, e.y - zy);
+          if (dist <= rad + (e.radius || 12)) {
+            if (p.pullInwardPx > 0 && e.tier !== 'boss' && dist > 14) {
+              const pullAng = Math.atan2(zy - e.y, zx - e.x);
+              e.x = player.clampCoord(e.x + Math.cos(pullAng) * p.pullInwardPx);
+              e.y = player.clampCoord(e.y + Math.sin(pullAng) * p.pullInwardPx);
+            }
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 1.8),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Zero-Point Reversal',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(zy - e.y, zx - e.x), 45, false, player, spawner, particles, camera);
+            if (e.active && e.hp > 0) {
+              e.statuses.apply('marked', { duration: 5.0, sourceName: 'Zero-Point Reversal' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'inesPolarityInversionBurst': {
+        const rad = p.radius || 270;
+        const zx = this.polarityVortex ? this.polarityVortex.x : player.x;
+        const zy = this.polarityVortex ? this.polarityVortex.y : player.y;
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 12, 0.32);
+        if (p.spawnCrater && world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.verdigris, 0.40);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.6), PALETTE.bone, 0.25);
+          particles.spawnBurst(zx, zy, 34, PALETTE.verdigris, 60, 220, 3, 0.45);
+          particles.spawnBurst(zx, zy, 24, PALETTE.signal, 50, 180, 2, 0.35);
+          particles.spawnDebris(zx, zy, 'canLid', 8);
+          particles.spawnDebris(zx, zy, 'shardRust', 8);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 4.4),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Zero-Point Reversal',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 220, false, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Zero-Point Reversal' }, e, particles);
+            }
+          }
+        }
+        this.polarityVortex = null;
+        break;
+      }
+
+      case 'kaelenDeployFoundryRibs': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 260;
+        this.foundryCathedral = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1550,
+          pressY: -160,
+          pressTargetY: 0,
+          pressSlammed: false,
+          pillars: [
+            { x: player.x - rad * 0.65, y: player.y - rad * 0.55 },
+            { x: player.x + rad * 0.65, y: player.y - rad * 0.55 },
+            { x: player.x + rad * 0.65, y: player.y + rad * 0.55 },
+            { x: player.x - rad * 0.65, y: player.y + rad * 0.55 },
+          ],
+        };
+        if (p.grantMoltenJuggernaut) {
+          player.statuses.apply('moltenJuggernaut', { duration: 8.0, sourceName: 'Cathedral of Iron' }, player, particles);
+        }
+        sound.playUltimateStart();
+        if (camera) camera.shake(6, 0.18);
+        if (particles) {
+          for (const pil of this.foundryCathedral.pillars) {
+            particles.spawnGroundBreakEffect(pil.x, pil.y, 40);
+            particles.spawnSparks(pil.x, pil.y, 10, PALETTE.ember);
+          }
+        }
+        break;
+      }
+
+      case 'kaelenFoundryRibPulse': {
+        const rad = p.radius || 250;
+        const zx = this.foundryCathedral ? this.foundryCathedral.x : player.x;
+        const zy = this.foundryCathedral ? this.foundryCathedral.y : player.y;
+
+        sound.playExplosion();
+        if (camera) camera.shake(p.shakePx || 8, 0.20);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.ember, 0.32);
+          particles.spawnBurst(zx, zy, 26, PALETTE.ember, 50, 175, 3, 0.35);
+          particles.spawnBurst(zx, zy, 16, PALETTE.brass, 40, 150, 2, 0.28);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.2),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Cathedral of Iron',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 80, false, player, spawner, particles, camera);
+            if (e.active && e.hp > 0) {
+              e.statuses.apply('burn', { duration: p.burnDuration || 6.0, sourceAtk: player.atk * 1.5, sourceName: 'Cathedral of Iron' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'kaelenFoundryPressSlam': {
+        const rad = p.radius || 260;
+        const zx = this.foundryCathedral ? this.foundryCathedral.x : player.x;
+        const zy = this.foundryCathedral ? this.foundryCathedral.y : player.y;
+
+        if (this.foundryCathedral) {
+          this.foundryCathedral.pressSlammed = true;
+          this.foundryCathedral.pressY = 0;
+        }
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playExplosion === 'function') sound.playExplosion();
+        if (camera) camera.shake(p.shakePx || 14, 0.38);
+
+        if (p.spawnCrater && world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        if (particles) {
+          particles.spawnGroundBreakEffect(zx, zy, rad);
+          particles.spawnShockwave(zx, zy, rad, PALETTE.ember, 0.45);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.65), PALETTE.brass, 0.30);
+          particles.spawnBurst(zx, zy, 40, PALETTE.ember, 60, 240, 3, 0.50);
+          particles.spawnBurst(zx, zy, 25, PALETTE.bone, 50, 190, 2, 0.40);
+        }
+
+        if (player.classId === 'kaelen' && player.classBehavior && Array.isArray(player.classBehavior.pools)) {
+          for (let i = 0; i < 5; i++) {
+            const a = (i / 5) * Math.PI * 2;
+            player.classBehavior.pools.push({
+              x: player.clampCoord(zx + Math.cos(a) * (rad * 0.4)),
+              y: player.clampCoord(zy + Math.sin(a) * (rad * 0.4)),
+              radius: 75,
+              life: 8.0,
+              maxLife: 8.0,
+              tickTimer: 0.15,
+              kind: 'magma',
+            });
+          }
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 4.0),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Cathedral of Iron',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 220, false, player, spawner, particles, camera);
+            if (e.active && e.hp > 0) {
+              if (p.stunDuration > 0) {
+                e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Cathedral of Iron' }, e, particles);
+              }
+              e.statuses.apply('burn', { duration: p.burnDuration || 8.0, sourceAtk: player.atk * 1.8, sourceName: 'Cathedral of Iron' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'kaelenDeployCryoBlizzard': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 270;
+        this.cryoBlizzard = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1550,
+          fractalRings: [0.35, 0.65, 1.0],
+          iceNeedles: [],
+        };
+        for (let i = 0; i < 24; i++) {
+          const a = (i / 24) * Math.PI * 2 + (i % 3) * 0.3;
+          const dist = 30 + (i * 27) % (rad - 30);
+          this.cryoBlizzard.iceNeedles.push({
+            x: player.clampCoord(player.x + Math.cos(a) * dist),
+            y: player.clampCoord(player.y + Math.sin(a) * dist),
+            h: 12 + (i % 4) * 6,
+            grown: 0,
+          });
+        }
+        sound.playUltimateStart();
+        if (particles) {
+          particles.spawnShockwave(player.x, player.y, rad, PALETTE.signal, 0.28);
+          particles.spawnBurst(player.x, player.y, 20, PALETTE.signal, 30, 120, 2, 0.3);
+        }
+        break;
+      }
+
+      case 'kaelenCryoFractalPulse': {
+        const rad = p.radius || 260;
+        const zx = this.cryoBlizzard ? this.cryoBlizzard.x : player.x;
+        const zy = this.cryoBlizzard ? this.cryoBlizzard.y : player.y;
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 7, 0.18);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.signal, 0.32);
+          particles.spawnBurst(zx, zy, 25, PALETTE.signal, 45, 160, 2, 0.32);
+          particles.spawnBurst(zx, zy, 15, PALETTE.bone, 35, 130, 2, 0.25);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 28)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          const dist = Math.hypot(e.x - zx, e.y - zy);
+          if (dist <= rad + (e.radius || 12)) {
+            if (p.pullInwardPx > 0 && e.tier !== 'boss' && dist > 14) {
+              const pullAng = Math.atan2(zy - e.y, zx - e.x);
+              e.x = player.clampCoord(e.x + Math.cos(pullAng) * p.pullInwardPx);
+              e.y = player.clampCoord(e.y + Math.sin(pullAng) * p.pullInwardPx);
+            }
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.1),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Whiteout Rupture',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(zy - e.y, zx - e.x), 40, false, player, spawner, particles, camera);
+            if (e.active && e.hp > 0) {
+              e.statuses.apply('slow', { duration: 4.0, value: 0.50, sourceName: 'Whiteout Rupture' }, e, particles);
+              if (p.freezeDuration > 0) {
+                e.statuses.apply('stun', { duration: p.freezeDuration, sourceName: 'Whiteout Freeze' }, e, particles);
+              }
+            }
+          }
+        }
+        break;
+      }
+
+      case 'kaelenCryoShrapnelBurst': {
+        const rad = p.radius || 270;
+        const zx = this.cryoBlizzard ? this.cryoBlizzard.x : player.x;
+        const zy = this.cryoBlizzard ? this.cryoBlizzard.y : player.y;
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 12, 0.35);
+
+        if (p.spawnCrater && world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.signal, 0.42);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.6), PALETTE.bone, 0.28);
+          particles.spawnBurst(zx, zy, 40, PALETTE.signal, 60, 230, 3, 0.48);
+          particles.spawnBurst(zx, zy, 25, PALETTE.bone, 50, 180, 2, 0.38);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 3.6),
+              atkBuffPct,
+              isCrit: true,
+              critMult: 1.5,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Whiteout Rupture',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 190, true, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Whiteout Rupture' }, e, particles);
+            }
+          }
+        }
+        this.cryoBlizzard = null;
+        break;
+      }
+
+      case 'vesperaSpawnColossus': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 270;
+        this.colossusState = {
+          x: player.x,
+          y: player.y - 12,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1580,
+          stage: 'descend',
+          sweepAngle: -Math.PI * 0.75,
+          sweepProgress: 0,
+          stompShockwave: 0,
+          hammerProgress: 0,
+        };
+        sound.playUltimateStart();
+        if (camera) camera.shake(5, 0.15);
+        if (particles) {
+          particles.spawnBurst(player.x, player.y - 12, 16, PALETTE.volt, 40, 140, 2, 0.25);
+        }
+        break;
+      }
+
+      case 'vesperaColossusFistSweep': {
+        const rad = p.radius || 240;
+        const zx = this.colossusState ? this.colossusState.x : player.x;
+        const zy = this.colossusState ? this.colossusState.y : player.y;
+
+        if (this.colossusState) {
+          this.colossusState.stage = 'sweep';
+          this.colossusState.sweepProgress = 1;
+        }
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 8, 0.20);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.volt, 0.32);
+          particles.spawnBurst(zx, zy, 25, PALETTE.volt, 50, 180, 3, 0.32);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.2),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Colossus Directive',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 140, false, player, spawner, particles, camera);
+          }
+        }
+        break;
+      }
+
+      case 'vesperaColossusStomp': {
+        const rad = p.radius || 250;
+        const zx = this.colossusState ? this.colossusState.x : player.x;
+        const zy = this.colossusState ? this.colossusState.y : player.y;
+
+        if (this.colossusState) {
+          this.colossusState.stage = 'stomp';
+          this.colossusState.stompShockwave = 1;
+        }
+
+        sound.playHitMetal();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 9, 0.22);
+        if (particles) {
+          particles.spawnGroundBreakEffect(zx, zy, rad * 0.7);
+          particles.spawnShockwave(zx, zy, rad, PALETTE.volt, 0.35);
+          particles.spawnBurst(zx, zy, 28, PALETTE.volt, 60, 190, 2, 0.35);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.4),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Colossus Directive',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 160, false, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Colossus Directive' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'vesperaColossusGrandSlam': {
+        const rad = p.radius || 270;
+        const zx = this.colossusState ? this.colossusState.x : player.x;
+        const zy = this.colossusState ? this.colossusState.y : player.y;
+
+        if (this.colossusState) {
+          this.colossusState.stage = 'grandSlam';
+          this.colossusState.hammerProgress = 1;
+        }
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playExplosion === 'function') sound.playExplosion();
+        if (camera) camera.shake(p.shakePx || 14, 0.38);
+
+        if (p.spawnCrater && world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        if (particles) {
+          particles.spawnGroundBreakEffect(zx, zy, rad);
+          particles.spawnShockwave(zx, zy, rad, PALETTE.volt, 0.44);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.55), PALETTE.bone, 0.28);
+          particles.spawnBurst(zx, zy, 40, PALETTE.volt, 70, 240, 3, 0.50);
+          particles.spawnBurst(zx, zy, 25, PALETTE.signal, 50, 190, 2, 0.38);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 4.2),
+              atkBuffPct,
+              isCrit: true,
+              critMult: 1.5,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Colossus Directive',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 220, true, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Colossus Directive' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'vesperaDeployStormAtlas': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 280;
+        this.stormAtlas = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1580,
+          bolts: [],
+          supercellActive: false,
+          radarAngle: 0,
+        };
+        sound.playUltimateStart();
+        break;
+      }
+
+      case 'vesperaSkyLightningCascade': {
+        const rad = p.radius || 270;
+        const zx = this.stormAtlas ? this.stormAtlas.x : player.x;
+        const zy = this.stormAtlas ? this.stormAtlas.y : player.y;
+        const wave = p.boltWave || 1;
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 8, 0.20);
+
+        if (this.stormAtlas) {
+          for (let b = 0; b < 2; b++) {
+            const ang = (wave * 1.5 + b * Math.PI) % (Math.PI * 2);
+            const bx = zx + Math.cos(ang) * (rad * 0.65);
+            const by = zy + Math.sin(ang) * (rad * 0.65);
+            this.stormAtlas.bolts.push({
+              targetX: bx,
+              targetY: by,
+              life: 0.35,
+              maxLife: 0.35,
+              segments: 5,
+            });
+          }
+        }
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.signal, 0.30);
+          particles.spawnBurst(zx, zy, 25, PALETTE.signal, 50, 180, 2, 0.32);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          const dist = Math.hypot(e.x - zx, e.y - zy);
+          if (dist <= rad + (e.radius || 12)) {
+            if (p.pullInwardPx > 0 && e.tier !== 'boss' && dist > 14) {
+              const pullAng = Math.atan2(zy - e.y, zx - e.x);
+              e.x = player.clampCoord(e.x + Math.cos(pullAng) * p.pullInwardPx);
+              e.y = player.clampCoord(e.y + Math.sin(pullAng) * p.pullInwardPx);
+            }
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.4),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Worldstorm Atlas',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(zy - e.y, zx - e.x), 50, false, player, spawner, particles, camera);
+            if (e.active && e.hp > 0) {
+              e.statuses.apply('marked', { duration: 6.0, sourceName: 'Worldstorm Atlas' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'vesperaSupercellBurst': {
+        const rad = p.radius || 280;
+        const zx = this.stormAtlas ? this.stormAtlas.x : player.x;
+        const zy = this.stormAtlas ? this.stormAtlas.y : player.y;
+
+        if (this.stormAtlas) {
+          this.stormAtlas.supercellActive = true;
+        }
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 13, 0.36);
+
+        if (p.spawnCrater && world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.signal, 0.44);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.55), PALETTE.bone, 0.28);
+          particles.spawnBurst(zx, zy, 40, PALETTE.signal, 65, 240, 3, 0.50);
+          particles.spawnBurst(zx, zy, 25, PALETTE.volt, 50, 190, 2, 0.40);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 4.2),
+              atkBuffPct,
+              isCrit: true,
+              critMult: 1.5,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Worldstorm Atlas',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 200, true, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Worldstorm Atlas' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'kaelenStartMeltdown': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        this.movementLocked = false;
+        player.ultimateActive = false;
+        player.statuses.remove('untouchable');
+        if (p.letterboxOut) {
+          this.letterboxTarget = 0;
+        }
+        if (camera && camera.setZoom) {
+          camera.setZoom(p.zoom || 1.0);
+        }
+
+        const dur = p.duration || 8.0;
+        this.meltdownState = {
+          active: true,
+          timer: dur,
+          duration: dur,
+          slagTimer: 0,
+          flameTimer: 0,
+          venting: false,
+          flameAngle: this.aimAngle || 0,
+          slagFootprints: [],
+        };
+
+        if (player.classBehavior && player.classBehavior.pressure !== undefined) {
+          player.classBehavior.pressure = 200;
+        }
+        player.statuses.apply('moltenJuggernaut', { duration: dur, sourceName: 'Supercritical Meltdown' }, player, particles);
+        player.statuses.apply('supercriticalOverdrive', { duration: dur, sourceName: 'Supercritical Meltdown' }, player, particles);
+        player.statuses.apply('overheated', { duration: dur, sourceName: 'Supercritical Meltdown' }, player, particles);
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playExplosion === 'function') sound.playExplosion();
+        if (camera) camera.shake(8, 0.22);
+        if (particles) {
+          particles.spawnShockwave(player.x, player.y, 140, PALETTE.ember, 0.32);
+          particles.spawnBurst(player.x, player.y, 25, PALETTE.ember, 40, 160, 3, 0.35);
+        }
+        break;
+      }
+
+      case 'kaelenTimeoutFinale': {
+        if (this.meltdownState && !this.meltdownState.venting) {
+          this.triggerMeltdownVent(player, spawner, projectiles, particles, camera, world);
+        }
+        break;
+      }
+
+      case 'vesperaStartArmada': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        this.movementLocked = false;
+        player.ultimateActive = false;
+        player.statuses.remove('untouchable');
+        if (p.letterboxOut) {
+          this.letterboxTarget = 0;
+        }
+        if (camera && camera.setZoom) {
+          camera.setZoom(p.zoom || 1.0);
+        }
+
+        const dur = p.duration || 8.0;
+        const drones = [];
+        // 6 inner drones (r = 46px, rotating +2.5 rad/s)
+        for (let i = 0; i < 6; i++) {
+          drones.push({
+            ring: 'inner',
+            radius: 46,
+            angle: (i / 6) * Math.PI * 2,
+            speed: 2.5,
+            color: PALETTE.volt,
+            x: player.x,
+            y: player.y,
+          });
+        }
+        // 6 outer drones (r = 82px, rotating -1.8 rad/s)
+        for (let i = 0; i < 6; i++) {
+          drones.push({
+            ring: 'outer',
+            radius: 82,
+            angle: (i / 6) * Math.PI * 2,
+            speed: -1.8,
+            color: PALETTE.signal,
+            x: player.x,
+            y: player.y,
+          });
+        }
+
+        this.armadaState = {
+          active: true,
+          timer: dur,
+          duration: dur,
+          drones,
+          zapTimer: 0,
+          laserTimer: 0,
+          activeLaserTargets: [],
+          diving: false,
+          diveDrones: [],
+          diveTarget: { x: player.x, y: player.y },
+          empTriggered: false,
+        };
+
+        player.statuses.apply('arcOvercharge', { duration: dur, sourceName: 'Overclocked Armada' }, player, particles);
+        player.statuses.apply('overclockedArmada', { duration: dur, sourceName: 'Overclocked Armada' }, player, particles);
+
+        sound.playUltimateStart();
+        if (camera) camera.shake(7, 0.20);
+        if (particles) {
+          particles.spawnShockwave(player.x, player.y, 160, PALETTE.volt, 0.35);
+          particles.spawnBurst(player.x, player.y, 25, PALETTE.signal, 45, 175, 2, 0.35);
+        }
+        break;
+      }
+
+      case 'vesperaTimeoutFinale': {
+        if (this.armadaState && !this.armadaState.diving) {
+          const targetX = this.aimCursorX || player.x;
+          const targetY = this.aimCursorY || player.y;
+          this.triggerArmadaDiveBomb(player, targetX, targetY, spawner, projectiles, particles, camera, world);
+        }
+        break;
+      }
+
+      case 'senaWorldsplitterStart': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        this.movementLocked = true;
+        const rad = p.radius || 240;
+        const zx = player.x;
+        const zy = player.y;
+
+        const fissures = [];
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + 0.2;
+          fissures.push({ angle: a, dist: rad });
+        }
+        const spikes = [];
+        for (let i = 0; i < 8; i++) {
+          const a = (i / 8) * Math.PI * 2 + 0.4;
+          const dist = 60 + ((i * 47) % (rad - 80));
+          spikes.push({
+            x: zx + Math.cos(a) * dist,
+            y: zy + Math.sin(a) * dist,
+            height: 18 + (i % 3) * 8,
+          });
+        }
+
+        this.worldsplitterState = {
+          x: zx,
+          y: zy,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: 1800,
+          fissures,
+          spikes,
+          stage: 'cracking',
+        };
+
+        sound.playSkillGroundBreak();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 12, 0.28);
+        if (particles) {
+          particles.spawnGroundBreakEffect(zx, zy, 120);
+          particles.spawnShockwave(zx, zy, rad * 0.4, PALETTE.ember, 0.35);
+          particles.spawnBurst(zx, zy, 25, PALETTE.ember, 50, 160, 2, 0.35);
+        }
+        break;
+      }
+
+      case 'senaWorldsplitterQuake': {
+        const rad = p.radius || 200;
+        const zx = this.worldsplitterState ? this.worldsplitterState.x : player.x;
+        const zy = this.worldsplitterState ? this.worldsplitterState.y : player.y;
+        if (this.worldsplitterState) {
+          this.worldsplitterState.stage = 'quake';
+        }
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 10, 0.24);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad * 0.75, PALETTE.brass, 0.32);
+          particles.spawnBurst(zx, zy, 30, PALETTE.ember, 60, 190, 2, 0.38);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          const dist = Math.hypot(e.x - zx, e.y - zy);
+          if (dist <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 3.5),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Worldsplitter',
+              targetName: e.name,
+            });
+            const ang = Math.atan2(e.y - zy, e.x - zx);
+            e.takeDamage(pipe.finalDamage, ang, p.knockbackPx || 120, false, player, spawner, particles, camera);
+          }
+        }
+        break;
+      }
+
+      case 'senaWorldsplitterEruption': {
+        this.movementLocked = false;
+        player.ultimateActive = false;
+        player.statuses.remove('untouchable');
+        const rad = p.radius || 240;
+        const zx = this.worldsplitterState ? this.worldsplitterState.x : player.x;
+        const zy = this.worldsplitterState ? this.worldsplitterState.y : player.y;
+        if (this.worldsplitterState) {
+          this.worldsplitterState.stage = 'erupted';
+        }
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 15, 0.38);
+
+        if (world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 12.0);
+        }
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.ember, 0.45);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.55), PALETTE.brass, 0.35);
+          particles.spawnBurst(zx, zy, 45, PALETTE.ember, 70, 240, 3, 0.50);
+          particles.spawnBurst(zx, zy, 30, PALETTE.brass, 50, 190, 2, 0.40);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 5.5),
+              atkBuffPct,
+              isCrit: true,
+              critMult: 1.5,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Worldsplitter',
+              targetName: e.name,
+            });
+            const ang = Math.atan2(e.y - zy, e.x - zx);
+            e.takeDamage(pipe.finalDamage, ang, 220, true, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Worldsplitter' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'senaStartSoundstage': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 250;
+        this.soundstageState = {
+          x: player.x,
+          y: player.y,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1700,
+          bars: 8,
+          beat: 0,
+          ribbonAngle: 0,
+          rings: [],
+        };
+        sound.playUltimateStart();
+        if (particles) {
+          particles.spawnShockwave(player.x, player.y, rad * 0.4, PALETTE.signal, 0.30);
+        }
+        break;
+      }
+
+      case 'senaBeatWindowDrop': {
+        const rad = p.radius || 160;
+        const zx = this.soundstageState ? this.soundstageState.x : player.x;
+        const zy = this.soundstageState ? this.soundstageState.y : player.y;
+        const col = p.color || PALETTE.signal;
+        const beatIdx = p.beatIndex || 1;
+
+        if (this.soundstageState) {
+          this.soundstageState.beat = beatIdx;
+          this.soundstageState.rings.push({ rad: 20, maxRad: rad, life: 0.45, color: col });
+        }
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 6, 0.16);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, col, 0.28);
+          particles.spawnBurst(zx, zy, 18, col, 40, 140, 2, 0.28);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 20)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 1.8),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Perfect Frequency',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 60, false, player, spawner, particles, camera);
+          }
+        }
+        break;
+      }
+
+      case 'senaHarmonicCrescendo': {
+        const rad = p.radius || 220;
+        const zx = this.soundstageState ? this.soundstageState.x : player.x;
+        const zy = this.soundstageState ? this.soundstageState.y : player.y;
+
+        if (this.soundstageState) {
+          this.soundstageState.beat = 3;
+          this.soundstageState.rings.push({ rad: 40, maxRad: rad, life: 0.50, color: PALETTE.signal });
+        }
+
+        sound.playUltimateReleaseCrack();
+        if (camera) camera.shake(p.shakePx || 10, 0.25);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.volt, 0.35);
+          particles.spawnBurst(zx, zy, 28, PALETTE.signal, 55, 180, 2, 0.35);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.8),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Perfect Frequency',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 100, false, player, spawner, particles, camera);
+          }
+        }
+        break;
+      }
+
+      case 'senaForteResonanceBurst': {
+        const rad = p.radius || 260;
+        const zx = this.soundstageState ? this.soundstageState.x : player.x;
+        const zy = this.soundstageState ? this.soundstageState.y : player.y;
+
+        if (this.soundstageState) {
+          this.soundstageState.beat = 4;
+        }
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 14, 0.36);
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.bone, 0.45);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.65), PALETTE.signal, 0.35);
+          particles.spawnBurst(zx, zy, 40, PALETTE.signal, 65, 230, 3, 0.48);
+          particles.spawnBurst(zx, zy, 25, PALETTE.volt, 50, 180, 2, 0.38);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 30)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 4.2),
+              atkBuffPct,
+              isCrit: true,
+              critMult: 1.5,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Perfect Frequency',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 190, true, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Perfect Frequency' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'rookDeployRelayPylons': {
+        this.worldFrozen = false;
+        this.twoToneWorld = false;
+        const rad = p.radius || 220;
+        const zx = player.x;
+        const zy = player.y;
+
+        const pylons = [];
+        for (let i = 0; i < 3; i++) {
+          const a = -Math.PI * 0.5 + (i / 3) * Math.PI * 2;
+          pylons.push({
+            x: zx + Math.cos(a) * rad,
+            y: zy + Math.sin(a) * rad,
+          });
+        }
+
+        this.relayPylonsState = {
+          x: zx,
+          y: zy,
+          radius: rad,
+          elapsedMs: 0,
+          durationMs: p.durationMs || 1400,
+          pylons,
+          gridActive: false,
+          collapsing: false,
+        };
+
+        sound.playUltimateStart();
+        if (camera) camera.shake(5, 0.18);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, 80, PALETTE.signal, 0.25);
+          for (const py of pylons) {
+            particles.spawnGroundBreakEffect(py.x, py.y, 40);
+          }
+        }
+        break;
+      }
+
+      case 'rookChargeCircuitGrid': {
+        const rad = p.radius || 220;
+        const zx = this.relayPylonsState ? this.relayPylonsState.x : player.x;
+        const zy = this.relayPylonsState ? this.relayPylonsState.y : player.y;
+
+        if (this.relayPylonsState) {
+          this.relayPylonsState.gridActive = true;
+        }
+
+        sound.playSkillGroundBreak();
+        if (camera) camera.shake(p.shakePx || 9, 0.22);
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.signal, 0.32);
+          particles.spawnBurst(zx, zy, 25, PALETTE.volt, 45, 170, 2, 0.32);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 24)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          const dist = Math.hypot(e.x - zx, e.y - zy);
+          if (dist <= rad + (e.radius || 12)) {
+            if (p.pullInwardPx > 0 && e.tier !== 'boss' && dist > 14) {
+              const pullAng = Math.atan2(zy - e.y, zx - e.x);
+              e.x = player.clampCoord(e.x + Math.cos(pullAng) * p.pullInwardPx);
+              e.y = player.clampCoord(e.y + Math.sin(pullAng) * p.pullInwardPx);
+            }
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 3.8),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Blackout Cascade',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(zy - e.y, zx - e.x), 50, false, player, spawner, particles, camera);
+            if (e.active && e.hp > 0) {
+              e.statuses.apply('marked', { duration: 6.0, sourceName: 'Blackout Cascade' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'rookSuperconductorCollapse': {
+        const rad = p.radius || 260;
+        const zx = this.relayPylonsState ? this.relayPylonsState.x : player.x;
+        const zy = this.relayPylonsState ? this.relayPylonsState.y : player.y;
+
+        if (this.relayPylonsState) {
+          this.relayPylonsState.collapsing = true;
+        }
+
+        sound.playUltimateReleaseCrack();
+        if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
+        if (camera) camera.shake(p.shakePx || 15, 0.38);
+
+        if (world && typeof world.addCrater === 'function') {
+          world.addCrater(zx, zy, rad, 10.0);
+        }
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.bone, 0.45);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.65), PALETTE.signal, 0.35);
+          particles.spawnBurst(zx, zy, 45, PALETTE.signal, 65, 240, 3, 0.50);
+          particles.spawnBurst(zx, zy, 25, PALETTE.volt, 50, 190, 2, 0.40);
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 32)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 6.2),
+              atkBuffPct,
+              isCrit: true,
+              critMult: 1.5,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Blackout Cascade',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(zy - e.y, zx - e.x), 210, true, player, spawner, particles, camera);
+            if (p.stunDuration > 0 && e.active && e.hp > 0) {
+              e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Blackout Cascade' }, e, particles);
+            }
+          }
+        }
+        break;
+      }
+
       case 'endCast': {
         this.active = false;
         this.worldFrozen = false;
@@ -1898,6 +3628,17 @@ export class UltimateSequencer {
         this.levitationZone = null;
         this.solarCataclysm = null;
         this.ionSingularity = null;
+        this.meltdownState = null;
+        this.armadaState = null;
+        this.worldsplitterState = null;
+        this.soundstageState = null;
+        this.relayPylonsState = null;
+        this.craneDropState = null;
+        this.polarityVortex = null;
+        this.foundryCathedral = null;
+        this.cryoBlizzard = null;
+        this.colossusState = null;
+        this.stormAtlas = null;
         player.ultimateActive = false;
         player.statuses.remove('untouchable');
 
@@ -1912,6 +3653,154 @@ export class UltimateSequencer {
       default:
         break;
     }
+  }
+
+  triggerMeltdownVent(player, spawner, projectiles, particles, camera, world) {
+    if (!this.meltdownState) return;
+    this.meltdownState.venting = true;
+    const zx = player.x;
+    const zy = player.y;
+    const rad = 240;
+
+    sound.playUltimateReleaseCrack();
+    if (camera) camera.shake(12, 0.38);
+    if (world && typeof world.addCrater === 'function') {
+      world.addCrater(zx, zy, rad, 10.0);
+    }
+    if (particles) {
+      particles.spawnShockwave(zx, zy, rad, PALETTE.ember, 0.45);
+      particles.spawnShockwave(zx, zy, Math.round(rad * 0.65), PALETTE.brass, 0.35);
+      particles.spawnShockwave(zx, zy, Math.round(rad * 0.3), PALETTE.bone, 0.25);
+      particles.spawnBurst(zx, zy, 45, PALETTE.ember, 70, 240, 3, 0.52);
+      particles.spawnBurst(zx, zy, 25, PALETTE.brass, 50, 190, 2, 0.42);
+    }
+
+    // 4 Magma pools radiating from blast
+    if (player.classBehavior && Array.isArray(player.classBehavior.pools)) {
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + 0.35;
+        player.classBehavior.pools.push({
+          x: player.clampCoord(zx + Math.cos(a) * (rad * 0.45)),
+          y: player.clampCoord(zy + Math.sin(a) * (rad * 0.45)),
+          radius: 70,
+          life: 6.0,
+          maxLife: 6.0,
+          tickTimer: 0.15,
+          kind: 'magma',
+        });
+      }
+    }
+
+    // Heavy thermobaric damage + Stun + Burn + Corrode
+    const atkBuffPct = this._getUltimateAtkBuffPct(player);
+    const targets = (spawner && typeof spawner.queryRadius === 'function')
+      ? spawner.queryRadius(zx, zy, rad + 32)
+      : [];
+
+    for (const e of targets) {
+      if (!e.active || e.hp <= 0) continue;
+      if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+        const pipe = computeDamagePipeline({
+          baseDamage: player.baseAtkForPipeline * 7.5, // 750% ATK
+          atkBuffPct,
+          isCrit: false,
+          critMult: 1.0,
+          targetStatuses: e.statuses,
+          targetBaseDef: e.def || 0,
+          sourceName: 'Supercritical Vent',
+          targetName: e.name,
+        });
+        e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 210, false, player, spawner, particles, camera);
+        if (e.active && e.hp > 0) {
+          e.statuses.apply('stun', { duration: 2.0, sourceName: 'Supercritical Vent' }, e, particles);
+          e.statuses.apply('burn', { duration: 6.0, sourceAtk: player.atk * 1.5, sourceName: 'Supercritical Vent' }, e, particles);
+          for (let c = 0; c < 5; c++) {
+            e.statuses.apply('corrode', { duration: 8.0, sourceName: 'Supercritical Vent' }, e, particles);
+          }
+        }
+      }
+    }
+
+    this.meltdownState = null;
+    this.active = false;
+    this.letterboxTarget = 0;
+    if (camera && camera.setZoom) camera.setZoom(1.0);
+  }
+
+  triggerArmadaDiveBomb(player, worldMouseX, worldMouseY, spawner, projectiles, particles, camera, world) {
+    if (!this.armadaState || this.armadaState.diving) return;
+    this.armadaState.diving = true;
+    const targetX = Number.isFinite(worldMouseX) ? worldMouseX : player.x;
+    const targetY = Number.isFinite(worldMouseY) ? worldMouseY : player.y;
+    this.armadaState.diveTarget = { x: targetX, y: targetY };
+    this.armadaState.diveDrones = [];
+
+    // Launch all 12 drones in a staggered kamikaze sequence
+    for (let i = 0; i < this.armadaState.drones.length; i++) {
+      const d = this.armadaState.drones[i];
+      const scatterAngle = (i / this.armadaState.drones.length) * Math.PI * 2;
+      const scatterDist = (i * 11) % 45;
+      const tx = targetX + Math.cos(scatterAngle) * scatterDist;
+      const ty = targetY + Math.sin(scatterAngle) * scatterDist;
+      this.armadaState.diveDrones.push({
+        startX: d.x,
+        startY: d.y,
+        targetX: tx,
+        targetY: ty,
+        progress: -(i * 0.04), // staggered delays
+        duration: 0.28 + (i % 3) * 0.04,
+        impacted: false,
+      });
+    }
+    sound.playUltimateStart();
+  }
+
+  detonateArmadaEmp(player, zx, zy, spawner, particles, camera, world) {
+    const rad = 240;
+    sound.playUltimateReleaseCrack();
+    if (camera) camera.shake(12, 0.35);
+    if (world && typeof world.addCrater === 'function') {
+      world.addCrater(zx, zy, rad, 10.0);
+    }
+    if (particles) {
+      particles.spawnShockwave(zx, zy, rad, PALETTE.volt, 0.45);
+      particles.spawnShockwave(zx, zy, Math.round(rad * 0.6), PALETTE.signal, 0.35);
+      particles.spawnShockwave(zx, zy, Math.round(rad * 0.3), PALETTE.bone, 0.25);
+      particles.spawnBurst(zx, zy, 45, PALETTE.volt, 65, 230, 3, 0.5);
+      particles.spawnBurst(zx, zy, 25, PALETTE.signal, 50, 190, 2, 0.4);
+    }
+
+    // Heavy EMP damage + Stun to all in radius
+    const atkBuffPct = this._getUltimateAtkBuffPct(player);
+    const targets = (spawner && typeof spawner.queryRadius === 'function')
+      ? spawner.queryRadius(zx, zy, rad + 32)
+      : [];
+
+    for (const e of targets) {
+      if (!e.active || e.hp <= 0) continue;
+      if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+        const pipe = computeDamagePipeline({
+          baseDamage: player.baseAtkForPipeline * 7.0, // 700% ATK
+          atkBuffPct,
+          isCrit: false,
+          critMult: 1.0,
+          targetStatuses: e.statuses,
+          targetBaseDef: e.def || 0,
+          sourceName: 'Overclocked Armada EMP',
+          targetName: e.name,
+        });
+        e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 190, false, player, spawner, particles, camera);
+        if (e.active && e.hp > 0) {
+          e.statuses.apply('stun', { duration: 2.0, sourceName: 'Overclocked Armada EMP' }, e, particles);
+          e.statuses.apply('marked', { duration: 8.0, sourceName: 'Overclocked Armada EMP' }, e, particles);
+        }
+      }
+    }
+
+    this.armadaState = null;
+    this.active = false;
+    this.letterboxTarget = 0;
+    if (camera && camera.setZoom) camera.setZoom(1.0);
   }
 
   _getUltimateAtkBuffPct(player) {
@@ -2093,6 +3982,145 @@ export class UltimateSequencer {
       ctx.fillRect(tx - 1, ty - 5, 2, 11);
     }
 
+    // 2.5. Draw Sena's Worldsplitter (3 Concentric Fault Rings, Magma Fissures, & Basalt Monolith Spikes)
+    if (this.worldsplitterState) {
+      const ws = this.worldsplitterState;
+      const zx = Math.round(ws.x - camX);
+      const zy = Math.round(ws.y - camY);
+      const rad = ws.radius;
+      const pulse = Math.sin(ws.elapsedMs * 0.008) * 3;
+
+      // Draw 3 concentric jagged seismic fault rings on the ground
+      const ringRadii = [80, 160, 240];
+      for (let ri = 0; ri < ringRadii.length; ri++) {
+        const ringR = ringRadii[ri];
+        if (ws.stage === 'cracking' && ri > 0 && ws.elapsedMs < ri * 250) continue;
+        const pts = 24;
+        for (let pIdx = 0; pIdx < pts; pIdx++) {
+          const a1 = (pIdx / pts) * Math.PI * 2;
+          const a2 = ((pIdx + 1) / pts) * Math.PI * 2;
+          const jag1 = ((pIdx * 19) % 9) - 4;
+          const jag2 = (((pIdx + 1) * 19) % 9) - 4;
+          const r1 = ringR + jag1 + pulse;
+          const r2 = ringR + jag2 + pulse;
+          const x1 = Math.round(zx + Math.cos(a1) * r1);
+          const y1 = Math.round(zy + Math.sin(a1) * r1);
+          const x2 = Math.round(zx + Math.cos(a2) * r2);
+          const y2 = Math.round(zy + Math.sin(a2) * r2);
+
+          drawPixelLine(ctx, x1, y1, x2, y2, PALETTE.ember, 3);
+          drawPixelLine(ctx, x1, y1, x2, y2, PALETTE.brass, 1);
+        }
+      }
+
+      // Draw branching incandescent magma fissure veins connecting the rings
+      for (const fis of ws.fissures) {
+        const segs = 4;
+        let prevX = zx;
+        let prevY = zy;
+        for (let s = 1; s <= segs; s++) {
+          const st = s / segs;
+          const jitterA = fis.angle + Math.sin(s * 2.8 + ws.elapsedMs * 0.01) * 0.22;
+          const curR = rad * st;
+          const nx = Math.round(zx + Math.cos(jitterA) * curR);
+          const ny = Math.round(zy + Math.sin(jitterA) * curR);
+          drawPixelLine(ctx, prevX, prevY, nx, ny, PALETTE.ember, 2);
+          drawPixelLine(ctx, prevX, prevY, nx, ny, PALETTE.brass, 1);
+          prevX = nx;
+          prevY = ny;
+        }
+      }
+
+      // Central incandescent tectonic magma pool
+      drawBresenhamCircle(ctx, zx, zy, 28, PALETTE.ember, 0.95);
+      drawBresenhamCircle(ctx, zx, zy, 14, PALETTE.brass, 1.0);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(zx - 3, zy - 3, 6, 6);
+
+      // Basalt rock monolith spikes along the fractures
+      for (const spk of ws.spikes) {
+        const sx = Math.round(spk.x - camX);
+        const sy = Math.round(spk.y - camY);
+        const h = spk.height;
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(sx - 3, sy - 1, 6, 2);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(sx - 2, sy - h, 4, h);
+        ctx.fillStyle = PALETTE.slagLight;
+        ctx.fillRect(sx - 1, sy - h + 2, 2, h - 3);
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(sx - 1, sy - 2, 2, 2);
+      }
+    }
+
+    // 2.8. Draw Sena's Perfect Frequency (8-Band Audio Visualizer Soundstage, BPM Cadence Rings, & Conductive Ribbons)
+    if (this.soundstageState) {
+      const ss = this.soundstageState;
+      const zx = Math.round(ss.x - camX);
+      const zy = Math.round(ss.y - camY);
+      const rad = ss.radius;
+
+      // Holographic neon circular soundstage perimeter
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.signal, 0.85);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.55), PALETTE.volt, 0.55);
+      drawBresenhamCircle(ctx, zx, zy, 32, PALETTE.bone, 0.75);
+
+      // 8-Directional Audio Equalizer Visualizer Towers radiating outward
+      const barCount = 8;
+      for (let b = 0; b < barCount; b++) {
+        const ang = (b / barCount) * Math.PI * 2;
+        const cosA = Math.cos(ang);
+        const sinA = Math.sin(ang);
+
+        // Tower guide line
+        const startDist = 36;
+        const endDist = rad - 12;
+        const bx1 = Math.round(zx + cosA * startDist);
+        const by1 = Math.round(zy + sinA * startDist);
+        const bx2 = Math.round(zx + cosA * endDist);
+        const by2 = Math.round(zy + sinA * endDist);
+        drawPixelLine(ctx, bx1, by1, bx2, by2, PALETTE.soot, 1);
+
+        // Animated equalizer level blocks (5 levels)
+        const intensity = Math.abs(Math.sin(ss.elapsedMs * 0.012 + b * 1.4));
+        const maxBlocks = 6;
+        const litBlocks = Math.max(1, Math.round(intensity * maxBlocks));
+
+        for (let lvl = 0; lvl < litBlocks; lvl++) {
+          const lDist = startDist + (lvl / maxBlocks) * (endDist - startDist);
+          const lx = Math.round(zx + cosA * lDist);
+          const ly = Math.round(zy + sinA * lDist);
+          const col = lvl >= 4 ? PALETTE.bone : lvl >= 2 ? PALETTE.volt : PALETTE.signal;
+          ctx.fillStyle = col;
+          ctx.fillRect(lx - 2, ly - 2, 4, 4);
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(lx - 1, ly - 1, 2, 2);
+        }
+      }
+
+      // Expanding BPM cadence rings
+      for (const cr of ss.rings) {
+        drawBresenhamCircle(ctx, zx, zy, Math.round(cr.rad), cr.color, Math.max(0.2, cr.life / 0.5));
+      }
+
+      // Spinning Conductive Ribbon Hoops orbiting Sena
+      const ribbonDist = 42;
+      for (let r = 0; r < 2; r++) {
+        const rAng = ss.ribbonAngle + r * Math.PI;
+        const rx = Math.round(zx + Math.cos(rAng) * ribbonDist);
+        const ry = Math.round(zy + Math.sin(rAng) * (ribbonDist * 0.7));
+        drawBresenhamCircle(ctx, rx, ry, 12, r === 0 ? PALETTE.signal : PALETTE.volt, 0.9);
+        drawPixelLine(ctx, zx, zy - 4, rx, ry, PALETTE.bone, 1);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(rx - 2, ry - 2, 4, 4);
+      }
+
+      // Center treble resonance icon
+      ctx.font = '9px monospace';
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillText('[♫ 140 BPM]', zx - 28, zy - 12);
+    }
+
     // 3. Draw Rook's Ten Count / Long Count / Rail Slug charging aim line, corridor bounds, & lock-on reticles
     if (this.aimLineActive && p) {
       const sx = Math.round(p.x - camX);
@@ -2195,6 +4223,111 @@ export class UltimateSequencer {
       ctx.fillRect(sx - 1, sy - 1, 2, 2);
     }
 
+    // 3.8. Draw Rook's Blackout Cascade (3 Tesla Relay Pylons, Laser Wire Power Grid, & EMP Collapse)
+    if (this.relayPylonsState) {
+      const rp = this.relayPylonsState;
+      const zx = Math.round(rp.x - camX);
+      const zy = Math.round(rp.y - camY);
+      const rad = rp.radius;
+
+      // Tactical grid perimeter
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.signal, 0.65);
+
+      const pPos = rp.pylons.map((p) => ({
+        x: Math.round(p.x - camX),
+        y: Math.round(p.y - camY),
+      }));
+
+      // High-Voltage Laser Wires connecting the 3 pylons into an equilateral triangle
+      if (rp.gridActive || rp.collapsing) {
+        for (let i = 0; i < 3; i++) {
+          const p1 = pPos[i];
+          const p2 = pPos[(i + 1) % 3];
+
+          // Laser wire beam
+          drawPixelLine(ctx, p1.x, p1.y - 30, p2.x, p2.y - 30, PALETTE.signal, 3);
+          drawPixelLine(ctx, p1.x, p1.y - 30, p2.x, p2.y - 30, PALETTE.bone, 1);
+
+          // Moving digital circuit data packet dots streaming along wire
+          const streamOff = (rp.elapsedMs * 0.25 + i * 50) % 100;
+          const st = streamOff / 100;
+          const dotX = Math.round(p1.x + (p2.x - p1.x) * st);
+          const dotY = Math.round(p1.y - 30 + (p2.y - p1.y) * st);
+          ctx.fillStyle = PALETTE.volt;
+          ctx.fillRect(dotX - 2, dotY - 2, 4, 4);
+          ctx.fillStyle = PALETTE.bone;
+          ctx.fillRect(dotX - 1, dotY - 1, 2, 2);
+
+          // High-frequency electrical lightning arcs bridging inward to center
+          const jitter = Math.sin(rp.elapsedMs * 0.05 + i * 2.1) * 12;
+          const midX = Math.round((p1.x + p2.x) * 0.5 + jitter);
+          const midY = Math.round((p1.y - 30 + p2.y - 30) * 0.5 - jitter * 0.5);
+          drawPixelLine(ctx, midX, midY, zx, zy, PALETTE.volt, 1);
+        }
+      }
+
+      // Draw the 3 Tesla Relay Pylons
+      for (let i = 0; i < 3; i++) {
+        const py = pPos[i];
+        const pylonW = 16;
+        const pylonH = 46;
+
+        // Base ground anchoring
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(py.x - Math.floor(pylonW / 2) - 2, py.y - 3, pylonW + 4, 6);
+
+        // Tower chassis
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(py.x - Math.floor(pylonW / 2), py.y - pylonH, pylonW, pylonH);
+        ctx.fillStyle = PALETTE.slagLight;
+        ctx.fillRect(py.x - Math.floor(pylonW / 2) + 2, py.y - pylonH + 2, pylonW - 4, pylonH - 4);
+
+        // Cross-brace struts
+        drawPixelLine(ctx, py.x - Math.floor(pylonW / 2), py.y - pylonH + 10, py.x + Math.floor(pylonW / 2), py.y - 10, PALETTE.rust, 1);
+        drawPixelLine(ctx, py.x + Math.floor(pylonW / 2), py.y - pylonH + 10, py.x - Math.floor(pylonW / 2), py.y - 10, PALETTE.rust, 1);
+
+        // Copper transformer coils
+        for (let c = 0; c < 3; c++) {
+          const cy = py.y - pylonH + 12 + c * 8;
+          ctx.fillStyle = PALETTE.brass;
+          ctx.fillRect(py.x - 6, cy, 12, 4);
+          ctx.fillStyle = PALETTE.bone;
+          ctx.fillRect(py.x - 2, cy + 1, 4, 2);
+        }
+
+        // Glowing neon glass insulator bulb on top
+        const bulbY = py.y - pylonH - 4;
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(py.x - 5, bulbY - 6, 10, 10);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(py.x - 3, bulbY - 4, 6, 6);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(py.x - 1, bulbY - 2, 2, 2);
+
+        // Static discharge sparks from bulb
+        if (rp.gridActive) {
+          const spkAng = rp.elapsedMs * 0.02 + i * 2.3;
+          const sx = Math.round(py.x + Math.cos(spkAng) * 10);
+          const sy = Math.round(bulbY + Math.sin(spkAng) * 10);
+          drawPixelLine(ctx, py.x, bulbY, sx, sy, PALETTE.volt, 1);
+        }
+      }
+
+      // If collapsing: Blinding blue-white EMP blackout explosion + digital matrix glitch lines
+      if (rp.collapsing) {
+        drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.8), PALETTE.signal, 0.95);
+        drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.45), PALETTE.bone, 1.0);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(zx - 16, zy - 16, 32, 32);
+
+        // Horizontal digital glitch scanlines across screen
+        for (let g = 0; g < 6; g++) {
+          const gy = (zy - 80) + ((g * 31 + rp.elapsedMs * 0.6) % 160);
+          drawPixelLine(ctx, zx - rad, Math.round(gy), zx + rad, Math.round(gy), PALETTE.signal, 1);
+        }
+      }
+    }
+
     // 4. Draw Ines's Levitating Wreck Parts, Magnetic Tether Lightning, & Slam Drop Streaks
     if (this.levitationZone) {
       const zx = Math.round(this.levitationZone.x - camX);
@@ -2267,6 +4400,118 @@ export class UltimateSequencer {
       }
     }
 
+    // 4.6. Draw Ines's Overhead Industrial Gantry Crane & Magnetic Compactor Slam
+    if (this.craneDropState) {
+      const cds = this.craneDropState;
+      const zx = Math.round(cds.x - camX);
+      const zy = Math.round(cds.y - camY);
+      const rad = cds.radius;
+
+      // Draw gantry crane warning perimeter on ground
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.verdigris, 0.75);
+      drawBresenhamCircle(ctx, zx, zy, 40, PALETTE.bone, 0.45);
+
+      // Overhead heavy industrial gantry girder across top of screen (at y = 22)
+      const girderY = 22;
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(0, girderY - 6, ctx.canvas.width, 14);
+      // Yellow / black hazard diagonal stripes along the girder
+      for (let hx = 0; hx < ctx.canvas.width; hx += 24) {
+        ctx.fillStyle = PALETTE.brass;
+        ctx.beginPath();
+        ctx.moveTo(hx, girderY + 8);
+        ctx.lineTo(hx + 12, girderY - 6);
+        ctx.lineTo(hx + 18, girderY - 6);
+        ctx.lineTo(hx + 6, girderY + 8);
+        ctx.fill();
+      }
+
+      // Crane trolley directly above target X
+      ctx.fillStyle = PALETTE.slagLight;
+      ctx.fillRect(zx - 20, girderY - 8, 40, 18);
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillRect(zx - 16, girderY - 4, 32, 4);
+
+      // Steel suspension cables hanging from trolley down to claw
+      const cableProgress = Math.min(1, (cds.elapsedMs % 3000) / 1000);
+      const clawY = Math.round(girderY + 12 + (zy - girderY - 24) * (cds.dropping ? 1 : cableProgress));
+
+      drawPixelLine(ctx, zx - 12, girderY + 8, zx - 8, clawY, PALETTE.bone, 1);
+      drawPixelLine(ctx, zx + 12, girderY + 8, zx + 8, clawY, PALETTE.bone, 1);
+
+      // Electromagnetic claw + heavy scrap metal compactor block
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(zx - 24, clawY - 14, 48, 14);
+      ctx.fillStyle = PALETTE.verdigris;
+      ctx.fillRect(zx - 22, clawY - 12, 44, 10);
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillRect(zx - 18, clawY - 8, 36, 3);
+
+      // 80-ton crushed scrap metal compactor cube
+      const compactorW = 56;
+      const compactorH = 34;
+      ctx.fillStyle = PALETTE.slag;
+      ctx.fillRect(zx - Math.floor(compactorW / 2), clawY, compactorW, compactorH);
+      ctx.fillStyle = PALETTE.slagLight;
+      ctx.fillRect(zx - Math.floor(compactorW / 2) + 4, clawY + 4, compactorW - 8, compactorH - 8);
+      drawPixelLine(ctx, zx - Math.floor(compactorW / 2), clawY + 17, zx + Math.floor(compactorW / 2), clawY + 17, PALETTE.rust, 2);
+      drawPixelLine(ctx, zx, clawY, zx, clawY + compactorH, PALETTE.rust, 2);
+
+      // Crackling verdigris magnetic discharge arcs around the magnet
+      for (let a = 0; a < 4; a++) {
+        const arcX = zx + (a % 2 === 0 ? -26 : 26);
+        const arcY = clawY + a * 6;
+        drawPixelLine(ctx, arcX, arcY, arcX + (a % 2 === 0 ? -8 : 8), arcY + 4, PALETTE.signal, 1);
+      }
+    }
+
+    // 4.8. Draw Ines's Dual-Polarity Singularity Vortex & Repulsion Inversion
+    if (this.polarityVortex) {
+      const pv = this.polarityVortex;
+      const zx = Math.round(pv.x - camX);
+      const zy = Math.round(pv.y - camY);
+      const rad = pv.radius;
+
+      // Concentric magnetic polarity contour rings
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.verdigris, 0.85);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.65), PALETTE.signal, 0.75);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.35), PALETTE.bone, 0.90);
+
+      // Central dense magnetic singularity core
+      const coreR = Math.max(8, Math.round(20 * (1 - Math.min(1, pv.elapsedMs / 1400) * 0.5)));
+      drawBresenhamCircle(ctx, zx, zy, coreR, PALETTE.bone, 1.0);
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(zx - 6, zy - 6, 12, 12);
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillRect(zx - 4, zy - 4, 8, 8);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(zx - 2, zy - 2, 4, 4);
+
+      // Draw counter-rotating (+) and (-) polarity particle streams spiraling inward
+      for (const pt of pv.particles) {
+        const curR = rad * pt.distRatio;
+        const px = Math.round(zx + Math.cos(pt.angle) * curR);
+        const py = Math.round(zy + Math.sin(pt.angle) * curR);
+
+        const inA = pt.angle + (pt.speed > 0 ? 0.35 : -0.35);
+        const inX = Math.round(zx + Math.cos(inA) * (curR * 0.8));
+        const inY = Math.round(zy + Math.sin(inA) * (curR * 0.8));
+        drawPixelLine(ctx, px, py, inX, inY, pt.color, 1);
+
+        ctx.fillStyle = pt.color;
+        ctx.fillRect(px - 2, py - 2, 4, 4);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(px - 1, py - 1, 2, 2);
+
+        if (pt.polarity === '+') {
+          drawPixelLine(ctx, px - 2, py, px + 2, py, PALETTE.bone, 1);
+          drawPixelLine(ctx, px, py - 2, px, py + 2, PALETTE.bone, 1);
+        } else {
+          drawPixelLine(ctx, px - 2, py, px + 2, py, PALETTE.signal, 1);
+        }
+      }
+    }
+
     // 5. Draw Kaelen's Sunfall Cataclysm / Tectonic Kiln / Blight Hurricane World Effects
     if (this.solarCataclysm) {
       const sc = this.solarCataclysm;
@@ -2333,7 +4578,125 @@ export class UltimateSequencer {
       }
     }
 
-    // 6. Draw Vespera's Orbital Ion Singularity / Valkyrie Swarm / Zenith Thunderhead World Effects
+    // 5.3. Draw Kaelen's Cathedral of Iron (4 Steel Girder Pillars, Searing Slag Rivers, & 80-Ton Forge Press)
+    if (this.foundryCathedral) {
+      const fc = this.foundryCathedral;
+      const zx = Math.round(fc.x - camX);
+      const zy = Math.round(fc.y - camY);
+      const rad = fc.radius;
+
+      // Draw molten slag channels connecting the 4 corner pillars
+      const p1 = { x: Math.round(fc.pillars[0].x - camX), y: Math.round(fc.pillars[0].y - camY) };
+      const p2 = { x: Math.round(fc.pillars[1].x - camX), y: Math.round(fc.pillars[1].y - camY) };
+      const p3 = { x: Math.round(fc.pillars[2].x - camX), y: Math.round(fc.pillars[2].y - camY) };
+      const p4 = { x: Math.round(fc.pillars[3].x - camX), y: Math.round(fc.pillars[3].y - camY) };
+
+      drawPixelLine(ctx, p1.x, p1.y, p2.x, p2.y, PALETTE.ember, 4);
+      drawPixelLine(ctx, p2.x, p2.y, p3.x, p3.y, PALETTE.ember, 4);
+      drawPixelLine(ctx, p3.x, p3.y, p4.x, p4.y, PALETTE.ember, 4);
+      drawPixelLine(ctx, p4.x, p4.y, p1.x, p1.y, PALETTE.ember, 4);
+
+      drawPixelLine(ctx, p1.x, p1.y, p2.x, p2.y, PALETTE.brass, 2);
+      drawPixelLine(ctx, p2.x, p2.y, p3.x, p3.y, PALETTE.brass, 2);
+      drawPixelLine(ctx, p3.x, p3.y, p4.x, p4.y, PALETTE.brass, 2);
+      drawPixelLine(ctx, p4.x, p4.y, p1.x, p1.y, PALETTE.brass, 2);
+
+      // Central molten lava lake in the crucible center
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.45), PALETTE.ember, 0.95);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.28), PALETTE.brass, 0.85);
+
+      // Draw 4 colossal steel girder pillars at 4 corners
+      const corners = [p1, p2, p3, p4];
+      for (let i = 0; i < 4; i++) {
+        const c = corners[i];
+        const pillarW = 22;
+        const pillarH = 75;
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(c.x - Math.floor(pillarW / 2), c.y - 4, pillarW, 8);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(c.x - Math.floor(pillarW / 2), c.y - pillarH, pillarW, pillarH);
+        ctx.fillStyle = PALETTE.slagLight;
+        ctx.fillRect(c.x - Math.floor(pillarW / 2) + 3, c.y - pillarH + 2, pillarW - 6, pillarH - 4);
+        drawPixelLine(ctx, c.x - Math.floor(pillarW / 2), c.y - pillarH, c.x + Math.floor(pillarW / 2), c.y - 20, PALETTE.rust, 2);
+        drawPixelLine(ctx, c.x + Math.floor(pillarW / 2), c.y - pillarH, c.x - Math.floor(pillarW / 2), c.y - 20, PALETTE.rust, 2);
+        ctx.fillStyle = PALETTE.ember;
+        for (let r = 0; r < 5; r++) {
+          ctx.fillRect(c.x - 2, c.y - pillarH + 10 + r * 12, 4, 4);
+        }
+      }
+
+      // Overhead hydraulic forge press
+      const pressW = 86;
+      const pressH = 42;
+      const pressCurY = zy - 30 + fc.pressY;
+
+      drawPixelLine(ctx, zx - 26, pressCurY - 120, zx - 26, pressCurY, PALETTE.bone, 4);
+      drawPixelLine(ctx, zx + 26, pressCurY - 120, zx + 26, pressCurY, PALETTE.bone, 4);
+
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(zx - Math.floor(pressW / 2), pressCurY, pressW, pressH);
+      ctx.fillStyle = PALETTE.slag;
+      ctx.fillRect(zx - Math.floor(pressW / 2) + 3, pressCurY + 3, pressW - 6, pressH - 6);
+      for (let ch = -3; ch <= 3; ch++) {
+        drawPixelLine(ctx, zx + ch * 12 - 4, pressCurY + 6, zx + ch * 12 + 4, pressCurY + 16, PALETTE.brass, 2);
+      }
+      drawPixelLine(ctx, zx - Math.floor(pressW / 2), pressCurY + pressH - 2, zx + Math.floor(pressW / 2), pressCurY + pressH - 2, PALETTE.ember, 3);
+    }
+
+    // 5.6. Draw Kaelen's Whiteout Rupture (Subzero Koch Snowflake Fractals & Ice Needles)
+    if (this.cryoBlizzard) {
+      const cb = this.cryoBlizzard;
+      const zx = Math.round(cb.x - camX);
+      const zy = Math.round(cb.y - camY);
+      const rad = cb.radius;
+
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.signal, 0.90);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.65), PALETTE.bone, 0.70);
+
+      const rot = cb.elapsedMs * 0.0018;
+      for (let arm = 0; arm < 6; arm++) {
+        const a = rot + (arm / 6) * Math.PI * 2;
+        const cosA = Math.cos(a);
+        const sinA = Math.sin(a);
+        const ex = Math.round(zx + cosA * rad);
+        const ey = Math.round(zy + sinA * rad);
+
+        drawPixelLine(ctx, zx, zy, ex, ey, PALETTE.signal, 2);
+        drawPixelLine(ctx, zx, zy, ex, ey, PALETTE.bone, 1);
+
+        for (let b = 1; b <= 4; b++) {
+          const bDist = (b / 5) * rad;
+          const bx = Math.round(zx + cosA * bDist);
+          const by = Math.round(zy + sinA * bDist);
+          const wing = 18 - b * 2;
+          const side1A = a + 0.65;
+          const side2A = a - 0.65;
+          drawPixelLine(ctx, bx, by, Math.round(bx + Math.cos(side1A) * wing), Math.round(by + Math.sin(side1A) * wing), PALETTE.signal, 1);
+          drawPixelLine(ctx, bx, by, Math.round(bx + Math.cos(side2A) * wing), Math.round(by + Math.sin(side2A) * wing), PALETTE.signal, 1);
+        }
+      }
+
+      for (const needle of cb.iceNeedles) {
+        const nx = Math.round(needle.x - camX);
+        const ny = Math.round(needle.y - camY);
+        const curH = Math.round(needle.h * needle.grown);
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(nx - 2, ny - 1, 4, 2);
+        drawPixelLine(ctx, nx, ny, nx, ny - curH, PALETTE.signal, 2);
+        drawPixelLine(ctx, nx, ny, nx, ny - curH, PALETTE.bone, 1);
+      }
+
+      for (let i = 0; i < 18; i++) {
+        const fa = cb.elapsedMs * 0.004 + i * 0.35;
+        const fr = (rad * 0.2) + ((i * 37) % (rad * 0.7));
+        const fx = Math.round(zx + Math.cos(fa) * fr);
+        const fy = Math.round(zy + Math.sin(fa) * (fr * 0.75));
+        ctx.fillStyle = i % 2 === 0 ? PALETTE.signal : PALETTE.bone;
+        ctx.fillRect(fx - 1, fy - 1, 3, 3);
+      }
+    }
+
+    // 6. Draw Vespera's Orbital Ion Singularity World Effects
     if (this.ionSingularity) {
       const ion = this.ionSingularity;
       const zx = Math.round(ion.x - camX);
@@ -2345,7 +4708,6 @@ export class UltimateSequencer {
       drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.volt, 0.9);
       drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.42), PALETTE.signal, 0.8);
 
-      // Compute outer polygon vertices
       const verts = [];
       for (let i = 0; i < vCount; i++) {
         const a = rot + (i / vCount) * Math.PI * 2;
@@ -2355,7 +4717,6 @@ export class UltimateSequencer {
         });
       }
 
-      // Draw outer geometric polygon + internal star chords (pentagram / hexagram / octagram)
       const step = vCount >= 5 ? 2 : 1;
       for (let i = 0; i < vCount; i++) {
         const v1 = verts[i];
@@ -2364,7 +4725,6 @@ export class UltimateSequencer {
         drawPixelLine(ctx, v1.x, v1.y, v2.x, v2.y, PALETTE.volt, 2);
         drawPixelLine(ctx, v1.x, v1.y, vStar.x, vStar.y, i % 2 === 0 ? PALETTE.bone : PALETTE.volt, 1);
 
-        // Orbiting Vertex Drone Node
         ctx.fillStyle = PALETTE.soot;
         ctx.fillRect(v1.x - 4, v1.y - 4, 8, 8);
         ctx.fillStyle = PALETTE.volt;
@@ -2373,7 +4733,6 @@ export class UltimateSequencer {
         ctx.fillRect(v1.x - 1, v1.y - 1, 2, 2);
       }
 
-      // Central orbital ion sky-beam + peripheral pillars
       ctx.fillStyle = PALETTE.volt;
       ctx.fillRect(zx - 10, 0, 20, zy);
       ctx.fillStyle = PALETTE.bone;
@@ -2388,6 +4747,347 @@ export class UltimateSequencer {
         ctx.fillStyle = PALETTE.bone;
         ctx.fillRect(px - Math.max(1, Math.floor(w / 4)), 0, Math.max(2, Math.floor(w / 2)), py);
         drawBresenhamCircle(ctx, px, py, 18, PALETTE.volt, 0.9);
+      }
+    }
+
+    // 6.4. Draw Vespera's Colossus Directive (War Automaton, Puppet Command Wires, Pneumatic Fist & Core Slam)
+    if (this.colossusState) {
+      const cs = this.colossusState;
+      const zx = Math.round(cs.x - camX);
+      const zy = Math.round(cs.y - camY);
+      const rad = cs.radius;
+
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.volt, 0.75);
+
+      if (p) {
+        const px = Math.round(p.x - camX);
+        const py = Math.round(p.y - camY - 6);
+        const wireSegments = 5;
+        const leftHandX = px - 8;
+        const rightHandX = px + 8;
+        const colossusShoulderLX = zx - 18;
+        const colossusShoulderRX = zx + 18;
+        const colossusShoulderY = zy - 42;
+
+        for (let s = 1; s <= wireSegments; s++) {
+          const st = s / wireSegments;
+          const prevSt = (s - 1) / wireSegments;
+          const jitter = Math.sin(cs.elapsedMs * 0.06 + s * 1.8) * 4;
+          const lx1 = Math.round(leftHandX + (colossusShoulderLX - leftHandX) * prevSt);
+          const ly1 = Math.round(py + (colossusShoulderY - py) * prevSt);
+          const lx2 = Math.round(leftHandX + (colossusShoulderLX - leftHandX) * st + (s < wireSegments ? jitter : 0));
+          const ly2 = Math.round(py + (colossusShoulderY - py) * st);
+          drawPixelLine(ctx, lx1, ly1, lx2, ly2, s % 2 === 0 ? PALETTE.volt : PALETTE.bone, 1);
+
+          const rx1 = Math.round(rightHandX + (colossusShoulderRX - rightHandX) * prevSt);
+          const ry1 = Math.round(py + (colossusShoulderY - py) * prevSt);
+          const rx2 = Math.round(rightHandX + (colossusShoulderRX - rightHandX) * st + (s < wireSegments ? -jitter : 0));
+          const ry2 = Math.round(py + (colossusShoulderY - py) * st);
+          drawPixelLine(ctx, rx1, ry1, rx2, ry2, s % 2 === 0 ? PALETTE.volt : PALETTE.bone, 1);
+        }
+      }
+
+      const autoX = zx;
+      const autoY = zy;
+
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(autoX - 28, autoY + 6, 56, 12);
+
+      ctx.fillStyle = PALETTE.slag;
+      ctx.fillRect(autoX - 22, autoY - 14, 14, 24);
+      ctx.fillRect(autoX + 8, autoY - 14, 14, 24);
+      ctx.fillStyle = PALETTE.slagLight;
+      ctx.fillRect(autoX - 20, autoY - 12, 10, 20);
+      ctx.fillRect(autoX + 10, autoY - 12, 10, 20);
+
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(autoX - 24, autoY - 52, 48, 40);
+      ctx.fillStyle = PALETTE.slag;
+      ctx.fillRect(autoX - 22, autoY - 50, 44, 36);
+      ctx.fillStyle = PALETTE.slagLight;
+      ctx.fillRect(autoX - 18, autoY - 46, 36, 28);
+
+      ctx.fillStyle = PALETTE.slag;
+      ctx.fillRect(autoX - 26, autoY - 64, 8, 16);
+      ctx.fillRect(autoX + 18, autoY - 64, 8, 16);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(autoX - 27, autoY - 68, 10, 4);
+      ctx.fillRect(autoX + 17, autoY - 68, 10, 4);
+
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(autoX - 10, autoY - 42, 20, 8);
+      ctx.fillStyle = PALETTE.volt;
+      ctx.fillRect(autoX - 8, autoY - 40, 16, 4);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillRect(autoX - 3, autoY - 39, 6, 2);
+
+      if (cs.stage === 'sweep') {
+        const armAngle = cs.sweepAngle;
+        const fistReach = 58;
+        const fx = Math.round(autoX + Math.cos(armAngle) * fistReach);
+        const fy = Math.round(autoY - 26 + Math.sin(armAngle) * fistReach);
+        drawPixelLine(ctx, autoX - 16, autoY - 36, fx, fy, PALETTE.volt, 4);
+        drawPixelLine(ctx, autoX - 16, autoY - 36, fx, fy, PALETTE.bone, 2);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(fx - 9, fy - 9, 18, 18);
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(fx - 6, fy - 6, 12, 12);
+      } else if (cs.stage === 'grandSlam') {
+        const slamY = autoY + 6;
+        drawPixelLine(ctx, autoX - 16, autoY - 48, autoX, slamY, PALETTE.volt, 5);
+        drawPixelLine(ctx, autoX + 16, autoY - 48, autoX, slamY, PALETTE.volt, 5);
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(autoX - 18, slamY - 14, 36, 20);
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(autoX - 16, slamY - 12, 32, 16);
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(autoX - 10, slamY - 8, 20, 8);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(autoX - 4, slamY - 4, 8, 4);
+      } else {
+        ctx.fillStyle = PALETTE.slag;
+        ctx.fillRect(autoX - 32, autoY - 42, 10, 32);
+        ctx.fillRect(autoX + 22, autoY - 42, 10, 32);
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(autoX - 30, autoY - 20, 6, 10);
+        ctx.fillRect(autoX + 24, autoY - 20, 6, 10);
+      }
+    }
+
+    // 6.7. Draw Vespera's Worldstorm Atlas (Holographic Weather Radar, Isobar Contours, Sky Lightning)
+    if (this.stormAtlas) {
+      const sa = this.stormAtlas;
+      const zx = Math.round(sa.x - camX);
+      const zy = Math.round(sa.y - camY);
+      const rad = sa.radius;
+
+      // 1. Holographic weather radar grid on floor
+      drawBresenhamCircle(ctx, zx, zy, rad, PALETTE.signal, 0.90);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.65), PALETTE.signal, 0.65);
+      drawBresenhamCircle(ctx, zx, zy, Math.round(rad * 0.35), PALETTE.signal, 0.45);
+      drawPixelLine(ctx, zx - rad, zy, zx + rad, zy, PALETTE.signal, 1);
+      drawPixelLine(ctx, zx, zy - rad, zx, zy + rad, PALETTE.signal, 1);
+
+      // Rotating radar sweep beam
+      const sweepX = Math.round(zx + Math.cos(sa.radarAngle) * rad);
+      const sweepY = Math.round(zy + Math.sin(sa.radarAngle) * rad);
+      drawPixelLine(ctx, zx, zy, sweepX, sweepY, PALETTE.bone, 2);
+      drawPixelLine(ctx, zx, zy, sweepX, sweepY, PALETTE.signal, 1);
+
+      // 2. Concentric undulating isobar pressure bands
+      for (let ib = 1; ib <= 3; ib++) {
+        const baseR = (ib / 3) * rad * 0.85;
+        const pts = 16;
+        for (let pIdx = 0; pIdx < pts; pIdx++) {
+          const a1 = (pIdx / pts) * Math.PI * 2;
+          const a2 = ((pIdx + 1) / pts) * Math.PI * 2;
+          const r1 = baseR + Math.sin(a1 * 3 + sa.elapsedMs * 0.005) * 8;
+          const r2 = baseR + Math.sin(a2 * 3 + sa.elapsedMs * 0.005) * 8;
+          const x1 = Math.round(zx + Math.cos(a1) * r1);
+          const y1 = Math.round(zy + Math.sin(a1) * r1);
+          const x2 = Math.round(zx + Math.cos(a2) * r2);
+          const y2 = Math.round(zy + Math.sin(a2) * r2);
+          drawPixelLine(ctx, x1, y1, x2, y2, ib === 3 ? PALETTE.signal : PALETTE.volt, 1);
+        }
+      }
+
+      // Isobar pressure text labels
+      ctx.font = '8px monospace';
+      ctx.fillStyle = PALETTE.signal;
+      ctx.fillText('1013 hPa', zx + Math.round(rad * 0.65), zy - 8);
+      ctx.fillText('995 hPa', zx + Math.round(rad * 0.4), zy - 8);
+      ctx.fillStyle = PALETTE.bone;
+      ctx.fillText('970 hPa [EYE]', zx - 26, zy - 12);
+
+      // 3. Swirling cyclonic wind vector arrows orbiting the center
+      for (let i = 0; i < 6; i++) {
+        const a = sa.elapsedMs * 0.003 + (i / 6) * Math.PI * 2;
+        const dist = rad * 0.5;
+        const ax = Math.round(zx + Math.cos(a) * dist);
+        const ay = Math.round(zy + Math.sin(a) * dist);
+        const tanA = a + Math.PI * 0.5;
+        drawPixelLine(ctx, ax, ay, Math.round(ax + Math.cos(tanA) * 14), Math.round(ay + Math.sin(tanA) * 14), PALETTE.bone, 1);
+      }
+
+      // 4. Diagonal rain squalls across the radar
+      for (let r = 0; r < 20; r++) {
+        const rx = (zx - rad) + ((r * 31 + sa.elapsedMs * 0.45) % (rad * 2));
+        const ry = (zy - rad) + ((r * 23 + sa.elapsedMs * 0.75) % (rad * 2));
+        if (Math.hypot(rx - zx, ry - zy) <= rad) {
+          drawPixelLine(ctx, Math.round(rx), Math.round(ry), Math.round(rx - 8), Math.round(ry + 14), PALETTE.signal, 1);
+        }
+      }
+
+      // 5. Active jagged multi-segment sky lightning bolts
+      for (const bolt of sa.bolts) {
+        const ratio = bolt.life / bolt.maxLife;
+        const tx = Math.round(bolt.targetX - camX);
+        const ty = Math.round(bolt.targetY - camY);
+        const skyY = 0;
+        const segs = bolt.segments || 5;
+
+        let prevX = tx + (Math.sin(sa.elapsedMs * 0.05) * 20);
+        let prevY = skyY;
+        for (let s = 1; s <= segs; s++) {
+          const st = s / segs;
+          const curY = Math.round(skyY + (ty - skyY) * st);
+          const jitterX = s < segs ? (Math.sin(s * 3.7 + sa.elapsedMs * 0.05) * 18) : 0;
+          const curX = Math.round(prevX + ((tx - prevX) * 0.5) + jitterX);
+          drawPixelLine(ctx, prevX, prevY, curX, curY, ratio > 0.5 ? PALETTE.bone : PALETTE.signal, 3);
+          drawPixelLine(ctx, prevX, prevY, curX, curY, '#FFFFFF', 1);
+          prevX = curX;
+          prevY = curY;
+        }
+        drawBresenhamCircle(ctx, tx, ty, 18, PALETTE.signal, 0.95);
+      }
+
+      // 6. Central Supercell Ion Sky Pillar
+      if (sa.supercellActive) {
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(zx - 20, 0, 40, zy);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(zx - 8, 0, 16, zy);
+        drawBresenhamCircle(ctx, zx, zy, 32, PALETTE.signal, 1.0);
+      }
+    }
+
+    // 7. Draw Kaelen's continuous Supercritical Meltdown (molten slag footprints & roaring flamethrower torrent)
+    if (this.meltdownState) {
+      const ms = this.meltdownState;
+
+      // Draw bubbling molten slag footprints
+      for (let i = 0; i < ms.slagFootprints.length; i++) {
+        const fp = ms.slagFootprints[i];
+        const fx = Math.round(fp.x - camX);
+        const fy = Math.round(fp.y - camY);
+        const ratio = fp.life / fp.maxLife;
+        drawBresenhamCircle(ctx, fx, fy, Math.max(4, Math.round(fp.radius * ratio)), PALETTE.ember, 0.85);
+        drawBresenhamCircle(ctx, fx, fy, Math.max(2, Math.round(fp.radius * ratio * 0.55)), PALETTE.brass, 0.65);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(fx - 1, fy - 1, 2, 2);
+      }
+
+      // Draw roaring flamethrower torrent plume along flameAngle
+      if (ms.active && !ms.venting && p) {
+        const px = Math.round(p.x - camX);
+        const py = Math.round(p.y - camY - 4);
+        const cosA = Math.cos(ms.flameAngle);
+        const sinA = Math.sin(ms.flameAngle);
+        const perpX = -sinA;
+        const perpY = cosA;
+        const reach = 160;
+
+        // Core flame beam
+        drawPixelLine(ctx, px, py, Math.round(px + cosA * reach), Math.round(py + sinA * reach), PALETTE.bone, 2);
+
+        // Flaring flame plumes
+        const segments = 8;
+        for (let s = 1; s <= segments; s++) {
+          const st = s / segments;
+          const dist = st * reach;
+          const spread = Math.round(st * 36);
+          const cx = Math.round(px + cosA * dist);
+          const cy = Math.round(py + sinA * dist);
+
+          drawBresenhamCircle(ctx, cx, cy, Math.max(3, Math.round(spread * 0.65)), s % 2 === 0 ? PALETTE.ember : PALETTE.brass, 0.75);
+
+          // Lateral flame tongues
+          const wingX = Math.round(perpX * spread);
+          const wingY = Math.round(perpY * spread);
+          drawPixelLine(ctx, cx - wingX, cy - wingY, cx + wingX, cy + wingY, s % 3 === 0 ? PALETTE.bone : PALETTE.ember, 1);
+        }
+
+        // Lance muzzle glow
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(px - 3, py - 3, 6, 6);
+        drawBresenhamCircle(ctx, px, py, 14, PALETTE.ember, 0.9);
+      }
+    }
+
+    // 8. Draw Vespera's continuous Overclocked Armada (12 orbiting drones, Faraday shields, neon saturation lasers)
+    if (this.armadaState && p) {
+      const arm = this.armadaState;
+      const px = Math.round(p.x - camX);
+      const py = Math.round(p.y - camY - 6);
+
+      if (arm.active) {
+        // Draw concentric orbital rings
+        drawBresenhamCircle(ctx, px, py, 46, PALETTE.volt, 0.45);
+        drawBresenhamCircle(ctx, px, py, 82, PALETTE.signal, 0.40);
+
+        // Draw Faraday shield laser connections between adjacent drones in inner ring
+        const innerDrones = arm.drones.filter((d) => d.ring === 'inner');
+        for (let i = 0; i < innerDrones.length; i++) {
+          const d1 = innerDrones[i];
+          const d2 = innerDrones[(i + 1) % innerDrones.length];
+          const x1 = Math.round(d1.x - camX);
+          const y1 = Math.round(d1.y - camY);
+          const x2 = Math.round(d2.x - camX);
+          const y2 = Math.round(d2.y - camY);
+          drawPixelLine(ctx, x1, y1, x2, y2, PALETTE.volt, 1);
+        }
+
+        // Draw Faraday shield laser connections between adjacent drones in outer ring
+        const outerDrones = arm.drones.filter((d) => d.ring === 'outer');
+        for (let i = 0; i < outerDrones.length; i++) {
+          const d1 = outerDrones[i];
+          const d2 = outerDrones[(i + 1) % outerDrones.length];
+          const x1 = Math.round(d1.x - camX);
+          const y1 = Math.round(d1.y - camY);
+          const x2 = Math.round(d2.x - camX);
+          const y2 = Math.round(d2.y - camY);
+          drawPixelLine(ctx, x1, y1, x2, y2, PALETTE.signal, 1);
+        }
+
+        // Draw the 12 drones
+        for (let i = 0; i < arm.drones.length; i++) {
+          const d = arm.drones[i];
+          const dx = Math.round(d.x - camX);
+          const dy = Math.round(d.y - camY);
+
+          // Drone body
+          ctx.fillStyle = PALETTE.soot;
+          ctx.fillRect(dx - 4, dy - 4, 8, 8);
+          ctx.fillStyle = d.color;
+          ctx.fillRect(dx - 3, dy - 3, 6, 6);
+          ctx.fillStyle = PALETTE.bone;
+          ctx.fillRect(dx - 1, dy - 1, 2, 2);
+
+          // Spinning propeller tick marks
+          const propA = this.elapsedMs * 0.04 + i * 1.5;
+          const pCos = Math.cos(propA) * 5;
+          const pSin = Math.sin(propA) * 5;
+          drawPixelLine(ctx, Math.round(dx - pCos), Math.round(dy - pSin), Math.round(dx + pCos), Math.round(dy + pSin), PALETTE.bone, 1);
+        }
+
+        // Draw active neon tracer saturation lasers
+        if (Array.isArray(arm.activeLaserTargets)) {
+          for (const lt of arm.activeLaserTargets) {
+            const x1 = Math.round(lt.fromX - camX);
+            const y1 = Math.round(lt.fromY - camY);
+            const x2 = Math.round(lt.toX - camX);
+            const y2 = Math.round(lt.toY - camY);
+            drawPixelLine(ctx, x1, y1, x2, y2, lt.color, 2);
+            drawPixelLine(ctx, x1, y1, x2, y2, PALETTE.bone, 1);
+            drawBresenhamCircle(ctx, x2, y2, 8, lt.color, 0.85);
+          }
+        }
+
+        // Draw dive-bomb kamikaze streaks if diving
+        if (arm.diving && Array.isArray(arm.diveDrones)) {
+          for (const dd of arm.diveDrones) {
+            if (dd.progress < 0 || dd.progress >= 1) continue;
+            const curX = Math.round(dd.startX + (dd.targetX - dd.startX) * dd.progress - camX);
+            const curY = Math.round(dd.startY + (dd.targetY - dd.startY) * dd.progress - camY);
+            const tx = Math.round(dd.targetX - camX);
+            const ty = Math.round(dd.targetY - camY);
+
+            drawPixelLine(ctx, curX, curY, tx, ty, PALETTE.volt, 2);
+            ctx.fillStyle = PALETTE.bone;
+            ctx.fillRect(curX - 3, curY - 3, 6, 6);
+            drawBresenhamCircle(ctx, tx, ty, 10, PALETTE.signal, 0.75);
+          }
+        }
       }
     }
   }

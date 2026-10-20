@@ -1268,13 +1268,14 @@ export const CLASSES = {
       },
     ],
     ultimate: {
-      id: 'solarKiln',
+      id: 'supercriticalMeltdown',
       hotkey: 'R',
-      name: 'Solar Kiln',
-      icon: 'solarKiln',
-      totalDamageMult: 8.5,
-      radius: 280,
-      desc: 'Time freezes as Kaelen chains the battlefield in an 8-point fiery star, erupts 6 magma geysers, and detonates a supercritical Solar Kiln across 280px for 850% ATK + Burn & Corrode.',
+      name: 'Supercritical Meltdown',
+      icon: 'supercriticalMeltdown',
+      totalDamageMult: 14.5,
+      radius: 240,
+      duration: 8.0,
+      desc: 'Locks boiler valves for 8.0s of continuous Supercritical Overdrive (+40% Move Speed, +50% Damage Reduction, Stun & Knockback Immunity). Drops molten slag trails underfoot, sprays a continuous 160px flamethrower torrent toward the cursor, grants zero-cooldown Steam Vents [V], and concludes with a 240px thermobaric shockwave (750% ATK + Stun/Corrode/Burn) on timeout or recast [R].',
     },
     passives: [
       {
@@ -1594,13 +1595,14 @@ export const CLASSES = {
       },
     ],
     ultimate: {
-      id: 'ionConvergence',
+      id: 'overclockedArmada',
       hotkey: 'R',
-      name: 'Ion Convergence',
-      icon: 'ionConvergence',
-      totalDamageMult: 9.0,
-      radius: 240,
-      desc: 'Drops 6 Dreadnought Relay Satellites in a hexagonal laser cage around the target area, then calls down a sky-splitting Orbital Ion Cannon for 900% ATK and a 2.0s Stun.',
+      name: 'Overclocked Armada',
+      icon: 'overclockedArmada',
+      totalDamageMult: 15.0,
+      radius: 260,
+      duration: 8.0,
+      desc: 'Deploys an escort of 12 autonomous Arc-Drones orbiting in a concentric double ring for 8.0s of continuous combat. Drones auto-zap incoming projectiles within 140px, fire continuous twin neon laser beams at enemies near the cursor, and on timeout or recast [R] dive-bomb the cursor in a 12-drone cluster nuke + 240px EMP shockwave.',
     },
     passives: [
       {

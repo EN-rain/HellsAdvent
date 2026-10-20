@@ -788,6 +788,27 @@ export function PixelIcon({ itemId, size = 32 }) {
         ctx.fillRect(6, 6, 4, 4);
         break;
       }
+      case 'supercriticalMeltdown':
+      case 'skill_supercriticalMeltdown': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Overdriven red-hot boiler core with 4 jet vents and flame plumes
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(4, 4, 8, 8);
+        ctx.fillRect(2, 6, 12, 4);
+        ctx.fillRect(6, 2, 4, 12);
+        ctx.fillStyle = PALETTE.brass;
+        ctx.fillRect(5, 5, 6, 6);
+        ctx.fillStyle = PALETTE.bone;
+        ctx.fillRect(6, 6, 4, 4);
+        // Jet plume sparks at corners
+        ctx.fillStyle = PALETTE.ember;
+        ctx.fillRect(1, 1, 2, 2);
+        ctx.fillRect(13, 1, 2, 2);
+        ctx.fillRect(1, 13, 2, 2);
+        ctx.fillRect(13, 13, 2, 2);
+        break;
+      }
       case 'sunfallFurnace':
       case 'tectonicKiln':
       case 'blightHurricane':
@@ -805,6 +826,27 @@ export function PixelIcon({ itemId, size = 32 }) {
         break;
       }
       // VESPERA LOCKE (ARC-DRONE ARTIFICER) SKILLS & ULTIMATES
+      case 'overclockedArmada':
+      case 'skill_overclockedArmada': {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(0, 0, 16, 16);
+        // Concentric dual-ring drone swarm with laser tethers
+        ctx.fillStyle = PALETTE.volt;
+        ctx.fillRect(2, 2, 12, 2);
+        ctx.fillRect(2, 12, 12, 2);
+        ctx.fillRect(2, 4, 2, 8);
+        ctx.fillRect(12, 4, 2, 8);
+        ctx.fillStyle = PALETTE.signal;
+        ctx.fillRect(5, 5, 6, 6);
+        ctx.fillStyle = PALETTE.bone;
+        // 4 Drone satellites on outer perimeter
+        ctx.fillRect(1, 7, 2, 2);
+        ctx.fillRect(13, 7, 2, 2);
+        ctx.fillRect(7, 1, 2, 2);
+        ctx.fillRect(7, 13, 2, 2);
+        ctx.fillRect(7, 7, 2, 2);
+        break;
+      }
       case 'teslaPylon':
       case 'skill_teslaPylon': {
         ctx.fillStyle = PALETTE.soot;

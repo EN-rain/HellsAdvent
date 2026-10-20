@@ -297,6 +297,11 @@ export class GameEngine {
 
     const isSimulationActive = this.uiState === 'playing';
 
+    if (this.player && this.player.pendingClassChoice && isSimulationActive) {
+      this.setUiState('classChoice');
+      return;
+    }
+
     if (isSimulationActive) {
       this.accumulator += frameDelta;
       while (this.accumulator >= this.fixedDt) {
@@ -1248,21 +1253,20 @@ export class GameEngine {
     }
 
     let activeUltDef = null;
+    const resolvedSeqDef = p.ultimates ? p.ultimates.getActiveUltimateDef(p) : null;
     if (p.ultimateSlot && skillMap.has(p.ultimateSlot)) {
       const u = skillMap.get(p.ultimateSlot);
       activeUltDef = {
         id: u.id,
         name: u.name,
-        icon: u.icon || 'sevenCuts',
-        summary: u.desc || '',
-        desc: u.desc || '',
-        chargeNeeded: 100,
+        icon: u.icon || resolvedSeqDef?.icon || 'sevenCuts',
+        summary: u.desc || resolvedSeqDef?.summary || '',
+        desc: u.desc || resolvedSeqDef?.desc || '',
+        chargeNeeded: resolvedSeqDef?.chargeNeeded || 100,
       };
     }
     if (!activeUltDef) {
-      activeUltDef = p.ultimates
-        ? p.ultimates.getActiveUltimateDef(p)
-        : cls.ultimate;
+      activeUltDef = resolvedSeqDef || cls.ultimate;
     }
     const maxChargeNeeded =
       activeUltDef?.chargeNeeded || (p.hasNode('nineCuts') ? 85 : 100);
@@ -1275,6 +1279,8 @@ export class GameEngine {
       classId: p.classId,
       activeClassId: p.activeClassId,
       unlockedClasses: p.unlockedClasses || [p.activeClassId],
+      pendingClassChoice: Boolean(p.pendingClassChoice),
+      chosenClassAtLevel15: p.chosenClassAtLevel15,
       skillSlots: p.skillSlots,
       ultimateSlot: p.ultimateSlot,
       loadoutPresets: p.loadoutPresets,
@@ -1321,6 +1327,8 @@ export class GameEngine {
       ultimateCharge: Math.floor(p.ultimateCharge),
       ultimateChargeNeeded: maxChargeNeeded,
       ultimateDef: activeUltDef,
+      ultimateActive: p.ultimates ? p.ultimates.active : false,
+      ultimateContinuousTimer: p.ultimates?.armadaState?.timer || p.ultimates?.meltdownState?.timer || 0,
       invalidUltShake: p.ultimates ? p.ultimates.invalidShakeTimer > 0 : false,
       ultReadyFlash: p.ultimates ? p.ultimates.readyFlashTimer > 0 : false,
       equipped: { ...p.equipped },
