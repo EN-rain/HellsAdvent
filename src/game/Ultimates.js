@@ -154,11 +154,17 @@ export class UltimateSequencer {
 
   getActiveUltimateDef(player) {
     if (!player) return ULTIMATES.sevenCuts;
+    const forkChoice =
+      typeof player.getSkillFork === 'function'
+        ? player.getSkillFork(player.ultimateSlot)
+        : null;
     return getActiveUltimateForPlayer(
       player.classId,
       player.ownedNodes,
       player.activeClassId,
-      player.ultimateSlot
+      player.ultimateSlot,
+      player.level || 1,
+      forkChoice
     );
   }
 

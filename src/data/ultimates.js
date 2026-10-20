@@ -2324,15 +2324,151 @@ ULTIMATES.whiteoutRupture = ULTIMATES.blightHurricane;
 ULTIMATES.zeroPointReversal = ULTIMATES.junkyardRain;
 
 /**
- * Resolves the active Ultimate definition for a given player class, active specialization, equipped ultimate slot, & unlocked Master nodes.
+ * Scales an ultimate definition's timeline steps, damage, radius, and camera/VFX intensity
+ * for Tier 2 (Lv 15 Enhanced) and Tier 4 (Lv 45 Mastery).
  */
-export function getActiveUltimateForPlayer(
+function applyUltimateTierScaling(baseUlt, tier, forkChoice = null) {
+  if (!baseUlt) return baseUlt;
+
+  // Tier 1 (Lv 1-14) and Tier 3 (Lv 30-44) use baseline definitions for their respective forms,
+  // while Tier 2 (Lv 15-29) enhances the Lv 1 Base Ult and Tier 4 (Lv 45+) masters the Lv 30 Transformed Ult.
+  const isEnhancedTier = tier === 2;
+  const isMasteryTier = tier === 4;
+
+  let dmgScale = isEnhancedTier ? 1.30 : isMasteryTier ? 1.35 : 1.0;
+  let radiusScale = isEnhancedTier ? 1.20 : isMasteryTier ? 1.22 : 1.0;
+  let shakeScale = isEnhancedTier ? 1.25 : isMasteryTier ? 1.35 : 1.0;
+  let durationScale = isEnhancedTier ? 1.15 : isMasteryTier ? 1.25 : 1.0;
+
+  // Apply Skill Tree Fork modifier at Tier 3/4 if invested
+  if (forkChoice === 0) {
+    radiusScale *= 1.15;
+    durationScale *= 1.15;
+  } else if (forkChoice === 1) {
+    dmgScale *= 1.20;
+    shakeScale *= 1.15;
+  }
+
+  const tierLabel =
+    tier === 1
+      ? 'TIER I · BASE'
+      : tier === 2
+      ? 'TIER II · ENHANCED'
+      : tier === 3
+      ? 'TIER III · TRANSFORMED'
+      : 'TIER IV · MASTERY';
+
+  const suffix =
+    isEnhancedTier ? ' [ENHANCED]' : isMasteryTier ? ' [MASTERY]' : '';
+
+  const scaledSteps = (baseUlt.steps || []).map((step) => {
+    const p = { ...(step.params || {}) };
+    if (typeof p.damageMult === 'number') {
+      p.damageMult = +(p.damageMult * dmgScale).toFixed(2);
+    }
+    if (typeof p.damageMultPerCut === 'number') {
+      p.damageMultPerCut = +(p.damageMultPerCut * dmgScale).toFixed(2);
+    }
+    if (typeof p.aoeDamageMult === 'number') {
+      p.aoeDamageMult = +(p.aoeDamageMult * dmgScale).toFixed(2);
+    }
+    if (typeof p.counterBurstMult === 'number') {
+      p.counterBurstMult = +(p.counterBurstMult * dmgScale).toFixed(2);
+    }
+    if (typeof p.radius === 'number') {
+      p.radius = Math.round(p.radius * radiusScale);
+    }
+    if (typeof p.fieldRadius === 'number') {
+      p.fieldRadius = Math.round(p.fieldRadius * radiusScale);
+    }
+    if (typeof p.aoeRadius === 'number') {
+      p.aoeRadius = Math.round(p.aoeRadius * radiusScale);
+    }
+    if (typeof p.shakePx === 'number') {
+      p.shakePx = Math.round(p.shakePx * shakeScale);
+    }
+    if (typeof p.duration === 'number') {
+      p.duration = +(p.duration * durationScale).toFixed(1);
+    }
+    if (typeof p.stunDuration === 'number' && (isEnhancedTier || isMasteryTier)) {
+      p.stunDuration = +(p.stunDuration + 0.5).toFixed(1);
+    }
+    if (typeof p.wreckPieceCount === 'number' && (isEnhancedTier || isMasteryTier)) {
+      p.wreckPieceCount = Math.round(p.wreckPieceCount * 1.4);
+    }
+    if (typeof p.rayCount === 'number' && (isEnhancedTier || isMasteryTier)) {
+      p.rayCount += 4;
+    }
+    if (typeof p.meteorCount === 'number' && (isEnhancedTier || isMasteryTier)) {
+      p.meteorCount = Math.round(p.meteorCount * 1.5);
+    }
+    if (typeof p.vertexCount === 'number' && (isEnhancedTier || isMasteryTier)) {
+      p.vertexCount += 2;
+    }
+    if (isEnhancedTier || isMasteryTier) {
+      if (p.applyBleed === false) p.applyBleed = true;
+      if (p.corrosiveRain === false) p.corrosiveRain = true;
+      if (p.tectonicFissures === false && isMasteryTier) p.tectonicFissures = true;
+      if (p.thunderheadStorm === false && isMasteryTier) p.thunderheadStorm = true;
+      if (p.impactFrame && typeof p.impactFrame.frames === 'number') {
+        p.impactFrame = {
+          ...p.impactFrame,
+          frames: p.impactFrame.frames + 1,
+        };
+      }
+    }
+    if (step.action === 'cutInEnter' && p.titleCard) {
+      p.titleCard = `${p.titleCard}${suffix}`;
+    }
+    return {
+      ...step,
+      params: p,
+    };
+  });
+
+  return {
+    ...baseUlt,
+    tier,
+    tierLabel,
+    name: `${baseUlt.name}${suffix}`,
+    titleCard: `${baseUlt.titleCard}${suffix}`,
+    totalDamageMult: +(baseUlt.totalDamageMult * dmgScale).toFixed(2),
+    radius: baseUlt.radius ? Math.round(baseUlt.radius * radiusScale) : baseUlt.radius,
+    steps: scaledSteps,
+  };
+}
+
+/**
+ * Resolves the Base Ultimate (Levels 1-29) for each character.
+ * Every character has a completely distinct mechanic, animation, and VFX palette.
+ */
+function getBaseUltimateForCharacter(classId = 'sena') {
+  switch (classId) {
+    case 'sena':
+      return ULTIMATES.sevenCuts; // Omnislash time-stop spatial cuts
+    case 'rook':
+      return ULTIMATES.tenCount; // 10-round rapid precision ballistic barrage
+    case 'ines':
+      return ULTIMATES.scrapfall; // Magnetic levitation & orbital wreck slam
+    case 'kaelen':
+      return ULTIMATES.sunfallFurnace; // Solar reactor ignition & slag meteor rain
+    case 'vespera':
+      return ULTIMATES.orbitalSingularity; // Geometric drone matrix & ion sky-pillars
+    default:
+      return ULTIMATES.sevenCuts;
+  }
+}
+
+/**
+ * Resolves the Transformed Ultimate (Levels 30+) based on specialization, equipped ultimate, or master node.
+ * Every class/specialization transforms into a fundamentally new mechanic and animation at Level 30.
+ */
+function getTransformedUltimateForPlayer(
   classId = 'sena',
   ownedNodes = [],
   activeClassId = null,
   ultimateSlot = null
 ) {
-  // 1. Direct ultimateSlot resolution if equipped
   const ultKey = (ultimateSlot || '').toLowerCase();
   if (ultKey) {
     if (ultKey.includes('meltdown') || ultKey.includes('flyover') || ultKey.includes('broadside')) {
@@ -2353,8 +2489,8 @@ export function getActiveUltimateForPlayer(
     if (ultKey.includes('worldstorm') || ultKey.includes('thunderhead') || ultKey.includes('supercell')) {
       return ULTIMATES.zenithThunderhead;
     }
-    if (ultKey.includes('corridor') || ultKey.includes('phantom')) {
-      return ULTIMATES.sevenCuts;
+    if (ultKey.includes('corridor') || ultKey.includes('phantom') || ultKey.includes('nine')) {
+      return ULTIMATES.nineCuts;
     }
     if (ultKey.includes('worldsplitter') || ultKey.includes('cataclysm-fissure') || ultKey.includes('riftbreaker')) {
       return ULTIMATES.worldsplitter;
@@ -2362,27 +2498,23 @@ export function getActiveUltimateForPlayer(
     if (ultKey.includes('frequency') || ultKey.includes('crescendo') || ultKey.includes('pulsedancer')) {
       return ULTIMATES.perfectFrequency;
     }
-    if (ultKey.includes('meridian') || ultKey.includes('curtain') || ultKey.includes('railhunter')) {
+    if (ultKey.includes('meridian') || ultKey.includes('curtain') || ultKey.includes('railhunter') || ultKey.includes('slug')) {
       return ULTIMATES.railSlug;
     }
-    if (ultKey.includes('weather') || ultKey.includes('battery') || ultKey.includes('siegegunner')) {
+    if (ultKey.includes('weather') || ultKey.includes('battery') || ultKey.includes('siegegunner') || ultKey.includes('dead')) {
       return ULTIMATES.deadGround;
     }
     if (ultKey.includes('blackout') || ultKey.includes('static-grid') || ultKey.includes('circuitwarden')) {
       return ULTIMATES.blackoutCascade;
     }
-    if (ultKey.includes('press') || ultKey.includes('polarity-collapse') || ultKey.includes('magnetcrusher')) {
+    if (ultKey.includes('press') || ultKey.includes('polarity-collapse') || ultKey.includes('magnetcrusher') || ultKey.includes('crane')) {
       return ULTIMATES.craneDrop;
     }
-    if (ultKey.includes('typhoon') || ultKey.includes('scrap-maelstrom') || ultKey.includes('scrapstorm')) {
-      return ULTIMATES.scrapfall;
-    }
-    if (ultKey.includes('reversal') || ultKey.includes('flux-implosion') || ultKey.includes('polaritybreaker')) {
+    if (ultKey.includes('typhoon') || ultKey.includes('scrap-maelstrom') || ultKey.includes('scrapstorm') || ultKey.includes('reversal') || ultKey.includes('flux-implosion') || ultKey.includes('polaritybreaker')) {
       return ULTIMATES.junkyardRain;
     }
   }
 
-  // 2. Active Specialization ID resolution
   const specKey = (activeClassId || '').toLowerCase();
   if (specKey) {
     if (specKey === 'cindercorsair') return ULTIMATES.supercriticalMeltdown;
@@ -2391,45 +2523,77 @@ export function getActiveUltimateForPlayer(
     if (specKey === 'voltreaver') return ULTIMATES.overclockedArmada;
     if (specKey === 'ironpuppeteer') return ULTIMATES.valkyrieSwarm;
     if (specKey === 'stormcartographer') return ULTIMATES.zenithThunderhead;
-    if (specKey === 'phantomedge') return ULTIMATES.sevenCuts;
+    if (specKey === 'phantomedge') return ULTIMATES.nineCuts;
     if (specKey === 'riftbreaker') return ULTIMATES.worldsplitter;
     if (specKey === 'pulsedancer') return ULTIMATES.perfectFrequency;
     if (specKey === 'railhunter') return ULTIMATES.railSlug;
     if (specKey === 'siegegunner') return ULTIMATES.deadGround;
     if (specKey === 'circuitwarden') return ULTIMATES.blackoutCascade;
     if (specKey === 'magnetcrusher') return ULTIMATES.craneDrop;
-    if (specKey === 'scrapstorm') return ULTIMATES.scrapfall;
+    if (specKey === 'scrapstorm') return ULTIMATES.junkyardRain;
     if (specKey === 'polaritybreaker') return ULTIMATES.junkyardRain;
   }
 
-  // 3. Fallback: Base Character ID + Master Tree Nodes
   if (classId === 'sena') {
-    if (ownedNodes.includes('nineCuts')) return ULTIMATES.nineCuts;
     if (ownedNodes.includes('holdTheLine')) return ULTIMATES.holdTheLine;
-    return ULTIMATES.sevenCuts;
+    if (ownedNodes.includes('worldsplitter')) return ULTIMATES.worldsplitter;
+    if (ownedNodes.includes('perfectFrequency')) return ULTIMATES.perfectFrequency;
+    return ULTIMATES.nineCuts;
   }
   if (classId === 'rook') {
-    if (ownedNodes.includes('longCount')) return ULTIMATES.longCount;
     if (ownedNodes.includes('deadGround')) return ULTIMATES.deadGround;
-    return ULTIMATES.railSlug || ULTIMATES.tenCount;
+    if (ownedNodes.includes('blackoutCascade')) return ULTIMATES.blackoutCascade;
+    return ULTIMATES.railSlug;
   }
   if (classId === 'ines') {
-    if (ownedNodes.includes('craneDrop')) return ULTIMATES.craneDrop;
     if (ownedNodes.includes('junkyardRain')) return ULTIMATES.junkyardRain;
-    return ULTIMATES.scrapfall;
+    return ULTIMATES.craneDrop;
   }
   if (classId === 'kaelen') {
     if (ownedNodes.includes('tectonicKiln')) return ULTIMATES.tectonicKiln;
     if (ownedNodes.includes('blightHurricane')) return ULTIMATES.blightHurricane;
-    return ULTIMATES.supercriticalMeltdown || ULTIMATES.sunfallFurnace;
+    return ULTIMATES.supercriticalMeltdown;
   }
   if (classId === 'vespera') {
     if (ownedNodes.includes('valkyrieSwarm')) return ULTIMATES.valkyrieSwarm;
     if (ownedNodes.includes('zenithThunderhead')) return ULTIMATES.zenithThunderhead;
-    return ULTIMATES.overclockedArmada || ULTIMATES.orbitalSingularity;
+    return ULTIMATES.overclockedArmada;
   }
-  return ULTIMATES.sevenCuts;
+  return ULTIMATES.nineCuts;
+}
+
+/**
+ * Resolves the active Ultimate definition for a given player class, active specialization,
+ * equipped ultimate slot, unlocked Master nodes, and player Level (4-Tier Progression: Lv 1, 15, 30, 45).
+ */
+export function getActiveUltimateForPlayer(
+  classId = 'sena',
+  ownedNodes = [],
+  activeClassId = null,
+  ultimateSlot = null,
+  playerLevel = 1,
+  forkChoice = null
+) {
+  const lvl = Number.isFinite(playerLevel) ? playerLevel : 1;
+
+  // Determine Upgrade Tier:
+  // Level 1-14:  Tier 1 (Base Ultimate)
+  // Level 15-29: Tier 2 (Enhanced Base Ultimate)
+  // Level 30-44: Tier 3 (Transformed Specialization Ultimate)
+  // Level 45+:   Tier 4 (Mastery Specialization Ultimate)
+  const tier = lvl >= 45 ? 4 : lvl >= 30 ? 3 : lvl >= 15 ? 2 : 1;
+
+  // If explicit legacy master nodes were passed without a level (e.g. unit tests), honor them
+  const hasExplicitMasterNode = Array.isArray(ownedNodes) && ownedNodes.length > 0;
+  const useTransformed = tier >= 3 || hasExplicitMasterNode;
+
+  const baseDef = useTransformed
+    ? getTransformedUltimateForPlayer(classId, ownedNodes, activeClassId, ultimateSlot)
+    : getBaseUltimateForCharacter(classId);
+
+  return applyUltimateTierScaling(baseDef, tier, forkChoice);
 }
 
 export default ULTIMATES;
+
 
