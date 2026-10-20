@@ -30,6 +30,13 @@ import { tacticalSystem } from './TacticalAI.js';
 import { obstacleManager } from './Obstacles.js';
 import { worldLedger } from './WorldLedger.js';
 import { getAllSkillsForCharacter } from '../data/classChangeData.js';
+import {
+  DARK_FANTASY_FLOORS,
+  DUSKHOLLOW_TOWN,
+  TAVERN_MEALS,
+  WANDERING_MERCHANT_STOCK,
+  CURIO_GAMBLE_TIERS,
+} from '../data/darkFantasyConfig.js';
 
 const SAVE_SLOT_PREFIX = 'gravel_sky_save_slot_';
 const LEGACY_SAVE_KEY = 'gravel_sky_save_v1';
@@ -58,11 +65,13 @@ export class GameEngine {
     this.camera = new Camera(INTERNAL_WIDTH, INTERNAL_HEIGHT);
     this.world = new World();
     this.player = new Player('sena');
+    this.player.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+    this.player.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
     this.projectiles = new ProjectilePool(80);
     this.particles = new ParticleSystem();
     this.spawner = new Spawner(this.world);
 
-    // UI states: 'title' | 'slotSelect' | 'charSelect' | 'playing' | 'shop' | 'inventory' | 'skills' | 'harlow' | 'pause' | 'death'
+    // UI states: 'title' | 'slotSelect' | 'charSelect' | 'playing' | 'shop' | 'inventory' | 'skills' | 'quests' | 'harlow' | 'pause' | 'death'
     this.uiState = 'title';
     this.activeSlotIndex = 0;
     this.scanlinesEnabled = false;
@@ -75,6 +84,7 @@ export class GameEngine {
     // Active Boss Name Card banner timer
     this.bossNameCard = null;
     this.seenBossesInSession = new Set();
+    this.activeShopTab = 'runesmith'; // 'runesmith' | 'apothecary' | 'tavern' | 'curio' | 'wandering' | 'pilgrim'
 
     // Input state
     this.keys = {
@@ -189,6 +199,11 @@ export class GameEngine {
     const slot = summaries[slotIndex];
     if (slot && slot.exists) {
       this.loadProgress(slotIndex);
+      // User request: "when i play i should be spawn in the town not in the tower"
+      this.travelToFloor(0);
+      this.player.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+      this.player.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
+      this.camera.snapTo(this.player.x, this.player.y, this.world.size);
       this.setUiState('playing');
     } else {
       this.setUiState('charSelect');
@@ -210,6 +225,11 @@ export class GameEngine {
     if (this.particles && typeof this.particles.clear === 'function') {
       this.particles.clear();
     }
+    // User request: "when i play i should be spawn in the town not in the tower"
+    worldLedger.travelToFloor(0, this.player);
+    this.player.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+    this.player.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
+    this.spawner.syncWithWorldLedger();
     this.camera.snapTo(this.player.x, this.player.y, this.world.size);
     this.saveProgress(slotIndex);
     this.setUiState('playing');
@@ -468,34 +488,14 @@ export class GameEngine {
     // 3. Loot & grounded scrap pickups
     this.particles.drawPickups(octx, this.camera);
 
-    // 4. Ume & Harlow interaction prompts when near
+    // 4. Context-sensitive interaction ground highlight (floating keybind card is rendered by React <InteractionPrompt>)
     if (this.uiState === 'playing') {
-      if (this.isPlayerNearUme()) {
-        const ux = Math.round(WORLD_CONFIG.umePosition.x - this.camera.renderX);
-        const uy = Math.round(WORLD_CONFIG.umePosition.y - this.camera.renderY - 22);
-        octx.fillStyle = PALETTE.soot;
-        octx.fillRect(ux - 22, uy - 6, 44, 9);
-        octx.fillStyle = PALETTE.signal;
-        octx.fillRect(ux - 22, uy - 6, 44, 1);
-        drawPixelText(octx, 'E SHOP', ux, uy - 4, PALETTE.signal, 'center');
-      }
-      if (this.isPlayerNearHarlow()) {
-        const hx = Math.round(WORLD_CONFIG.harlowPosition.x - this.camera.renderX);
-        const hy = Math.round(WORLD_CONFIG.harlowPosition.y - this.camera.renderY - 22);
-        const canPromo = this.player.canPromoteToJourneyman() || this.player.canPromoteToMaster();
-        const col = canPromo ? PALETTE.brass : PALETTE.bone;
-        octx.fillStyle = PALETTE.soot;
-        octx.fillRect(hx - 28, hy - 6, 56, 9);
-        octx.fillStyle = col;
-        octx.fillRect(hx - 28, hy - 6, 56, 1);
-        drawPixelText(
-          octx,
-          canPromo ? 'E PROMOTE' : 'E HARLOW',
-          hx,
-          hy - 4,
-          col,
-          'center'
-        );
+      const interact = this.getNearbyInteractable();
+      if (interact) {
+        const ix = Math.round(interact.x - this.camera.renderX);
+        const iy = Math.round(interact.y - this.camera.renderY);
+        octx.fillStyle = interact.color || PALETTE.brass;
+        octx.fillRect(ix - 10, iy + 8, 20, 1);
       }
     }
 
@@ -589,13 +589,194 @@ export class GameEngine {
     );
   }
 
+  worldToScreen(wx, wy) {
+    if (!this.canvas) return { x: 0, y: 0, visible: false };
+    const cx = this.camera ? this.camera.renderX : 3000;
+    const cy = this.camera ? this.camera.renderY : 3000;
+    const relX = wx - cx;
+    const relY = wy - cy;
+    const sx = this.letterboxX + relX * this.displayScale;
+    const sy = this.letterboxY + relY * this.displayScale;
+    const visible =
+      relX >= -100 &&
+      relX <= INTERNAL_WIDTH + 100 &&
+      relY >= -100 &&
+      relY <= INTERNAL_HEIGHT + 100;
+    return { x: Math.round(sx), y: Math.round(sy), visible };
+  }
+
+  getNearbyInteractable() {
+    const px = this.player.x;
+    const py = this.player.y;
+    let res = null;
+
+    if (worldLedger.currentFloor === 0) {
+      // 1. Check Top-Center Abyssal Spire Gate (3000, 2560)
+      const spire = DUSKHOLLOW_TOWN.abyssalTower || DUSKHOLLOW_TOWN.towerEntrance || { x: 3000, y: 2560 };
+      if (spire && Math.hypot(px - spire.x, py - spire.y) <= (spire.interactRadius || 140)) {
+        res = {
+          type: 'spireGate',
+          id: 'abyssalSpire',
+          name: spire.name || 'Abyssal Spire Gatehouse',
+          action: 'Enter Abyssal Spire',
+          subtitle: 'Ascend Floors 1–5 · Bloodlines',
+          prompt: 'E ENTER ABYSSAL SPIRE',
+          color: '#c084fc',
+          x: spire.x,
+          y: spire.y + 20,
+        };
+      }
+
+      // 2. Check the 6 Duskhollow Town RPG Buildings & NPC Masters
+      if (!res && DUSKHOLLOW_TOWN.buildings) {
+        for (const b of DUSKHOLLOW_TOWN.buildings) {
+          const npcX = b.npc?.x ?? b.x;
+          const npcY = b.npc?.y ?? b.y + 36;
+          if (Math.hypot(px - npcX, py - npcY) <= 110 || Math.hypot(px - b.x, py - b.y) <= 120) {
+            res = {
+              type: 'townBuilding',
+              id: b.id,
+              building: b,
+              name: b.npcName || b.name,
+              action: `Talk to ${b.npcName ? b.npcName.split(' ')[0] : 'Master'}`,
+              subtitle: `${b.name} · ${b.npcTitle || 'Master'}`,
+              prompt: b.prompt || `E ${b.name.toUpperCase()}`,
+              color: b.accentColor || b.roofTrim || PALETTE.brass,
+              x: npcX,
+              y: npcY,
+            };
+            break;
+          }
+        }
+      }
+
+      // 3. Check Central Sanctuary Well at (3000, 3000)
+      if (!res && Math.hypot(px - 3000, py - 3000) <= 90) {
+        res = {
+          type: 'townWell',
+          id: 'townWell',
+          name: 'Duskhollow Sanctuary Well',
+          action: 'Drink & Quench Thirst',
+          subtitle: 'Sacred Well · Full HP & Stamina Restore',
+          prompt: 'E SANCTUARY WELL',
+          color: '#4FD6A0',
+          x: 3000,
+          y: 3000,
+        };
+      }
+    } else {
+      // On Floors 1-5:
+      // 1. Check Dual Floor Completion Portals (Ascent Portal & Return to Town Portal)
+      const allPortals = [
+        ...(worldLedger.spawnedPortals || []),
+        ...(worldLedger.floorPortals?.[worldLedger.currentFloor]?.ascentPortal ? [worldLedger.floorPortals[worldLedger.currentFloor].ascentPortal] : []),
+        ...(worldLedger.floorPortals?.[worldLedger.currentFloor]?.townPortal ? [worldLedger.floorPortals[worldLedger.currentFloor].townPortal] : []),
+      ];
+
+      for (const p of allPortals) {
+        if (!p) continue;
+        if (Math.hypot(px - p.x, py - p.y) <= 85) {
+          const isAscent = p.type === 'ascent';
+          res = {
+            type: 'portal',
+            portal: p,
+            id: p.id || p.type,
+            name: isAscent ? `Ascent Portal (Floor ${p.targetFloor || 2})` : 'Duskhollow Return Portal',
+            action: isAscent ? `Ascend to Floor ${p.targetFloor || 2}` : 'Return to Duskhollow Town',
+            subtitle: isAscent ? 'Step through to deeper strata' : 'Safe Haven Hub',
+            prompt: isAscent ? `E ASCEND (FL ${p.targetFloor || 2})` : 'E RETURN TO TOWN',
+            color: isAscent ? '#c084fc' : '#34d399',
+            x: p.x,
+            y: p.y,
+          };
+          break;
+        }
+      }
+
+      // 2. Check Wandering Merchant Morwen
+      if (!res) {
+        const merchants = worldLedger.wanderingMerchants?.[worldLedger.currentFloor] || [];
+        for (const m of merchants) {
+          if (!m || m.state === 'FLED') continue;
+          if (Math.hypot(px - m.x, py - m.y) <= 95) {
+            if (m.state === 'WARD_ACTIVE' || m.state === 'protected') {
+              res = {
+                type: 'wanderingMerchant',
+                merchant: m,
+                id: m.id,
+                name: m.name || 'Morwen the Shrouded',
+                action: 'Trade Cursed Goods',
+                subtitle: 'Wandering Merchant · Discount Gear & Relics',
+                prompt: 'E WANDERING MERCHANT',
+                color: '#34d399',
+                x: m.x,
+                y: m.y,
+              };
+            } else if (m.state === 'DEFENDING') {
+              res = {
+                type: 'defendingMerchant',
+                merchant: m,
+                id: m.id,
+                name: m.name || 'Morwen the Shrouded',
+                action: 'Defend Morwen',
+                subtitle: `Hold out for ${Math.ceil(m.defenseTimer || m.questTimer || 30)}s`,
+                prompt: `PROTECT MORWEN (${Math.ceil(m.defenseTimer || m.questTimer || 30)}S)`,
+                color: PALETTE.signal,
+                x: m.x,
+                y: m.y,
+              };
+            }
+            break;
+          }
+        }
+      }
+
+      // 3. Check Cleansed Territory NPCs
+      if (!res) {
+        const cleansed = worldLedger.cleansedNpcs?.[worldLedger.currentFloor] || {};
+        for (const npc of Object.values(cleansed)) {
+          if (!npc) continue;
+          if (Math.hypot(px - npc.x, py - npc.y) <= 90) {
+            res = {
+              type: 'cleansedNpc',
+              npc,
+              id: npc.id,
+              name: npc.name || 'Sanctuary Pilgrim',
+              action: 'Receive Pilgrim Blessing',
+              subtitle: `${npc.role || 'Pilgrim'} · Full HP/Stamina`,
+              prompt: 'E PILGRIM CARAVAN',
+              color: '#38bdf8',
+              x: npc.x,
+              y: npc.y,
+            };
+            break;
+          }
+        }
+      }
+    }
+
+    // Attach screen projection if found
+    if (res) {
+      const scr = this.worldToScreen(res.x, res.y - 32);
+      res.keyBind = 'E';
+      res.screenX = scr.x;
+      res.screenY = scr.y;
+      res.visibleOnScreen = scr.visible;
+      res.dist = Math.round(Math.hypot(px - res.x, py - res.y));
+    }
+
+    return res;
+  }
+
   isPlayerNearUme() {
+    if (worldLedger.currentFloor !== 0) return false;
     const dx = this.player.x - WORLD_CONFIG.umePosition.x;
     const dy = this.player.y - WORLD_CONFIG.umePosition.y;
     return Math.hypot(dx, dy) <= 95;
   }
 
   isPlayerNearHarlow() {
+    if (worldLedger.currentFloor !== 0) return false;
     const dx = this.player.x - WORLD_CONFIG.harlowPosition.x;
     const dy = this.player.y - WORLD_CONFIG.harlowPosition.y;
     return Math.hypot(dx, dy) <= 95;
@@ -644,6 +825,7 @@ export class GameEngine {
         this.uiState === 'shop' ||
         this.uiState === 'inventory' ||
         this.uiState === 'skills' ||
+        this.uiState === 'quests' ||
         this.uiState === 'harlow' ||
         this.uiState === 'pause' ||
         this.uiState === 'dev'
@@ -669,15 +851,101 @@ export class GameEngine {
       return;
     }
 
+    if (e.code === 'KeyJ') {
+      if (this.uiState === 'playing') this.setUiState('quests');
+      else if (this.uiState === 'quests') this.setUiState('playing');
+      return;
+    }
+
     if (e.code === 'KeyE') {
       if (this.uiState === 'playing') {
-        if (this.isPlayerNearUme()) {
-          this.setUiState('shop');
-          return;
-        }
-        if (this.isPlayerNearHarlow()) {
-          this.setUiState('harlow');
-          return;
+        const interact = this.getNearbyInteractable();
+        if (interact) {
+          if (interact.type === 'portal' && interact.portal) {
+            this.travelToFloor(interact.portal.targetFloor);
+            return;
+          }
+          if (interact.type === 'spireGate') {
+            this.setUiState('harlow');
+            return;
+          }
+          if (interact.type === 'townWell') {
+            this.player.refillHealthAndStamina();
+            sound.playCoin?.();
+            if (this.particles) {
+              this.particles.spawnShockwave?.(this.player.x, this.player.y, 72, '#4FD6A0', 0.35);
+              this.particles.spawnFloatingText?.(
+                this.player.x,
+                this.player.y - 28,
+                'SANCTUARY WELL: FULL HP & STAMINA RESTORED',
+                '#4FD6A0'
+              );
+            }
+            this.saveProgress();
+            this.notifyUi();
+            return;
+          }
+          if (interact.type === 'townBuilding') {
+            const bid = interact.id;
+            if (bid === 'runesmithForge' || bid === 'runesmith_forge') {
+              this.activeShopTab = 'runesmith';
+              this.setUiState('shop');
+              return;
+            }
+            if (bid === 'alchemistApothecary' || bid === 'alchemist_apothecary') {
+              this.activeShopTab = 'apothecary';
+              this.setUiState('shop');
+              return;
+            }
+            if (bid === 'ravensRestTavern' || bid === 'ravens_rest_tavern') {
+              this.activeShopTab = 'tavern';
+              this.setUiState('shop');
+              return;
+            }
+            if (bid === 'curioBroker' || bid === 'mystic_enchanter') {
+              this.activeShopTab = 'curio';
+              this.setUiState('shop');
+              return;
+            }
+            if (bid === 'huntersGuild' || bid === 'hunters_guild') {
+              worldLedger.talkToMalakor?.(this.player, this.particles);
+              this.saveProgress();
+              this.setUiState('harlow');
+              return;
+            }
+            if (bid === 'arcaneSanctum' || bid === 'arcane_sanctum') {
+              this.setUiState('skills');
+              return;
+            }
+          }
+          if (interact.type === 'wanderingMerchant') {
+            this.activeShopTab = 'wandering';
+            this.setUiState('shop');
+            return;
+          }
+          if (interact.type === 'cleansedNpc') {
+            this.player.refillHealthAndStamina();
+            if (this.particles) {
+              this.particles.spawnFloatingText(
+                this.player.x,
+                this.player.y - 26,
+                'PILGRIM BLESSING: FULL RESTORE',
+                '#38bdf8'
+              );
+            }
+            this.activeShopTab = 'apothecary';
+            this.setUiState('shop');
+            return;
+          }
+          if (interact.type === 'ume') {
+            this.activeShopTab = 'runesmith';
+            this.setUiState('shop');
+            return;
+          }
+          if (interact.type === 'harlow') {
+            this.setUiState('harlow');
+            return;
+          }
         }
       } else if (this.uiState === 'shop' || this.uiState === 'harlow') {
         this.setUiState('playing');
@@ -887,14 +1155,202 @@ export class GameEngine {
     }
   }
 
-  // --- SHOP, SKILLS, & PROMOTION ACTIONS ---
+  // --- SHOP, TAVERN, CURIO GAMBLING, WANDERING MERCHANT, & FLOOR TRAVEL ---
+  travelToFloor(targetFloor) {
+    const f = Math.max(0, Math.min(5, Math.round(targetFloor)));
+    if (f > 0 && f > worldLedger.highestUnlockedFloor) {
+      return { ok: false, reason: `Floor ${f} is sealed until Floor ${f - 1} Overlords fall.` };
+    }
+
+    bossMechanics.resetAll();
+    fusionManager.reset();
+    obstacleManager.clearTemporary();
+    if (this.projectiles && typeof this.projectiles.clear === 'function') {
+      this.projectiles.clear();
+    }
+
+    worldLedger.travelToFloor(f, this.player);
+    if (typeof this.spawner?.syncWithWorldLedger === 'function') {
+      this.spawner.syncWithWorldLedger();
+    }
+
+    if (f === 0) {
+      // Spawn at Duskhollow Town Plaza south of the Spire path
+      this.player.x = 3000;
+      this.player.y = 3042;
+    } else {
+      // Spawn at the center of the Abyssal Spire floor
+      this.player.x = 3000;
+      this.player.y = 3042;
+    }
+    this.player.vx = 0;
+    this.player.vy = 0;
+    this.player.invulnTimer = 1.5;
+    this.camera.snapTo(this.player.x, this.player.y, this.world.size);
+
+    const floorCfg = worldLedger.getFloorConfig(f);
+    sound.playLevelUp?.();
+    if (this.particles) {
+      this.particles.spawnShockwave?.(this.player.x, this.player.y, 110, '#c084fc', 0.45);
+      this.particles.spawnFloatingText?.(
+        this.player.x,
+        this.player.y - 32,
+        f === 0 ? 'DUSKHOLLOW TOWN (SAFE HAVEN)' : `FLOOR ${f}: ${floorCfg.name.toUpperCase()}`,
+        f === 0 ? PALETTE.brass : '#c084fc'
+      );
+    }
+
+    if (this.uiState !== 'playing') {
+      this.setUiState('playing');
+    }
+    this.saveProgress();
+    this.notifyUi();
+    return { ok: true, floor: f };
+  }
+
+  buyTavernMeal(mealId) {
+    const meal = TAVERN_MEALS.find((m) => m.id === mealId);
+    if (!meal) return { ok: false, reason: 'Unknown meal.' };
+    if (this.player.gold < meal.price) {
+      return { ok: false, reason: 'Not enough Gold.' };
+    }
+    this.player.gold -= meal.price;
+    this.player.refillHealthAndStamina();
+    this.player.tavernMeal = {
+      id: meal.id,
+      name: meal.name,
+      hpBonusPct: meal.hpBonusPct || 0,
+      atkBonusPct: meal.atkBonusPct || 0,
+      defBonus: meal.defBonus || 0,
+      critBonus: meal.critBonus || 0,
+      xpBonusPct: meal.xpBonusPct || 0,
+      timer: meal.duration || 360,
+    };
+    this.player.recalculateStats(true);
+    sound.playBuySell?.();
+    if (this.particles) {
+      this.particles.spawnFloatingText?.(
+        this.player.x,
+        this.player.y - 28,
+        `MEAL BUFF: ${meal.name.toUpperCase()}`,
+        PALETTE.brass
+      );
+    }
+    this.saveProgress();
+    this.notifyUi();
+    return { ok: true, meal };
+  }
+
+  gambleCurio(tierId) {
+    const tier = CURIO_GAMBLE_TIERS.find((t) => t.id === tierId);
+    if (!tier) return { ok: false, reason: 'Invalid Curio tier.' };
+    if (this.player.gold < tier.price) {
+      return { ok: false, reason: 'Not enough Gold.' };
+    }
+    this.player.gold -= tier.price;
+    sound.playBuySell?.();
+
+    const roll = Math.random();
+    let rewardText = '';
+    if (roll < 0.35) {
+      // Gold Jackpot (1.6x to 2.5x)
+      const wonGold = Math.round(tier.price * (1.6 + Math.random() * 0.9));
+      this.player.gold += wonGold;
+      rewardText = `CURIO JACKPOT: +${wonGold} GOLD!`;
+    } else if (roll < 0.75) {
+      // Random Equipment piece
+      const equipIds = Object.values(SHOP_ITEMS)
+        .filter((it) => !it.consumable && (it.reqLevel || 1) <= Math.max(15, this.player.level + 12))
+        .map((it) => it.id);
+      const pickedId = equipIds[Math.floor(Math.random() * equipIds.length)];
+      const item = SHOP_ITEMS[pickedId];
+      if (item) {
+        if (!this.player.ownedEquipment.includes(item.id) && this.player.equipped[item.slot] !== item.id) {
+          this.player.ownedEquipment.push(item.id);
+        } else {
+          this.player.gold += Math.round(tier.price * 1.2);
+        }
+        rewardText = `UNSEALED GEAR: ${item.name.toUpperCase()}`;
+      }
+    } else {
+      // Bonus Skill Point or Cursed Relic
+      this.player.skillPoints += 1;
+      rewardText = 'ELDRITCH EPIPHANY: +1 SKILL POINT!';
+    }
+
+    if (this.particles) {
+      this.particles.spawnFloatingText?.(this.player.x, this.player.y - 30, rewardText, '#c084fc');
+    }
+    this.saveProgress();
+    this.notifyUi();
+    return { ok: true, rewardText };
+  }
+
+  buyWanderingMerchantItem(itemId) {
+    const item = WANDERING_MERCHANT_STOCK.find((it) => it.id === itemId);
+    if (!item) return { ok: false, reason: 'Unknown Caravan item.' };
+    if (this.player.gold < item.price) {
+      return { ok: false, reason: 'Not enough Gold.' };
+    }
+    this.player.gold -= item.price;
+    sound.playBuySell?.();
+
+    if (item.category === 'elixir') {
+      this.player.elixirBuff = {
+        id: item.id,
+        name: item.name,
+        xpMult: item.xpMult || 1.5,
+        goldMult: item.goldMult || 1.5,
+        timer: item.duration || 300,
+      };
+    } else if (item.category === 'relic') {
+      if (!this.player.cursedRelics.includes(item.id)) {
+        this.player.cursedRelics.push(item.id);
+      }
+      this.player.recalculateStats(false);
+    } else if (item.equipSlot) {
+      // Rare discount gear — add to SHOP_ITEMS dynamically if needed and equip
+      if (!SHOP_ITEMS[item.id]) {
+        SHOP_ITEMS[item.id] = {
+          id: item.id,
+          name: item.name,
+          slot: item.equipSlot,
+          grade: 'Relic',
+          reqLevel: 1,
+          price: item.price,
+          stats: item.stats || {},
+          desc: item.desc,
+        };
+      }
+      const prevEquipped = this.player.equipped[item.equipSlot];
+      if (prevEquipped && prevEquipped !== item.id && !this.player.ownedEquipment.includes(prevEquipped)) {
+        this.player.ownedEquipment.push(prevEquipped);
+      }
+      this.player.equipped[item.equipSlot] = item.id;
+      this.player.recalculateStats(false);
+      this.player.refreshEquipmentSprites();
+    }
+
+    this.saveProgress();
+    this.notifyUi();
+    return { ok: true, item };
+  }
+
   buyAndEquipItem(itemId) {
     const item = SHOP_ITEMS[itemId];
     if (!item) return { ok: false, reason: 'Unknown item.' };
 
     const p = this.player;
-    const gradeOrder = { Scrap: 1, Salvaged: 8, Relic: 16 };
-    const reqLv = gradeOrder[item.grade] || 1;
+    const gradeOrder = {
+      Scrap: 1,
+      Salvaged: 8,
+      Relic: 16,
+      Cryo: 24,
+      Hellfire: 40,
+      Rotwood: 58,
+      Void: 75,
+    };
+    const reqLv = item.reqLevel || gradeOrder[item.grade] || 1;
     if (p.level < reqLv) {
       return { ok: false, reason: `Requires Level ${reqLv}.` };
     }
@@ -1065,10 +1521,22 @@ export class GameEngine {
     return false;
   }
 
+  claimQuest(questId) {
+    const res = worldLedger.claimQuestReward(questId, this.player, this.particles);
+    if (res.ok) {
+      this.saveProgress();
+      this.notifyUi();
+    }
+    return res;
+  }
+
   respawnAfterDeath() {
     bossMechanics.resetAll();
     fusionManager.reset();
     obstacleManager.clearTemporary();
+    this.travelToFloor(0);
+    this.player.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+    this.player.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
     this.player.respawnAtKettle();
     this.projectiles.clear();
     this.camera.snapTo(this.player.x, this.player.y, this.world.size);
@@ -1134,12 +1602,21 @@ export class GameEngine {
       } else {
         worldLedger.reset();
       }
+      // User request: "when i play i should be spawn in the town not in the tower"
+      worldLedger.currentFloor = 0;
+      this.player.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+      this.player.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
       this.spawner.fromJSON(data.spawner);
+      this.spawner.syncWithWorldLedger();
       this.camera.snapTo(this.player.x, this.player.y, this.world.size);
     } else {
       worldLedger.reset();
+      worldLedger.currentFloor = 0;
       this.player = new Player('sena');
+      this.player.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+      this.player.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
       this.spawner = new Spawner(this.world);
+      this.spawner.syncWithWorldLedger();
       this.camera.snapTo(this.player.x, this.player.y, this.world.size);
     }
   }
@@ -1308,8 +1785,12 @@ export class GameEngine {
       maxStamina: p.maxStamina,
       level: p.level,
       xp: p.xp,
-      xpToNext: p.level >= 20 ? XP_CURVE[20] : XP_CURVE[p.level + 1],
+      xpToNext: p.xpToNext,
       gold: p.gold,
+      activeShopTab: this.activeShopTab,
+      tavernMeal: p.tavernMeal ? { ...p.tavernMeal } : null,
+      elixirBuff: p.elixirBuff ? { ...p.elixirBuff } : null,
+      cursedRelics: [...(p.cursedRelics || [])],
       godmode: Boolean(p.godmode),
       infiniteStamina: Boolean(p.infiniteStamina),
       noCooldowns: Boolean(p.noCooldowns),
@@ -1340,11 +1821,16 @@ export class GameEngine {
           ? p.classBehavior.getHudMechanicState()
           : (typeof p.getHudMechanicState === 'function' ? p.getHudMechanicState() : null),
       statuses: (p.statuses || p.status)?.getHudStatusList?.() || [],
+      currentFloor: worldLedger.currentFloor,
+      highestUnlockedFloor: worldLedger.highestUnlockedFloor,
+      floorName: worldLedger.getFloorConfig().name,
+      floorSubtitle: worldLedger.getFloorConfig().subtitle,
       areaName: area.name,
       areaSubtitle: area.subtitle,
       areaId: area.id,
       inSafeZone: !!(area && area.safe) || (p && p.isInSafeZone ? p.isInSafeZone(this.world) : false),
       stormActive: this.world.stormTimer > 0,
+      nearbyInteractable: this.getNearbyInteractable(),
       nearUme: this.isPlayerNearUme(),
       nearHarlow: this.isPlayerNearHarlow(),
       canPromoteJourneyman: p.canPromoteToJourneyman(),
@@ -1354,10 +1840,20 @@ export class GameEngine {
       defeatedBosses: { ...this.spawner.defeatedBosses },
       objective: nearestBoss,
       worldLedger: {
+        currentFloor: worldLedger.currentFloor,
+        highestUnlockedFloor: worldLedger.highestUnlockedFloor,
         floor1Complete: worldLedger.floor1Cleared,
         liberatedCount: Object.values(worldLedger.confirmedBossKills).filter(Boolean).length,
         zoneLiberated: worldLedger.territories[area.id]?.state === 'CLEARED',
         confirmedBossKills: { ...worldLedger.confirmedBossKills },
+        floorSectorChains: worldLedger.floorSectorChains,
+        bloodlineKills: { ...worldLedger.bloodlineKills },
+        wanderingMerchants: worldLedger.wanderingMerchants?.[worldLedger.currentFloor] || [],
+        cleansedNpcs: worldLedger.cleansedNpcs?.[worldLedger.currentFloor] || {},
+        floorPortals: worldLedger.floorPortals?.[worldLedger.currentFloor] || null,
+        activeSuddenQuest: worldLedger.activeSuddenQuest ? { ...worldLedger.activeSuddenQuest } : null,
+        storyQuest: worldLedger.getActiveStoryQuest ? worldLedger.getActiveStoryQuest() : null,
+        questSummary: worldLedger.getQuestStatusSummary ? worldLedger.getQuestStatusSummary() : null,
         unlockedAchievements: { ...worldLedger.unlockedAchievements },
         equippedCosmeticTitle: worldLedger.equippedCosmeticTitle,
         equippedCosmeticTrim: worldLedger.equippedCosmeticTrim,
@@ -1373,12 +1869,21 @@ export class GameEngine {
             hp: Math.ceil(boss.hp),
             maxHp: boss.maxHp,
             phase: boss.phase,
+            level: boss.level || 1,
+            abyssalEnraged: Boolean(boss.abyssalEnraged),
+            bloodlineStage: boss.bloodlineStage || 1,
+            bloodlineStageLabel: boss.bloodlineStageLabel || 'Warden',
             isRematch: !!boss.isRematch,
             staggerPct: Math.round((boss.statuses || boss.status)?.stagger || 0),
             staggered: Boolean(
               (boss.statuses || boss.status)?.has?.('staggered') ||
                 (boss.statuses || boss.status)?.staggeredTimer > 0
             ),
+            isStunned: Boolean(
+              (boss.statuses || boss.status)?.isStunned?.() ||
+                (boss.statuses || boss.status)?.has?.('stun')
+            ),
+            statuses: (boss.statuses || boss.status)?.getHudStatusList?.() || [],
             mechanic: bossMechanics.getHudBossMechanicState(boss),
           }
         : null,

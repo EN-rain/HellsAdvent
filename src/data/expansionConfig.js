@@ -354,12 +354,15 @@ export const FUSION_BOSSES_CONFIG = {
 
 export const FUSION_RULES = {
   requiredCount: 10,
-  maxClusterRadius: 96, // 96 world pixels from centroid
+  maxClusterRadius: 108, // World pixels from centroid for 10-mob cluster
   channelDuration: 2.0, // 2.0s interruptible channel (D16)
   backlashWindow: 0.5, // Last 0.5s of channel triggers 1.5s disorientation backlash on survivors (D25)
   backlashStunDuration: 1.5,
-  maxActiveChannels: 2,
-  maxActiveFusionBosses: 2, // D39: if full, eligible mobs keep fighting and retry later
+  maxActiveChannels: Infinity, // No limit on concurrent fusion channels
+  maxActiveFusionBosses: Infinity, // No limit on how many fusions can exist
+  kingRequiredCount: 5, // 5 Mid-Level Fused Bosses fuse into a King Boss
+  kingClusterRadius: 165, // Cluster radius for 5 mid-bosses to fuse into a King
+  kingChannelDuration: 2.2, // 2.2s channel for King Fusion
   staggerDamageRatio: 0.22, // Universal stagger damage ratio of cluster HP to interrupt
 };
 

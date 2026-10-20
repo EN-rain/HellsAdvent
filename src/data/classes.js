@@ -12,33 +12,33 @@
 import { PALETTE } from './config.js';
 
 export const STAGE_NAMES = {
-  1: 'Hand',
-  2: 'Journeyman',
-  3: 'Master',
+  1: 'Initiate',
+  2: 'Oathsworn',
+  3: 'Archon',
 };
 
 export const CLASSES = {
   // =========================================================================
-  // 1) SENA IBUKI — MELEE
+  // 1) SENA IBUKI — ABYSSAL BLADE KNIGHT
   // =========================================================================
   sena: {
     id: 'sena',
     name: 'Sena Ibuki',
-    role: 'Melee',
+    role: 'Abyssal Blade Knight',
     accent: PALETTE.signal, // #00F0FF
     accentName: 'signal',
-    pitch: 'Close-range rail cutter who builds speed and edge through unbroken pressure.',
-    weaponName: 'Railcut',
-    weaponDesc: 'A 22-inch length of train rail ground to a cyan edge.',
+    pitch: 'Cursed spatial swordswoman who builds Blood-Rhythm through relentless void slashes.',
+    weaponName: 'Duskrend',
+    weaponDesc: 'A cursed void-katana forged in soulfire that cleaves dimensional rifts.',
     titles: {
-      hand: 'Runner',
+      hand: 'Nightblade',
       journeyman: {
-        cutter: 'Cutter',
-        anvil: 'Anvil',
+        cutter: 'Rift-Cleaver',
+        anvil: 'Aegis Knight',
       },
       master: {
-        cutter: 'Flenser',
-        anvil: 'Girder',
+        cutter: 'Abyssal Executioner',
+        anvil: 'Immortal Bulwark',
       },
     },
     baseStats: {
@@ -83,24 +83,36 @@ export const CLASSES = {
         id: 'lunge',
         slot: 1,
         hotkey: '1',
-        name: 'Lunge',
+        name: 'Shadow Lunge',
         icon: 'lunge',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 cut', damageMult: 1.60, cooldown: 5.0 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 cuts', damageMult: 1.85, cooldown: 4.5 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 cuts', damageMult: 2.15, cooldown: 3.9 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 cuts', damageMult: 2.40, cooldown: 3.4 },
+        ],
         baseDamageMult: 1.60,
-        damagePerLevel: 0.20,
+        damagePerLevel: 0.27,
         baseCooldown: 5.0,
-        cooldownPerLevel: -0.4,
+        cooldownFloor: 2.5,
+        cooldownPerLevel: -0.53,
         staminaCost: 10,
         dashDistance: 160,
-        desc: 'Dash 160px toward the cursor, cutting every enemy on the line.',
+        desc: 'Shadow-step 160px toward the cursor, cleaving every cursed foe on the line. Ranks unlock free at Lv 1/15/30/45 (1 -> 4 cuts, 160% -> 240% ATK).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasQuickEdge = ownedNodes.includes('quickEdge');
-          const cd = Math.max(1.0, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2));
+          const rawCd = hasQuickEdge ? rk.cooldown * 0.6 : rk.cooldown;
+          const cd = Math.max(this.cooldownFloor, +rawCd.toFixed(2));
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            cooldown: hasQuickEdge ? +(cd * 0.6).toFixed(2) : cd,
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            cooldown: cd,
             staminaCost: this.staminaCost,
             dashDistance: this.dashDistance,
           };
@@ -109,8 +121,8 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
-            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
+            `Count & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
+            `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s (Floor ${this.cooldownFloor}s)`,
           ];
         },
       },
@@ -118,28 +130,37 @@ export const CLASSES = {
         id: 'groundBreak',
         slot: 2,
         hotkey: '2',
-        name: 'Ground Break',
+        name: 'Abyssal Rupture',
         icon: 'groundBreak',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 shock ring', damageMult: 1.40, radius: 110 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 rings', damageMult: 1.60, radius: 126 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 rings', damageMult: 1.80, radius: 142 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 rings', damageMult: 2.00, radius: 158 },
+        ],
         baseDamageMult: 1.40,
-        damagePerLevel: 0.15,
+        damagePerLevel: 0.20,
         baseRadius: 110,
-        radiusPerLevel: 12,
-        baseCooldown: 9.0,
+        radiusPerLevel: 16,
+        baseCooldown: 8.5,
+        cooldownFloor: 4.25,
         cooldownPerLevel: 0,
-        staminaCost: 20,
+        staminaCost: 14,
         stunDuration: 1.0,
-        desc: 'Slam the Railcut into the ground. Deals area damage and applies Stun for 1s.',
+        desc: 'Drive Duskrend downward, fracturing a 110px soulfire crater with 1.0s Stun. Ranks unlock free at Lv 1/15/30/45 (1 -> 4 shock rings, 140% -> 200% ATK).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasCarve = ownedNodes.includes('carve');
           const hasHeavyLanding = ownedNodes.includes('heavyLanding');
           return {
-            damageMult: hasCarve
-              ? +(2.60 + (l - 1) * this.damagePerLevel).toFixed(2)
-              : +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            radius: this.baseRadius + (l - 1) * this.radiusPerLevel + (hasHeavyLanding ? 40 : 0),
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: hasCarve ? +(rk.damageMult + 1.20).toFixed(2) : rk.damageMult,
+            radius: rk.radius + (hasHeavyLanding ? 40 : 0),
             cooldown: this.baseCooldown,
             staminaCost: this.staminaCost,
             stunDuration: hasCarve ? 0 : this.stunDuration,
@@ -149,7 +170,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Count & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Radius: ${cur.radius}px -> ${nxt.radius}px`,
           ];
         },
@@ -158,24 +179,35 @@ export const CLASSES = {
         id: 'railParry',
         slot: 3,
         hotkey: '3',
-        name: 'Rail Parry',
+        name: 'Soulfire Ward Parry',
         icon: 'railParry',
-        maxLevel: 5,
-        costPerLevel: 1,
-        parryDuration: 0.60,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 crescent', damageMult: 3.50, cooldown: 6.0 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 crescents', damageMult: 4.00, cooldown: 5.5 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 crescents', damageMult: 4.50, cooldown: 5.0 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 crescents', damageMult: 5.00, cooldown: 4.5 },
+        ],
+        parryDuration: 0.40,
         baseDamageMult: 3.50,
-        damagePerLevel: 0.30,
-        baseCooldown: 8.0,
+        damagePerLevel: 0.50,
+        baseCooldown: 6.0,
+        cooldownFloor: 3.0,
         cooldownPerLevel: 0.5,
-        staminaCost: 16,
-        desc: 'Assume a primed parry stance for 0.6s. Negates 100% of the next hit, unleashing a devastating Crescent Slash with heavy area knockback (350% ATK guaranteed Crit) and granting +35% ATK Speed, +30% ATK, and +25% Move Speed for 3s.',
+        staminaCost: 8,
+        desc: 'Enter a 0.4s ward stance. Deflecting an incoming blow unleashes Eclipse Crescent Slash (1 -> 4 crescents, 350% -> 500% total ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasRebar = ownedNodes.includes('rebar');
           return {
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
             parryDuration: +(this.parryDuration + (hasRebar ? 0.20 : 0)).toFixed(2),
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel + (hasRebar ? 0.60 : 0)).toFixed(2),
-            cooldown: +(this.baseCooldown - (l - 1) * this.cooldownPerLevel).toFixed(1),
+            damageMult: +(rk.damageMult + (hasRebar ? 0.60 : 0)).toFixed(2),
+            cooldown: Math.max(this.cooldownFloor, rk.cooldown),
             staminaCost: this.staminaCost,
             hasCounterShockwave: hasRebar,
           };
@@ -184,7 +216,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Riposte Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Riposte: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -193,13 +225,13 @@ export const CLASSES = {
     ultimate: {
       id: 'sevenCuts',
       hotkey: 'R',
-      name: 'Seven Cuts',
+      name: 'Seven Seals of Eclipse',
       icon: 'sevenCuts',
       totalDamageMult: 5.0,
       cuts: 7,
       radius: 300,
       duration: 1.05,
-      desc: 'Time stops. Sena cuts 7 times across every enemy within 300px for 500% total ATK.',
+      desc: 'Time stops beneath the Blood Moon. Sena cleaves 7 spatial rifts across every enemy within 300px for 500% total ATK.',
     },
     passives: [
       {
@@ -378,26 +410,26 @@ export const CLASSES = {
   },
 
   // =========================================================================
-  // 2) ROOK MATSUDA — RANGED
+  // 2) ROOK MATSUDA — INQUISITOR MARKSMAN
   // =========================================================================
   rook: {
     id: 'rook',
     name: 'Rook Matsuda',
-    role: 'Ranged',
+    role: 'Inquisitor Marksman',
     accent: PALETTE.brass, // #FFC83D
     accentName: 'brass',
-    pitch: 'Road courier with a leaf-spring nail gun, active reloads, and wire traps.',
-    weaponName: 'Springgun',
-    weaponDesc: 'A nail gun rebuilt with a car leaf spring as the bow, firing 6-inch rail bolts.',
+    pitch: 'Witch-hunter arbalist who fires consecrated silver stakes, consecrated reloads, and snare wards.',
+    weaponName: 'Hexbane Arbalest',
+    weaponDesc: 'A blessed repeating crossbow wrought from silvered yew and dark cathedral iron.',
     titles: {
-      hand: 'Drifter',
+      hand: 'Witch-Stalker',
       journeyman: {
-        longhand: 'Longhand',
-        wirehand: 'Wirehand',
+        longhand: 'Deadeye Inquisitor',
+        wirehand: 'Hex-Trapper',
       },
       master: {
-        longhand: 'Surveyor',
-        wirehand: 'Minelayer',
+        longhand: 'Grand Arbiter',
+        wirehand: 'Sanctum Warden',
       },
     },
     baseStats: {
@@ -442,27 +474,35 @@ export const CLASSES = {
         hotkey: '1',
         name: 'Rivet Spread',
         icon: 'rivetSpread',
-        maxLevel: 5,
-        costPerLevel: 1,
-        baseDamageMult: 0.60, // 60% ATK per bolt
-        damagePerLevel: 0.08, // +8% per level
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 5, countLabel: '5 bolts', totalMult: 3.00, boltMult: 0.60, cooldown: 6.0 },
+          { rank: 2, unlockLevel: 15, count: 6, countLabel: '6 bolts', totalMult: 3.60, boltMult: 0.60, cooldown: 5.5 },
+          { rank: 3, unlockLevel: 30, count: 7, countLabel: '7 bolts', totalMult: 3.99, boltMult: 0.57, cooldown: 5.0 },
+          { rank: 4, unlockLevel: 45, count: 8, countLabel: '8 bolts', totalMult: 4.40, boltMult: 0.55, cooldown: 4.5 },
+        ],
+        baseDamageMult: 0.60,
+        damagePerLevel: 0.0,
         bolts: 5,
         fanDeg: 40,
         baseCooldown: 6.0,
-        cooldownPerLevel: -0.4,
+        cooldownFloor: 3.0,
+        cooldownPerLevel: -0.5,
         staminaCost: 12,
-        desc: 'Fires 5 rail bolts in a 40-degree fan for 60% ATK each.',
+        desc: 'Fires rail bolts in a 40-degree fan (5 -> 8 bolts, 300% -> 440% total ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasRailSlug = ownedNodes.includes('railSlug');
           return {
-            damageMult: hasRailSlug
-              ? +(4.20 + (l - 1) * 0.25).toFixed(2)
-              : +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            bolts: hasRailSlug ? 1 : this.bolts,
-            cooldown: hasRailSlug
-              ? 7.0
-              : Math.max(2.0, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            rank: l,
+            count: hasRailSlug ? 1 : rk.count,
+            countLabel: hasRailSlug ? '1 slug' : rk.countLabel,
+            damageMult: hasRailSlug ? +(4.20 + (l - 1) * 0.25).toFixed(2) : rk.boltMult,
+            totalDamageMult: hasRailSlug ? +(4.20 + (l - 1) * 0.25).toFixed(2) : rk.totalMult,
+            bolts: hasRailSlug ? 1 : rk.count,
+            cooldown: hasRailSlug ? 7.0 : Math.max(this.cooldownFloor, rk.cooldown),
             staminaCost: this.staminaCost,
           };
         },
@@ -470,7 +510,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Bolt Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Spread: ${cur.countLabel} (${Math.round(cur.totalDamageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.totalDamageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -481,21 +521,32 @@ export const CLASSES = {
         hotkey: '2',
         name: 'Kickback',
         icon: 'kickback',
-        maxLevel: 5,
-        costPerLevel: 1,
-        baseDamageMult: 2.00, // 200% ATK
-        damagePerLevel: 0.20, // +20% per level
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 bolt', damageMult: 2.00, cooldown: 7.0 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 bolts', damageMult: 2.25, cooldown: 6.4 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 bolts', damageMult: 2.55, cooldown: 5.8 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 bolts', damageMult: 2.80, cooldown: 5.2 },
+        ],
+        baseDamageMult: 2.00,
+        damagePerLevel: 0.27,
         hopDistance: 90,
         knockback: 40,
         baseCooldown: 7.0,
-        cooldownPerLevel: -0.4,
+        cooldownFloor: 3.5,
+        cooldownPerLevel: -0.6,
         staminaCost: 10,
-        desc: 'Hop back 90px and fire one heavy bolt at the cursor for 200% ATK and 40px knockback.',
+        desc: 'Hop back 90px and fire heavy recoil bolts (1 -> 4 bolts, 200% -> 280% total ATK across Lv 1/15/30/45).',
         getStats(lvl = 1) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            cooldown: Math.max(2.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            cooldown: Math.max(this.cooldownFloor, rk.cooldown),
             staminaCost: this.staminaCost,
             hopDistance: this.hopDistance,
             knockback: this.knockback,
@@ -505,7 +556,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl);
           const nxt = this.getStats(nextLvl);
           return [
-            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Count & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -516,22 +567,33 @@ export const CLASSES = {
         hotkey: '3',
         name: 'Rapid Fire',
         icon: 'rapidFire',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 4.0, countLabel: '4.0s', duration: 4.0, cooldown: 12.0 },
+          { rank: 2, unlockLevel: 15, count: 4.7, countLabel: '4.7s', duration: 4.7, cooldown: 11.2 },
+          { rank: 3, unlockLevel: 30, count: 5.3, countLabel: '5.3s', duration: 5.3, cooldown: 10.4 },
+          { rank: 4, unlockLevel: 45, count: 6.0, countLabel: '6.0s', duration: 6.0, cooldown: 9.6 },
+        ],
         baseDuration: 4.0,
-        durationPerLevel: 0.5,
+        durationPerLevel: 0.67,
         attackSpeedMult: 2.0,
         baseCooldown: 12.0,
-        cooldownPerLevel: 0.5,
+        cooldownFloor: 6.0,
+        cooldownPerLevel: 0.8,
         staminaCost: 15,
-        desc: 'Overclock the springgun for 4.0s. Refills magazine immediately, grants +100% Attack Speed, and basic shots consume no ammo.',
+        desc: 'Overclock the springgun (4.0s -> 6.0s across Lv 1/15/30/45). Refills magazine immediately, grants +100% Attack Speed, and basic shots consume no ammo.',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasSpareSpools = ownedNodes.includes('spareSpools');
           const hasPressurePlates = ownedNodes.includes('pressurePlates');
           return {
-            duration: +(this.baseDuration + (l - 1) * this.durationPerLevel + (hasSpareSpools ? 1.5 : 0)).toFixed(1),
-            cooldown: +(this.baseCooldown - (l - 1) * this.cooldownPerLevel - (hasSpareSpools ? 2.0 : 0)).toFixed(1),
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            duration: +(rk.duration + (hasSpareSpools ? 1.5 : 0)).toFixed(1),
+            cooldown: Math.max(this.cooldownFloor, +(rk.cooldown - (hasSpareSpools ? 2.0 : 0)).toFixed(1)),
             attackSpeedMult: this.attackSpeedMult,
             staminaCost: this.staminaCost,
             hasExplosiveBolts: hasPressurePlates,
@@ -550,12 +612,12 @@ export const CLASSES = {
     ultimate: {
       id: 'railSlug',
       hotkey: 'R',
-      name: 'Anti-Materiel Rail Slug',
+      name: 'Judgement Silver Spear',
       icon: 'railSlug',
       totalDamageMult: 10.0, // 1000% ATK total
       range: 800,
       chargeTime: 1.2,
-      desc: 'Rook locks into a braced stance and supercharges a monolithic tungsten rail slug across the screen for 1000% ATK, piercing all enemies and obstacles.',
+      desc: 'Rook kneels in inquisitorial prayer and fires a consecrated solar spear across the realm for 1000% ATK, piercing all foes.',
     },
     passives: [
       {
@@ -737,26 +799,26 @@ export const CLASSES = {
   },
 
   // =========================================================================
-  // 3) INES CALLOWAY — MAGE (MAGNETIST)
+  // 3) INES CALLOWAY — OSSUARY NECROMANCER
   // =========================================================================
   ines: {
     id: 'ines',
     name: 'Ines Calloway',
-    role: 'Mage (Magnetist)',
+    role: 'Ossuary Necromancer',
     accent: PALETTE.verdigris, // #4FD6A0
     accentName: 'verdigris',
-    pitch: 'Industrial magnetist who orbits live scrap for armor and hurls metal at high velocity.',
-    weaponName: 'Alternator Rig & Palm Magnets',
-    weaponDesc: 'Canvas welding gloves with horseshoe magnets wired to a humming car alternator coil.',
+    pitch: 'Catacomb necromancer who orbits cursed bone-shards for armor and hurls grave-constructs.',
+    weaponName: 'Gravelord Scepter & Bone Reliquary',
+    weaponDesc: 'An ancient skull-topped scepter and dorsal ossuary cage humming with emerald soul-flame.',
     titles: {
-      hand: 'Gleaner',
+      hand: 'Grave-Caller',
       journeyman: {
-        binder: 'Binder',
-        slinger: 'Slinger',
+        binder: 'Bone-Weaver',
+        slinger: 'Crypt-Hurler',
       },
       master: {
-        binder: 'Crane',
-        slinger: 'Wrecker',
+        binder: 'Ossuary Sovereign',
+        slinger: 'Lich Empress',
       },
     },
     baseStats: {
@@ -802,21 +864,32 @@ export const CLASSES = {
         hotkey: '1',
         name: 'Pull',
         icon: 'pull',
-        maxLevel: 5,
-        costPerLevel: 1,
-        baseDamageMult: 0.90, // 90% ATK
-        damagePerLevel: 0.10, // +10% per level
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 pulse', damageMult: 0.90, radius: 180 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 pulses', damageMult: 1.00, radius: 194 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 pulses', damageMult: 1.15, radius: 208 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 pulses', damageMult: 1.30, radius: 222 },
+        ],
+        baseDamageMult: 0.90,
+        damagePerLevel: 0.13,
         baseRadius: 180,
-        radiusPerLevel: 14, // +14px per level
+        radiusPerLevel: 14,
         baseCooldown: 8.0,
+        cooldownFloor: 4.0,
         cooldownPerLevel: 0,
         staminaCost: 15,
-        desc: 'Yank every enemy within 180px of the cursor toward the cursor point and deal 90% ATK.',
+        desc: 'Yank every enemy within 180px toward the cursor (1 -> 4 pulses, 90% -> 130% ATK across Lv 1/15/30/45).',
         getStats(lvl = 1) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            radius: this.baseRadius + (l - 1) * this.radiusPerLevel,
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            radius: rk.radius,
             cooldown: this.baseCooldown,
             staminaCost: this.staminaCost,
           };
@@ -825,7 +898,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl);
           const nxt = this.getStats(nextLvl);
           return [
-            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Count & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Pull Radius: ${cur.radius}px -> ${nxt.radius}px`,
           ];
         },
@@ -836,23 +909,35 @@ export const CLASSES = {
         hotkey: '2',
         name: 'Spin Up',
         icon: 'spinUp',
-        maxLevel: 5,
-        costPerLevel: 1,
-        baseDamageMult: 0.60, // 60% ATK per second
-        damagePerLevel: 0.10, // +10% per level
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 3, countLabel: '3 blades', damageMult: 0.60, duration: 5.0, totalMult: 3.00 },
+          { rank: 2, unlockLevel: 15, count: 4, countLabel: '4 blades', damageMult: 0.64, duration: 5.4, totalMult: 3.46 },
+          { rank: 3, unlockLevel: 30, count: 5, countLabel: '5 blades', damageMult: 0.68, duration: 5.8, totalMult: 3.94 },
+          { rank: 4, unlockLevel: 45, count: 6, countLabel: '6 blades', damageMult: 0.72, duration: 6.0, totalMult: 4.32 },
+        ],
+        baseDamageMult: 0.60,
+        damagePerLevel: 0.04,
         baseDuration: 5.0,
-        durationPerLevel: 0.5, // +0.5s per level
+        durationPerLevel: 0.35,
         radius: 70,
         baseCooldown: 10.0,
+        cooldownFloor: 5.0,
         cooldownPerLevel: 0,
         staminaCost: 20,
-        desc: 'Accelerate orbiting scrap into a 70px ring for 5s, dealing 60% ATK/s and blocking projectiles (uses 1 scrap/s).',
+        desc: 'Accelerate orbiting scrap into a 70px blade ring (3 -> 6 blades, 300% -> 432% total ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasSecondSkin = ownedNodes.includes('secondSkin');
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            duration: (hasSecondSkin ? 7.0 : this.baseDuration) + (l - 1) * this.durationPerLevel,
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            totalDamageMult: rk.totalMult,
+            duration: +(rk.duration + (hasSecondSkin ? 2.0 : 0)).toFixed(1),
             radius: this.radius,
             cooldown: this.baseCooldown,
             staminaCost: this.staminaCost,
@@ -862,7 +947,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Ring DPS: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK/s`,
+            `Blades & DPS: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%/s) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}%/s)`,
             `Duration: ${cur.duration.toFixed(1)}s -> ${nxt.duration.toFixed(1)}s`,
           ];
         },
@@ -873,28 +958,36 @@ export const CLASSES = {
         hotkey: '3',
         name: 'Lump',
         icon: 'lump',
-        maxLevel: 5,
-        costPerLevel: 1,
-        baseDamageMult: 2.50, // 250% ATK
-        damagePerLevel: 0.20, // +20% per level
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 0, countLabel: '0 fragments', damageMult: 2.50, radius: 60 },
+          { rank: 2, unlockLevel: 15, count: 4, countLabel: '4 fragments', damageMult: 2.80, radius: 68 },
+          { rank: 3, unlockLevel: 30, count: 6, countLabel: '6 fragments', damageMult: 3.20, radius: 76 },
+          { rank: 4, unlockLevel: 45, count: 8, countLabel: '8 fragments', damageMult: 3.60, radius: 84 },
+        ],
+        baseDamageMult: 2.50,
+        damagePerLevel: 0.37,
         baseRadius: 60,
-        radiusPerLevel: 8, // +8px per level
+        radiusPerLevel: 8,
         scrapCost: 3,
         knockback: 50,
         baseCooldown: 6.0,
+        cooldownFloor: 3.0,
         cooldownPerLevel: 0,
         staminaCost: 15,
-        desc: 'Compress 3 orbiting pieces into a heavy metallic lump and hurl it for 250% ATK in a 60px blast.',
+        desc: 'Compress 3 orbiting pieces into a heavy metallic lump and hurl it (0 -> 8 fragments, 250% -> 360% ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasSpareParts = ownedNodes.includes('spareParts');
           const hasPileDriver = ownedNodes.includes('pileDriver');
-          const baseRad = this.baseRadius + (l - 1) * this.radiusPerLevel;
           return {
-            damageMult: hasPileDriver
-              ? +(4.00 + (l - 1) * this.damagePerLevel).toFixed(2)
-              : +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            radius: Math.round(baseRad * (hasSpareParts ? 1.3 : 1.0)),
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: hasPileDriver ? +(rk.damageMult + 1.50).toFixed(2) : rk.damageMult,
+            radius: Math.round(rk.radius * (hasSpareParts ? 1.3 : 1.0)),
             scrapCost: hasSpareParts ? 2 : this.scrapCost,
             cooldown: this.baseCooldown,
             staminaCost: this.staminaCost,
@@ -904,7 +997,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Blast Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Fragments & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Blast Radius: ${cur.radius}px -> ${nxt.radius}px`,
           ];
         },
@@ -913,12 +1006,12 @@ export const CLASSES = {
     ultimate: {
       id: 'scrapfall',
       hotkey: 'R',
-      name: 'Scrapfall',
+      name: 'Catacomb Bone-Tempest',
       icon: 'scrapfall',
       totalDamageMult: 5.5, // 550% ATK
       radius: 160,
       stunDuration: 1.5,
-      desc: 'Levitate loose wreck parts within 400px above the target area over 1s, then slam them down for 550% ATK and a 1.5s Stun.',
+      desc: 'Summon ancestral tombstones and colossus ribs from the earth over 1s, then crash them down for 550% ATK and a 1.5s Stun.',
     },
     passives: [
       {
@@ -1101,26 +1194,26 @@ export const CLASSES = {
   },
 
   // =========================================================================
-  // 4) KAELEN VOS — THERMO-LANCER (PYRO-ALCHEMIST / BOILER BRUISER)
+  // 4) KAELEN VOS — HELLFIRE DRAGOON
   // =========================================================================
   kaelen: {
     id: 'kaelen',
     name: 'Kaelen Vos',
-    role: 'Thermo-Lancer',
+    role: 'Hellfire Dragoon',
     accent: PALETTE.ember, // #FF5A26
     accentName: 'ember',
-    pitch: 'Boiler-rigged chemical lancer who sweeps roaring naphtha cones and vents supercritical pressure.',
-    weaponName: 'Slag Igniter & Pressure Lance',
-    weaponDesc: 'A riveted boiler-pipe lance fed by twin dorsal tanks of pressurized naphtha and lye gas.',
+    pitch: 'Demon-forged dragoon who sweeps brimstone fire-cones and vents abyssal dragon-fury.',
+    weaponName: 'Cinderlance & Brimstone Heart',
+    weaponDesc: 'A dragon-forged obsidian greatlance fed by a blazing infernal crucible strapped to his back.',
     titles: {
-      hand: 'Stoker',
+      hand: 'Ashen Lancer',
       journeyman: {
-        hellburner: 'Hellburner',
-        ironclad: 'Slagclad',
+        hellburner: 'Pyre-Knight',
+        ironclad: 'Demonclad',
       },
       master: {
-        hellburner: 'Cremator',
-        ironclad: 'Furnace Lord',
+        hellburner: 'Brimstone Dragoon',
+        ironclad: 'Infernal Tyrant',
       },
     },
     baseStats: {
@@ -1164,23 +1257,34 @@ export const CLASSES = {
         hotkey: '1',
         name: 'Naphtha Jet',
         icon: 'naphthaJet',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 fire pool', damageMult: 1.75, cooldown: 5.5 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 pools', damageMult: 2.00, cooldown: 5.0 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 pools', damageMult: 2.30, cooldown: 4.5 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 pools', damageMult: 2.55, cooldown: 4.0 },
+        ],
         baseDamageMult: 1.75,
-        damagePerLevel: 0.20,
+        damagePerLevel: 0.27,
         baseCooldown: 5.5,
-        cooldownPerLevel: -0.35,
+        cooldownFloor: 2.75,
+        cooldownPerLevel: -0.5,
         staminaCost: 12,
         dashDistance: 150,
         pressureGain: 22,
-        desc: 'Rocket 150px forward on twin exhaust nozzles, leaving a blazing trail of naphtha pools and slamming with the lance for 175% ATK.',
+        desc: 'Rocket 150px forward on twin exhaust nozzles, leaving blazing naphtha pools (1 -> 4 pools, 175% -> 255% ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasFlashpoint = ownedNodes.includes('flashpoint');
-          const cd = Math.max(1.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2));
+          const rawCd = hasFlashpoint ? rk.cooldown * 0.7 : rk.cooldown;
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            cooldown: hasFlashpoint ? +(cd * 0.7).toFixed(2) : cd,
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            cooldown: Math.max(this.cooldownFloor, +rawCd.toFixed(2)),
             staminaCost: this.staminaCost,
             dashDistance: this.dashDistance,
             pressureGain: this.pressureGain,
@@ -1190,7 +1294,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Pools & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -1201,24 +1305,35 @@ export const CLASSES = {
         hotkey: '2',
         name: 'Caustic Mortar',
         icon: 'causticMortar',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 canister', damageMult: 1.90, radius: 110, cooldown: 7.5 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 canisters', damageMult: 2.15, radius: 120, cooldown: 7.0 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 canisters', damageMult: 2.45, radius: 130, cooldown: 6.5 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 canisters', damageMult: 2.70, radius: 140, cooldown: 6.0 },
+        ],
         baseDamageMult: 1.90,
-        damagePerLevel: 0.20,
+        damagePerLevel: 0.27,
         baseRadius: 110,
         radiusPerLevel: 10,
         baseCooldown: 7.5,
-        cooldownPerLevel: -0.3,
+        cooldownFloor: 3.75,
+        cooldownPerLevel: -0.5,
         staminaCost: 15,
         pressureGain: 25,
-        desc: 'Lob a pressurized lye-naphtha canister to the cursor that explodes in a 110px chemical fireball for 190% ATK, inflicting Burn + Corrode.',
+        desc: 'Lob pressurized lye-naphtha canisters (1 -> 4 canisters, 190% -> 270% ATK across Lv 1/15/30/45), inflicting Burn + Corrode.',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasBackdraft = ownedNodes.includes('backdraft');
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            radius: this.baseRadius + (l - 1) * this.radiusPerLevel + (hasBackdraft ? 25 : 0),
-            cooldown: Math.max(3.0, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            radius: rk.radius + (hasBackdraft ? 25 : 0),
+            cooldown: Math.max(this.cooldownFloor, rk.cooldown),
             staminaCost: this.staminaCost,
             pressureGain: this.pressureGain,
           };
@@ -1227,7 +1342,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Blast Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Canisters & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Blast Radius: ${cur.radius}px -> ${nxt.radius}px`,
           ];
         },
@@ -1238,22 +1353,33 @@ export const CLASSES = {
         hotkey: '3',
         name: 'Vent Supernova',
         icon: 'ventNova',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 ring', damageMult: 2.50, cooldown: 8.5 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 rings', damageMult: 2.85, cooldown: 7.9 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 rings', damageMult: 3.20, cooldown: 7.3 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 rings', damageMult: 3.50, cooldown: 6.7 },
+        ],
         baseDamageMult: 2.50,
-        damagePerLevel: 0.25,
+        damagePerLevel: 0.33,
         baseRadius: 140,
         baseCooldown: 8.5,
-        cooldownPerLevel: -0.4,
+        cooldownFloor: 4.25,
+        cooldownPerLevel: -0.6,
         staminaCost: 16,
-        desc: 'Pull the boiler release valve! Consumes up to 50% Pressure to detonate a 140px thermobaric nova (up to +60% bonus DMG), stunning for 1s and granting Slag Carapace (-25% DMG taken).',
+        desc: 'Pull the boiler release valve! Detonates thermobaric nova rings (1 -> 4 rings, 250% -> 350% ATK across Lv 1/15/30/45), stunning for 1s and granting Slag Carapace.',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasMeltdown = ownedNodes.includes('meltdown');
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel + (hasMeltdown ? 0.50 : 0)).toFixed(2),
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: +(rk.damageMult + (hasMeltdown ? 0.50 : 0)).toFixed(2),
             radius: this.baseRadius + (hasMeltdown ? 30 : 0),
-            cooldown: Math.max(3.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            cooldown: Math.max(this.cooldownFloor, rk.cooldown),
             staminaCost: this.staminaCost,
           };
         },
@@ -1261,7 +1387,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Nova Damage: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Rings & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -1270,12 +1396,12 @@ export const CLASSES = {
     ultimate: {
       id: 'supercriticalMeltdown',
       hotkey: 'R',
-      name: 'Supercritical Meltdown',
+      name: 'Avatar of the Hell-Drake',
       icon: 'supercriticalMeltdown',
       totalDamageMult: 14.5,
       radius: 240,
       duration: 8.0,
-      desc: 'Locks boiler valves for 8.0s of continuous Supercritical Overdrive (+40% Move Speed, +50% Damage Reduction, Stun & Knockback Immunity). Drops molten slag trails underfoot, sprays a continuous 160px flamethrower torrent toward the cursor, grants zero-cooldown Steam Vents [V], and concludes with a 240px thermobaric shockwave (750% ATK + Stun/Corrode/Burn) on timeout or recast [R].',
+      desc: 'Unleashes the Hell-Drake Heart for 8.0s of Infernal Overdrive (+40% Move Speed, +50% Damage Reduction, CC Immunity). Leaves molten brimstone footprints, breathes a continuous 160px dragonfire torrent, and ends in a 240px hellfire eruption.',
     },
     passives: [
       {
@@ -1432,26 +1558,26 @@ export const CLASSES = {
   },
 
   // =========================================================================
-  // 5) VESPERA LOCKE — ARTIFICER (ARC-DRONE SUMMONER & TESLA CONDUIT)
+  // 5) VESPERA LOCKE — ELDRITCH SOULBINDER
   // =========================================================================
   vespera: {
     id: 'vespera',
     name: 'Vespera Locke',
-    role: 'Artificer (Summoner)',
+    role: 'Eldritch Soulbinder',
     accent: PALETTE.volt, // #C9F24B
     accentName: 'volt',
-    pitch: 'Signal-tower artificer who commands autonomous Arc-Drones, laser-tether pylons, and chain lightning.',
-    weaponName: 'Relay Staff & Arc-Spire Drones',
-    weaponDesc: 'A copper-wound telegraph staff topped with a rotary capacitor that directs autonomous hovering drones.',
+    pitch: 'Occult coven weaver who commands hovering Familiar Skulls, runic obelisks, and eldritch lightning.',
+    weaponName: 'Astral Grimoire & Halo Familiars',
+    weaponDesc: 'A levitating forbidden tome and a starforged halo ring that binds spectral familiar wisps.',
     titles: {
-      hand: 'Tinker',
+      hand: 'Coven Initiate',
       journeyman: {
-        overseer: 'Overseer',
-        conduit: 'Conduit',
+        overseer: 'Familiar Weaver',
+        conduit: 'Rift-Caller',
       },
       master: {
-        overseer: 'Architect',
-        conduit: 'Stormcaller',
+        overseer: 'Grand Soulbinder',
+        conduit: 'Astral Oracle',
       },
     },
     baseStats: {
@@ -1494,24 +1620,35 @@ export const CLASSES = {
         hotkey: '1',
         name: 'Tesla Pylon',
         icon: 'deployPylon',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 zap target', damageMult: 0.85, cooldown: 6.0 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 targets', damageMult: 1.00, cooldown: 5.5 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 targets', damageMult: 1.15, cooldown: 5.0 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 targets', damageMult: 1.33, cooldown: 4.5 },
+        ],
         baseDamageMult: 0.85,
-        damagePerLevel: 0.12,
+        damagePerLevel: 0.16,
         baseDuration: 12.0,
         radius: 155,
         baseCooldown: 6.0,
-        cooldownPerLevel: -0.35,
+        cooldownFloor: 3.0,
+        cooldownPerLevel: -0.5,
         staminaCost: 14,
-        desc: 'Deploy an autonomous Tesla Pylon at the cursor (12s, max 2). Zaps nearby foes for 85% ATK and forms a high-voltage laser tether with Vespera and other Pylons.',
+        desc: 'Deploy an autonomous Tesla Pylon (12s, max 2) that zaps nearby foes (1 -> 4 targets, 85% -> 133% ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasSiege = ownedNodes.includes('siegePylons');
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel + (hasSiege ? 0.30 : 0)).toFixed(2),
+            rank: l,
+            count: rk.count + (hasSiege ? 2 : 0),
+            countLabel: rk.countLabel,
+            damageMult: +(rk.damageMult + (hasSiege ? 0.30 : 0)).toFixed(2),
             duration: this.baseDuration + (hasSiege ? 6.0 : 0),
             radius: this.radius,
-            cooldown: Math.max(2.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            cooldown: Math.max(this.cooldownFloor, rk.cooldown),
             staminaCost: this.staminaCost,
           };
         },
@@ -1519,7 +1656,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Pylon Zap: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Targets & Zap: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -1530,22 +1667,33 @@ export const CLASSES = {
         hotkey: '2',
         name: 'Seeker Swarm',
         icon: 'seekerSwarm',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 4, countLabel: '4 micro-drones', damageMult: 1.75, cooldown: 8.0 },
+          { rank: 2, unlockLevel: 15, count: 5, countLabel: '5 drones', damageMult: 2.00, cooldown: 7.4 },
+          { rank: 3, unlockLevel: 30, count: 6, countLabel: '6 drones', damageMult: 2.30, cooldown: 6.8 },
+          { rank: 4, unlockLevel: 45, count: 8, countLabel: '8 drones', damageMult: 2.55, cooldown: 6.2 },
+        ],
         baseDamageMult: 1.75,
-        damagePerLevel: 0.20,
+        damagePerLevel: 0.27,
         seekers: 4,
         baseCooldown: 8.0,
-        cooldownPerLevel: -0.4,
+        cooldownFloor: 4.0,
+        cooldownPerLevel: -0.6,
         staminaCost: 16,
-        desc: 'Overdrive all Drones and Pylons to emit a 130px EMP shockwave (175% ATK + 1s Stun) while launching 4 homing Kamikaze Micro-Drones.',
+        desc: 'Overdrive Drones and Pylons to emit a 130px EMP shockwave + launch homing Micro-Drones (4 -> 8 drones, 175% -> 255% ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasOverclock = ownedNodes.includes('overclockedSwarm');
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            seekers: this.seekers + (hasOverclock ? 2 : 0),
-            cooldown: Math.max(3.5, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2)),
+            rank: l,
+            count: rk.count + (hasOverclock ? 2 : 0),
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            seekers: rk.count + (hasOverclock ? 2 : 0),
+            cooldown: Math.max(this.cooldownFloor, rk.cooldown),
             staminaCost: this.staminaCost,
           };
         },
@@ -1553,7 +1701,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `EMP & Seeker DMG: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Swarm & DMG: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -1564,22 +1712,33 @@ export const CLASSES = {
         hotkey: '3',
         name: 'Phase Blink',
         icon: 'phaseBlink',
-        maxLevel: 5,
-        costPerLevel: 1,
+        maxLevel: 4,
+        costPerLevel: 0,
+        rankTrack: [
+          { rank: 1, unlockLevel: 1, count: 1, countLabel: '1 decoy blast', damageMult: 2.20, cooldown: 7.5 },
+          { rank: 2, unlockLevel: 15, count: 2, countLabel: '2 blasts', damageMult: 2.55, cooldown: 6.9 },
+          { rank: 3, unlockLevel: 30, count: 3, countLabel: '3 blasts', damageMult: 2.90, cooldown: 6.3 },
+          { rank: 4, unlockLevel: 45, count: 4, countLabel: '4 blasts', damageMult: 3.20, cooldown: 5.7 },
+        ],
         baseDamageMult: 2.20,
-        damagePerLevel: 0.25,
+        damagePerLevel: 0.33,
         blinkDistance: 170,
         baseCooldown: 7.5,
-        cooldownPerLevel: -0.4,
+        cooldownFloor: 3.75,
+        cooldownPerLevel: -0.6,
         staminaCost: 14,
-        desc: 'Teleport 170px in a flash of lightning (grants Arc Overcharge for 3.5s) and leave a Holo-Decoy behind that taunts foes before exploding for 220% ATK.',
+        desc: 'Teleport 170px in a flash of lightning and leave a Holo-Decoy behind that taunts foes before detonating (1 -> 4 blasts, 220% -> 320% ATK across Lv 1/15/30/45).',
         getStats(lvl = 1, ownedNodes = []) {
-          const l = Math.max(1, Math.min(5, lvl));
+          const l = Math.max(1, Math.min(4, lvl));
+          const rk = this.rankTrack[l - 1] || this.rankTrack[0];
           const hasStatic = ownedNodes.includes('staticField');
-          const cd = Math.max(3.0, +(this.baseCooldown + (l - 1) * this.cooldownPerLevel).toFixed(2));
+          const rawCd = hasStatic ? rk.cooldown * 0.65 : rk.cooldown;
           return {
-            damageMult: +(this.baseDamageMult + (l - 1) * this.damagePerLevel).toFixed(2),
-            cooldown: hasStatic ? +(cd * 0.65).toFixed(2) : cd,
+            rank: l,
+            count: rk.count,
+            countLabel: rk.countLabel,
+            damageMult: rk.damageMult,
+            cooldown: Math.max(this.cooldownFloor, +rawCd.toFixed(2)),
             staminaCost: this.staminaCost,
             blinkDistance: this.blinkDistance,
           };
@@ -1588,7 +1747,7 @@ export const CLASSES = {
           const cur = this.getStats(lvl, ownedNodes);
           const nxt = this.getStats(nextLvl, ownedNodes);
           return [
-            `Decoy Blast: ${Math.round(cur.damageMult * 100)}% -> ${Math.round(nxt.damageMult * 100)}% ATK`,
+            `Decoy Blasts: ${cur.countLabel} (${Math.round(cur.damageMult * 100)}%) -> ${nxt.countLabel} (${Math.round(nxt.damageMult * 100)}% ATK)`,
             `Cooldown: ${cur.cooldown.toFixed(1)}s -> ${nxt.cooldown.toFixed(1)}s`,
           ];
         },
@@ -1597,12 +1756,12 @@ export const CLASSES = {
     ultimate: {
       id: 'overclockedArmada',
       hotkey: 'R',
-      name: 'Overclocked Armada',
+      name: 'Choir of Twelve Seraphim',
       icon: 'overclockedArmada',
       totalDamageMult: 15.0,
       radius: 260,
       duration: 8.0,
-      desc: 'Deploys an escort of 12 autonomous Arc-Drones orbiting in a concentric double ring for 8.0s of continuous combat. Drones auto-zap incoming projectiles within 140px, fire continuous twin neon laser beams at enemies near the cursor, and on timeout or recast [R] dive-bomb the cursor in a 12-drone cluster nuke + 240px EMP shockwave.',
+      desc: 'Summons 12 Eldritch Familiar Eyes orbiting in a double sigil ring for 8.0s. Familiars incinerate incoming projectiles within 140px, fire continuous astral beams near the cursor, and dive-bomb in a 12-star cataclysm on recast [R].',
     },
     passives: [
       {

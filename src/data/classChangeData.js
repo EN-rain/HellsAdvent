@@ -15,34 +15,34 @@ export const CHARACTERS = {
   sena: {
     id: 'sena',
     name: 'Sena Ibuki',
-    role: 'Melee',
+    role: 'Abyssal Blade Knight',
     color: '#00F0FF',
     accentName: 'signal',
     startingClass: 'phantomEdge',
     base: [
-      { id: 'sena:base:lunge', name: 'Lunge', level: 1, hotkey: '1', icon: 'lunge', cooldown: 5.0, staminaCost: 10, desc: 'Dash 160px toward the cursor, cutting every enemy on the line.' },
-      { id: 'sena:base:ground-break', name: 'Ground Break', level: 1, hotkey: '2', icon: 'groundBreak', cooldown: 8.5, staminaCost: 14, desc: 'Slam the rail downward, fracturing a 110px crater with heavy stagger and stun.' },
-      { id: 'sena:base:rail-parry', name: 'Rail Parry', level: 1, hotkey: '3', icon: 'railSpike', cooldown: 6.0, staminaCost: 8, desc: 'Enter a 0.4s parry window. Deflecting an incoming hit unleashes Crescent Slash.' }
+      { id: 'sena:base:lunge', name: 'Shadow Lunge', level: 1, hotkey: '1', icon: 'lunge', cooldown: 5.0, staminaCost: 10, desc: 'Shadow-step 160px toward the cursor, cleaving every cursed foe on the line.' },
+      { id: 'sena:base:ground-break', name: 'Abyssal Rupture', level: 1, hotkey: '2', icon: 'groundBreak', cooldown: 8.5, staminaCost: 14, desc: 'Drive Duskrend downward, fracturing a 110px soulfire crater with heavy stagger and stun.' },
+      { id: 'sena:base:rail-parry', name: 'Soulfire Ward Parry', level: 1, hotkey: '3', icon: 'railSpike', cooldown: 6.0, staminaCost: 8, desc: 'Enter a 0.4s ward stance. Deflecting an incoming blow unleashes Eclipse Crescent Slash.' }
     ],
     ultimate: {
       id: 'sena:base:seven-cuts',
-      name: 'Seven Cuts',
+      name: 'Seven Seals of Eclipse',
       level: 1,
       hotkey: 'R',
       icon: 'sevenCuts',
       cooldown: 0,
       staminaCost: 0,
-      desc: 'Seven spatial cuts across the combat arena ending in a devastating dimensional burst.'
+      desc: 'Seven spatial cuts across the combat arena ending in a devastating dimensional eclipse burst.'
     },
     classes: ['phantomEdge', 'riftBreaker', 'pulseDancer'],
     intrinsic: {
       id: 'fightingInstinct',
-      name: 'Fighting Instinct',
-      desc: 'Sena reads the rhythm of close-quarters violence, sharpening recovery and precision through unbroken focus.',
+      name: 'Blood-Oath Instinct',
+      desc: 'Sena reads the rhythm of close-quarters bloodshed, sharpening recovery and precision through unbroken focus.',
       ranks: {
         1: 'Consecutive meaningful attacks improve combat recovery slightly (+5% attack recovery).',
-        15: 'First clean hit landed within 2s of a successful dodge gains +15% damage bonus.',
-        30: 'Alternating between offensive attacks and evasive repositioning improves recovery by 10%.',
+        15: 'First clean hit landed within 2s of a successful shadow-dodge gains +15% damage bonus.',
+        30: 'Alternating between offensive strikes and evasive repositioning improves recovery by 10%.',
         45: 'Landing four varied actions in sequence grants one guaranteed critical finisher within 3s.'
       }
     }
@@ -50,30 +50,30 @@ export const CHARACTERS = {
   rook: {
     id: 'rook',
     name: 'Rook Matsuda',
-    role: 'Ranged',
+    role: 'Inquisitor Marksman',
     color: '#FFC83D',
     accentName: 'brass',
     startingClass: 'railHunter',
     base: [
-      { id: 'rook:base:rivet-spread', name: 'Rivet Spread', level: 1, hotkey: '1', icon: 'rivetSpread', cooldown: 5.0, staminaCost: 8, desc: 'Fire a 5-pellet conical blast of heated industrial rivets.' },
-      { id: 'rook:base:kickback', name: 'Kickback', level: 1, hotkey: '2', icon: 'kickback', cooldown: 7.5, staminaCost: 10, desc: 'Discharge an explosive concussive blast, vaulting backward away from danger.' },
-      { id: 'rook:base:rapid-fire', name: 'Rapid Fire', level: 1, hotkey: '3', icon: 'rapidFire', cooldown: 6.0, staminaCost: 12, desc: 'Unload three rapid-fire piercing shells in rapid succession.' }
+      { id: 'rook:base:rivet-spread', name: 'Silver Stake Spread', level: 1, hotkey: '1', icon: 'rivetSpread', cooldown: 5.0, staminaCost: 8, desc: 'Fire a 5-stake conical volley of consecrated silver bolts.' },
+      { id: 'rook:base:kickback', name: 'Sanctified Kickback', level: 1, hotkey: '2', icon: 'kickback', cooldown: 7.5, staminaCost: 10, desc: 'Discharge a blessed concussive blast, vaulting backward away from danger.' },
+      { id: 'rook:base:rapid-fire', name: 'Inquisitor Volley', level: 1, hotkey: '3', icon: 'rapidFire', cooldown: 6.0, staminaCost: 12, desc: 'Unleash rapid-fire consecrated silver bolts in quick succession.' }
     ],
     ultimate: {
       id: 'rook:base:anti-materiel-rail-slug',
-      name: 'Anti-Materiel Rail Slug',
+      name: 'Judgement Silver Spear',
       level: 1,
       hotkey: 'R',
       icon: 'railSlug',
       cooldown: 0,
       staminaCost: 0,
-      desc: 'Charge and fire a colossal armor-piercing depleted uranium slug through all targets.'
+      desc: 'Charge and fire a colossal armor-piercing solar-silver spear through all cursed targets.'
     },
     classes: ['railHunter', 'siegeGunner', 'circuitWarden'],
     intrinsic: {
       id: 'fieldAwareness',
-      name: 'Field Awareness',
-      desc: 'Rook tracks ballistic vectors and combat positioning, predicting incoming fire and enemy blind spots.',
+      name: 'Inquisitor’s Eye',
+      desc: 'Rook tracks occult vectors and combat positioning, predicting incoming hexes and enemy blind spots.',
       ranks: {
         1: 'Displays brief visual warning arcs on incoming off-screen ranged projectiles.',
         15: 'First aimed shot against a newly engaged hostile gains +20% accuracy and projectile speed.',
@@ -85,105 +85,105 @@ export const CHARACTERS = {
   ines: {
     id: 'ines',
     name: 'Ines Calloway',
-    role: 'Magnetist',
+    role: 'Ossuary Necromancer',
     color: '#4FD6A0',
     accentName: 'verdigris',
     startingClass: 'magnetCrusher',
     base: [
-      { id: 'ines:base:pull', name: 'Pull', level: 1, hotkey: '1', icon: 'pull', cooldown: 5.5, staminaCost: 10, desc: 'Direct magnetic flux to drag environmental scrap and lesser enemies toward Ines.' },
-      { id: 'ines:base:spin-up', name: 'Spin Up', level: 1, hotkey: '2', icon: 'spinUp', cooldown: 7.0, staminaCost: 12, desc: 'Accelerate orbiting scrap metal into a whirling defensive perimeter blade.' },
-      { id: 'ines:base:lump', name: 'Lump', level: 1, hotkey: '3', icon: 'lump', cooldown: 6.0, staminaCost: 14, desc: 'Compress surrounding debris into a dense molten slag block and hurl it.' }
+      { id: 'ines:base:pull', name: 'Grave-Grasp Pull', level: 1, hotkey: '1', icon: 'pull', cooldown: 5.5, staminaCost: 10, desc: 'Invoke spectral hands to drag ossuary shards and lesser enemies toward Ines.' },
+      { id: 'ines:base:spin-up', name: 'Whirling Bone-Vortex', level: 1, hotkey: '2', icon: 'spinUp', cooldown: 7.0, staminaCost: 12, desc: 'Accelerate orbiting bone-shards into a whirling necrotic perimeter blade.' },
+      { id: 'ines:base:lump', name: 'Ossuary Monolith', level: 1, hotkey: '3', icon: 'lump', cooldown: 6.0, staminaCost: 14, desc: 'Compress surrounding bone-relics into a dense grave-colossus skull and hurl it.' }
     ],
     ultimate: {
       id: 'ines:base:scrapfall',
-      name: 'Scrapfall',
+      name: 'Catacomb Bone-Tempest',
       level: 1,
       hotkey: 'R',
       icon: 'scrapfall',
       cooldown: 0,
       staminaCost: 0,
-      desc: 'Magnetize the sky above, raining hundreds of heavy metal shards onto the combat arena.'
+      desc: 'Tear open the catacomb vault above, raining hundreds of ancestral bone pillars onto the combat arena.'
     },
     classes: ['magnetCrusher', 'scrapstorm', 'polarityBreaker'],
     intrinsic: {
       id: 'fluxSense',
-      name: 'Flux Sense',
-      desc: 'Ines senses magnetic currents throughout the wasteland, amplifying destructive electromagnetic collapses.',
+      name: 'Soul-Crypt Resonance',
+      desc: 'Ines senses necrotic currents throughout the Spire, amplifying destructive ossuary collapses.',
       ranks: {
-        1: 'Magnetic pulses reveal nearby interactable metal obstacles and slag hazards.',
-        15: 'Offensive magnetic skill hits build +3% magnetic resonance damage (stacks up to 15%).',
+        1: 'Necrotic pulses reveal nearby interactable relics and mire hazards.',
+        15: 'Offensive necromancy skill hits build +3% soul resonance damage (stacks up to 15%).',
         30: 'Successful compression, polarity, or storm sequences trigger a secondary micro-shockwave.',
-        45: 'Reaching max resonance triggers a magnetic burst that staggers non-boss hostiles.'
+        45: 'Reaching max resonance triggers an ossuary burst that staggers non-boss hostiles.'
       }
     }
   },
   kaelen: {
     id: 'kaelen',
     name: 'Kaelen Vos',
-    role: 'Thermo-Lancer',
+    role: 'Hellfire Dragoon',
     color: '#FF5A26',
     accentName: 'ember',
     startingClass: 'cinderCorsair',
     base: [
-      { id: 'kaelen:base:naphtha-jet', name: 'Naphtha Jet', level: 1, hotkey: '1', icon: 'naphthaJet', cooldown: 5.5, staminaCost: 12, desc: 'Rocket-propelled Ignis Lance charge leaving a blazing firewall trail and knocking back foes.' },
-      { id: 'kaelen:base:caustic-mortar', name: 'Caustic Mortar', level: 1, hotkey: '2', icon: 'causticMortar', cooldown: 8.0, staminaCost: 14, desc: 'Lob a chemical slag shell applying Corrode and Burn in an expanding acid-fire pool.' },
-      { id: 'kaelen:base:vent-supernova', name: 'Vent Supernova', level: 1, hotkey: '3', icon: 'ventSupernova', cooldown: 6.5, staminaCost: 10, desc: 'Discharge boiler steam for a 360-degree thermobaric shockwave and stun blast.' }
+      { id: 'kaelen:base:naphtha-jet', name: 'Brimstone Dragon-Rush', level: 1, hotkey: '1', icon: 'naphthaJet', cooldown: 5.5, staminaCost: 12, desc: 'Hellfire-propelled Cinderlance charge leaving a blazing firewall trail and knocking back foes.' },
+      { id: 'kaelen:base:caustic-mortar', name: 'Hellfire Crucible Bomb', level: 1, hotkey: '2', icon: 'causticMortar', cooldown: 8.0, staminaCost: 14, desc: 'Lob a molten brimstone shell applying Corrode and Burn in an expanding hellfire pool.' },
+      { id: 'kaelen:base:vent-supernova', name: 'Infernal Wyrm-Roar', level: 1, hotkey: '3', icon: 'ventSupernova', cooldown: 6.5, staminaCost: 10, desc: 'Discharge crucible dragonfire for a 360-degree thermobaric shockwave and stun blast.' }
     ],
     ultimate: {
       id: 'kaelen:base:supercritical-meltdown',
-      name: 'Supercritical Meltdown',
+      name: 'Avatar of the Hell-Drake',
       level: 1,
       hotkey: 'R',
       icon: 'supercriticalMeltdown',
       cooldown: 0,
       staminaCost: 0,
-      desc: 'Lock boiler valves for 8s of Supercritical Overdrive: +40% Speed, +50% DR, continuous flame torrent, molten slag footsteps, and a 240px thermobaric finale.'
+      desc: 'Awaken the Hell-Drake Heart for 8s of Infernal Overdrive: +40% Speed, +50% DR, continuous dragonfire torrent, molten footprints, and a 240px eruption finale.'
     },
     classes: ['cinderCorsair', 'crucibleArchitect', 'cryoSaboteur'],
     intrinsic: {
       id: 'pressureInstinct',
-      name: 'Pressure Instinct',
-      desc: 'Kaelen commands extreme thermal cycles, turning volatile heat dissipation into lethal combat force.',
+      name: 'Dragonblood Fury',
+      desc: 'Kaelen commands extreme infernal heat cycles, turning volatile brimstone fury into lethal combat force.',
       ranks: {
-        1: 'Displays boiler heat buildup gradients with clear audio-visual red-zone cues.',
+        1: 'Displays dragon-heart heat buildup gradients with clear audio-visual red-zone cues.',
         15: 'Attacking during the upper heat range (+75%) sharpens skill damage by an additional +10%.',
         30: 'Executing timed attacks reduces thermal recovery delay by 15% across all specializations.',
-        45: 'Vent discharges leave a 4s thermal aura that burns hostiles and boosts move speed by +15%.'
+        45: 'Vent discharges leave a 4s hellfire aura that burns hostiles and boosts move speed by +15%.'
       }
     }
   },
   vespera: {
     id: 'vespera',
     name: 'Vespera Locke',
-    role: 'Artificer',
+    role: 'Eldritch Soulbinder',
     color: '#9FA7FF',
     accentName: 'volt',
     startingClass: 'voltReaver',
     base: [
-      { id: 'vespera:base:tesla-pylon', name: 'Tesla Pylon', level: 1, hotkey: '1', icon: 'teslaPylon', cooldown: 6.0, staminaCost: 10, desc: 'Deploy linked high-voltage spires that form a damaging, slowing laser fence.' },
-      { id: 'vespera:base:seeker-swarm', name: 'Seeker Swarm', level: 1, hotkey: '2', icon: 'seekerSwarm', cooldown: 7.5, staminaCost: 12, desc: 'Launch homing explosive micro-drones that seek out targets and detonate on impact.' },
-      { id: 'vespera:base:phase-blink', name: 'Phase Blink', level: 1, hotkey: '3', icon: 'phaseBlink', cooldown: 5.0, staminaCost: 8, desc: 'Teleport along cursor vector, emitting departure and arrival lightning shockwaves.' }
+      { id: 'vespera:base:tesla-pylon', name: 'Eldritch Obelisk', level: 1, hotkey: '1', icon: 'teslaPylon', cooldown: 6.0, staminaCost: 10, desc: 'Summon linked runic obelisks that weave a damaging, slowing astral ward-beam.' },
+      { id: 'vespera:base:seeker-swarm', name: 'Wisp-Skull Swarm', level: 1, hotkey: '2', icon: 'seekerSwarm', cooldown: 7.5, staminaCost: 12, desc: 'Unleash homing spectral wisp-skulls that seek out targets and detonate on impact.' },
+      { id: 'vespera:base:phase-blink', name: 'Astral Rift-Step', level: 1, hotkey: '3', icon: 'phaseBlink', cooldown: 5.0, staminaCost: 8, desc: 'Step through the Void along the cursor vector, emitting departure and arrival eldritch novas.' }
     ],
     ultimate: {
       id: 'vespera:base:overclocked-armada',
-      name: 'Overclocked Armada',
+      name: 'Choir of Twelve Seraphim',
       level: 1,
       hotkey: 'R',
       icon: 'overclockedArmada',
       cooldown: 0,
       staminaCost: 0,
-      desc: 'Deploy 12 concentric Arc-Drones for 8s: active point-defense projectile zapping, continuous dual neon tracer beams, and a 12-drone kamikaze dive-bomb finale.'
+      desc: 'Summon 12 concentric Eldritch Familiars for 8s: active projectile warding, continuous dual astral beams, and a 12-star cataclysm finale.'
     },
     classes: ['voltReaver', 'ironPuppeteer', 'stormCartographer'],
     intrinsic: {
       id: 'circuitIntuition',
-      name: 'Circuit Intuition',
-      desc: 'Vespera analyzes electrical grids and automated relays, optimizing drone networks and device feedback.',
+      name: 'Coven Sight',
+      desc: 'Vespera reads astral ley-lines and bound familiars, optimizing obelisk wards and occult resonance.',
       ranks: {
-        1: 'Provides tactical HUD range circles and connection previews for active deployables.',
-        15: 'Landing consecutive electro-strikes empowers the next device deployment with +15% radius.',
-        30: 'Teleportation or phase maneuvers immediately discharge a defensive static arc to nearby foes.',
-        45: 'Triggering three linked electrical events within 4s unleashes a cascading EMP overload.'
+        1: 'Provides tactical HUD range circles and connection previews for active obelisks.',
+        15: 'Landing consecutive astral strikes empowers the next obelisk summoning with +15% radius.',
+        30: 'Rift-steps or phase maneuvers immediately discharge a defensive eldritch arc to nearby foes.',
+        45: 'Triggering three linked occult events within 4s unleashes a cascading void overload.'
       }
     }
   }

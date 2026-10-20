@@ -1,15 +1,13 @@
 /**
- * HellsAdvent — 10-of-a-Kind Same-Species Fusion System (Section 3, D6, D7, D11, D16, D21, D25, D34, D38, D39)
- * - Detects 10 living, active common mobs of the exact same species ID in a contact-connected cluster
- *   within 96px of their centroid.
+ * HellsAdvent — Unlimited 10× Common Mob Fusion & 5× Mid-Boss -> KING Fusion System
+ * - 10 living, active common mobs of the same species ID in a cluster fuse into a Mid-Level Fused Boss.
+ * - No artificial cap on how many fusions or channels can happen simultaneously as long as conditions are met.
+ * - 5 Mid-Level Fused Bosses near together trigger a second-stage KING FUSION into "King <Name of the Mob>"!
  * - Strictly suppressed inside the Foreman's marked ritual No-Fusion AOE (D34).
- * - Runs a 2.0s interruptible FUSION CHANNEL with a visible universal stagger meter (D16, D21).
- * - Interrupted by kills, stun, knockback displacement, or universal stagger damage.
- * - Late interruption (last 0.5s) triggers 1.5s Fusion Backlash disorientation on survivors (D25).
- * - If mid-boss capacity is full, eligible mobs continue fighting normally and retry later (D39).
+ * - Runs an interruptible FUSION CHANNEL with a visible universal stagger meter.
  */
 
-import { PALETTE } from '../data/config.js';
+import { PALETTE, ENEMIES_CONFIG } from '../data/config.js';
 import { FUSION_BOSSES_CONFIG, FUSION_RULES } from '../data/expansionConfig.js';
 import { obstacleManager } from './Obstacles.js';
 import { drawBresenhamCircle, drawPixelLine } from './PixelArt.js';
@@ -21,8 +19,8 @@ export class FusionManager {
   }
 
   reset() {
-    this.channels = []; // Active 2.0s fusion channels
-    this.scanTimer = 0.22; // Check 4-5 times per second
+    this.channels = []; // Active 10x common or 5x mid-boss king fusion channels
+    this.scanTimer = 0.20; // Scan 5 times per second
     this.nextChannelId = 1;
   }
 
@@ -68,6 +66,14 @@ export class FusionManager {
     return count;
   }
 
+  _getCleanBaseMobName(speciesId, fallbackName = 'Mob') {
+    const commonCfg = ENEMIES_CONFIG?.commons?.[speciesId];
+    if (commonCfg && commonCfg.name) {
+      return commonCfg.name;
+    }
+    return fallbackName || speciesId || 'Abyssal Mob';
+  }
+
   update(dt, spawner, player, particles, camera, bossMechanics, worldLedger) {
     if (!spawner) return;
     const allEnemies = spawner.getAllActiveEnemies ? spawner.getAllActiveEnemies() : spawner.pool;
@@ -80,10 +86,14 @@ export class FusionManager {
       }
     }
 
-    // 1. Update active fusion channels
+    // 1. Update active fusion channels (both 10x Common and 5x Mid-Boss King channels)
     for (let i = this.channels.length - 1; i >= 0; i--) {
       const ch = this.channels[i];
       ch.elapsed += dt;
+      const reqCount = ch.requiredCount || (ch.isKingFusion ? (FUSION_RULES.kingRequiredCount || 5) : FUSION_RULES.requiredCount);
+      const maxRad = ch.isKingFusion
+        ? (FUSION_RULES.kingClusterRadius || 165)
+        : FUSION_RULES.maxClusterRadius;
 
       // Check if Foreman ritual No-Fusion AOE now covers any member or centroid (D34)
       if (
@@ -96,7 +106,7 @@ export class FusionManager {
         continue;
       }
 
-      // Check interruption conditions: member killed, stunned, displaced, or universal stagger reached (D16, D21)
+      // Check interruption conditions: member killed, stunned, displaced, or universal stagger reached
       let brokenReason = null;
       let aliveCount = 0;
       for (let mIdx = 0; mIdx < ch.members.length; mIdx++) {
@@ -111,7 +121,7 @@ export class FusionManager {
           break;
         }
         const distFromCentroid = Math.hypot(m.x - ch.centroidX, m.y - ch.centroidY);
-        if (distFromCentroid > FUSION_RULES.maxClusterRadius + 24) {
+        if (distFromCentroid > maxRad + 36) {
           brokenReason = 'DISPLACED';
           break;
         }
@@ -121,42 +131,45 @@ export class FusionManager {
         brokenReason = 'STAGGER BREAK';
       }
 
-      if (brokenReason || aliveCount < FUSION_RULES.requiredCount) {
+      if (brokenReason || aliveCount < reqCount) {
         const isLateBacklash =
-          ch.elapsed >= FUSION_RULES.channelDuration - FUSION_RULES.backlashWindow;
+          ch.elapsed >= ch.duration - FUSION_RULES.backlashWindow;
         this._interruptChannel(ch, isLateBacklash, brokenReason, particles, camera, worldLedger);
         this.channels.splice(i, 1);
         continue;
       }
 
-      // Pull members gently toward centroid while channeling
+      // Pull members toward centroid while channeling
+      const pullSpeed = ch.isKingFusion ? 28 : 22;
       for (let mIdx = 0; mIdx < ch.members.length; mIdx++) {
         const m = ch.members[mIdx];
         const dx = ch.centroidX - m.x;
         const dy = ch.centroidY - m.y;
         const d = Math.hypot(dx, dy);
         if (d > 14) {
-          m.x += (dx / d) * 18 * dt;
-          m.y += (dy / d) * 18 * dt;
+          m.x += (dx / d) * pullSpeed * dt;
+          m.y += (dy / d) * pullSpeed * dt;
         }
       }
 
-      // Channel complete -> Transform 10 commons into 1 Fusion Mid-Boss!
-      if (ch.elapsed >= FUSION_RULES.channelDuration) {
-        const success = this._completeFusion(ch, spawner, player, particles, camera);
+      // Channel complete -> Transform into Fusion Mid-Boss or KING Boss!
+      if (ch.elapsed >= ch.duration) {
+        const success = ch.isKingFusion
+          ? this._completeKingFusion(ch, spawner, player, particles, camera)
+          : this._completeFusion(ch, spawner, player, particles, camera);
         if (!success) {
-          // D39: If mid-boss capacity or pool is full at completion frame, release without deleting
           this._releaseChannelMembers(ch);
         }
         this.channels.splice(i, 1);
       }
     }
 
-    // 2. Periodically scan for new 10-of-a-kind contact clusters
+    // 2. Periodically scan for new 10-of-a-kind common clusters AND 5-of-a-kind Mid-Boss King clusters
     this.scanTimer -= dt;
     if (this.scanTimer <= 0) {
-      this.scanTimer = 0.22;
+      this.scanTimer = 0.20;
       this._scanForClusters(spawner, player, particles, camera, bossMechanics);
+      this._scanForKingClusters(spawner, player, particles, camera, bossMechanics);
     }
   }
 
@@ -176,9 +189,8 @@ export class FusionManager {
       if (!m || !m.active || m.hp <= 0) continue;
       m.fusionLocked = false;
       m.fusionChannelId = null;
-      m.fusionBacklashTimer = 3.5; // Prevent immediate re-chaining
+      m.fusionBacklashTimer = 3.0; // Brief cooldown before re-chaining
 
-      // D25: Late interruption (last 0.5s) disorients survivors for 1.5s
       if (isLateBacklash && m.statuses) {
         m.statuses.apply(
           'stun',
@@ -214,13 +226,26 @@ export class FusionManager {
   }
 
   _completeFusion(ch, spawner, player, particles, camera) {
-    const allEnemies = spawner.getAllActiveEnemies ? spawner.getAllActiveEnemies() : spawner.pool;
-    if (this.getActiveFusionBossCount(allEnemies) >= FUSION_RULES.maxActiveFusionBosses) {
-      return false; // D39: Keep fighting normally and retry later
-    }
-
-    const fusionCfg = FUSION_BOSSES_CONFIG[ch.speciesId];
-    if (!fusionCfg) return false;
+    // Unlimited fusions allowed as long as the 10-mob condition is satisfied!
+    const baseMobName = this._getCleanBaseMobName(ch.speciesId, ch.members[0]?.name);
+    const fusionCfg = FUSION_BOSSES_CONFIG[ch.speciesId] || {
+      id: ch.speciesId,
+      sourceSpeciesId: ch.speciesId,
+      name: `Fused ${baseMobName}`,
+      subtitle: `10× ${baseMobName} Amalgam`,
+      tier: 'fusionBoss',
+      hp: 340,
+      damage: 18,
+      def: 10,
+      speed: 96,
+      radius: 26,
+      xp: 120,
+      goldMin: 75,
+      goldMax: 110,
+      specialType: 'rollingRush',
+      specialCooldown: 4.6,
+      telegraphTime: 0.8,
+    };
 
     // Verify all 10 members are still alive
     for (let i = 0; i < ch.members.length; i++) {
@@ -229,7 +254,7 @@ export class FusionManager {
       }
     }
 
-    // Atomically consume the 10 common mobs (granting NO ordinary kill rewards per D38)
+    // Atomically consume the 10 common mobs
     const scaleMult = ch.members[0].scaleMult || 1.0;
     for (let i = 0; i < ch.members.length; i++) {
       const m = ch.members[i];
@@ -239,7 +264,6 @@ export class FusionManager {
       m.dead = true;
     }
 
-    // Now allocate 1 slot for the Fusion Mid-Boss (guaranteed free since we just freed up to 10 pool slots)
     const bossSlot = spawner._getFreeEnemy();
     if (!bossSlot) return false;
 
@@ -248,8 +272,11 @@ export class FusionManager {
       ch.centroidY,
       fusionCfg.radius || 26
     );
-    bossSlot.initFromConfig(fusionCfg, safePos.x, safePos.y, scaleMult);
+    bossSlot.initFromConfig(fusionCfg, safePos.x, safePos.y, scaleMult, player ? player.level : 1);
     bossSlot.tier = 'fusionBoss';
+    bossSlot.isKingBoss = false;
+    bossSlot.baseSpeciesId = ch.speciesId;
+    bossSlot.baseMobName = baseMobName;
     bossSlot.scaleMult = scaleMult;
 
     sound.playBossAlert?.();
@@ -259,7 +286,7 @@ export class FusionManager {
       particles.spawnFloatingText(
         safePos.x,
         safePos.y - 34,
-        `10× FUSION: ${fusionCfg.name.toUpperCase()}!`,
+        `10× FUSION: ${bossSlot.name.toUpperCase()}!`,
         PALETTE.blood
       );
     }
@@ -267,15 +294,102 @@ export class FusionManager {
     return true;
   }
 
-  _scanForClusters(spawner, player, particles, camera, bossMechanics) {
-    if (this.channels.length >= FUSION_RULES.maxActiveChannels) return;
+  /**
+   * Completes a 5× Mid-Level Fused Boss -> KING (<Name of the Mob>) Fusion!
+   */
+  _completeKingFusion(ch, spawner, player, particles, camera) {
+    // Verify all 5 mid-bosses are still alive
+    let totalMaxHp = 0;
+    let totalDmg = 0;
+    let totalDef = 0;
+    let totalXp = 0;
+    let totalGoldMin = 0;
+    let totalGoldMax = 0;
+    let maxLevel = 1;
 
-    const allEnemies = spawner.getAllActiveEnemies ? spawner.getAllActiveEnemies() : spawner.pool;
-    if (this.getActiveFusionBossCount(allEnemies) >= FUSION_RULES.maxActiveFusionBosses) {
-      return; // D39: Mid-boss slots full; eligible mobs continue normal combat
+    for (let i = 0; i < ch.members.length; i++) {
+      const m = ch.members[i];
+      if (!m || !m.active || m.hp <= 0) {
+        return false;
+      }
+      totalMaxHp += m.maxHp || 350;
+      totalDmg += m.damage || 20;
+      totalDef += m.def || 10;
+      totalXp += m.xp || 120;
+      totalGoldMin += m.goldMin || 75;
+      totalGoldMax += m.goldMax || 110;
+      if ((m.level || 1) > maxLevel) maxLevel = m.level;
     }
 
-    // Group eligible common mobs by speciesId
+    const leader = ch.members[0];
+    const scaleMult = leader.scaleMult || 1.0;
+    const speciesId = ch.speciesId || leader.baseSpeciesId || 'tinRat';
+    const baseMobName = ch.baseMobName || leader.baseMobName || this._getCleanBaseMobName(speciesId, leader.name);
+    const baseFusionCfg = FUSION_BOSSES_CONFIG[speciesId] || {
+      id: leader.id || 'scrapRatKing',
+      specialType: leader.specialType || 'rollingRush',
+      specialCooldown: 3.8,
+      telegraphTime: 0.75,
+      speed: leader.speed || 98,
+    };
+
+    // Consume all 5 mid-level fused bosses
+    for (let i = 0; i < ch.members.length; i++) {
+      const m = ch.members[i];
+      m.fusionLocked = false;
+      m.fusionChannelId = null;
+      m.active = false;
+      m.dead = true;
+    }
+
+    const kingSlot = spawner._getFreeEnemy();
+    if (!kingSlot) return false;
+
+    const safePos = obstacleManager.findSafePosition(ch.centroidX, ch.centroidY, 33);
+    kingSlot.initFromConfig(baseFusionCfg, safePos.x, safePos.y, scaleMult, player ? player.level : 1);
+
+    // Override with Sovereign KING stats & identity ("King <Name of the Mob>")
+    kingSlot.tier = 'fusionBoss';
+    kingSlot.isKingBoss = true;
+    kingSlot.baseSpeciesId = speciesId;
+    kingSlot.baseMobName = baseMobName;
+    kingSlot.level = maxLevel + 3;
+    kingSlot.name = `King ${baseMobName}`;
+    kingSlot.subtitle = `5× Fused Sovereign King · Lv.${kingSlot.level}`;
+    kingSlot.radius = 33;
+    kingSlot.baseMaxHp = Math.round(totalMaxHp * 1.25);
+    kingSlot.maxHp = kingSlot.baseMaxHp;
+    kingSlot.hp = kingSlot.maxHp;
+    kingSlot.baseDamage = Math.round((totalDmg / ch.members.length) * 2.15);
+    kingSlot.damage = kingSlot.baseDamage;
+    kingSlot.baseDef = Math.round((totalDef / ch.members.length) * 1.75);
+    kingSlot.def = kingSlot.baseDef;
+    kingSlot.speed = Math.round((baseFusionCfg.speed || 96) * 1.12);
+    kingSlot.xp = Math.round(totalXp * 1.5);
+    kingSlot.goldMin = Math.round(totalGoldMin * 1.5);
+    kingSlot.goldMax = Math.round(totalGoldMax * 1.6);
+
+    sound.playBossAlert?.();
+    if (camera) camera.shake(11, 0.42);
+    if (particles) {
+      particles.spawnGroundBreakEffect(safePos.x, safePos.y, 125);
+      particles.spawnShockwave(safePos.x, safePos.y, 140, '#FFC83D', 0.45);
+      particles.spawnShockwave(safePos.x, safePos.y, 95, '#C042FF', 0.35);
+      particles.spawnFloatingText(
+        safePos.x,
+        safePos.y - 44,
+        `👑 5× FUSION AWAKENED: KING ${baseMobName.toUpperCase()}!`,
+        '#FFC83D'
+      );
+    }
+
+    return true;
+  }
+
+  _scanForClusters(spawner, player, particles, camera, bossMechanics) {
+    const allEnemies = spawner.getAllActiveEnemies ? spawner.getAllActiveEnemies() : spawner.pool;
+
+    // Group eligible common mobs by speciesId (no cap on how many fusions can happen!)
     const bySpecies = new Map();
     for (let i = 0; i < allEnemies.length; i++) {
       const e = allEnemies[i];
@@ -296,8 +410,6 @@ export class FusionManager {
         continue;
       }
 
-      if (!FUSION_BOSSES_CONFIG[e.id]) continue;
-
       let list = bySpecies.get(e.id);
       if (!list) {
         list = [];
@@ -306,17 +418,21 @@ export class FusionManager {
       list.push(e);
     }
 
+    const playerLv = player?.level || 1;
+
     // Sort deterministically by uid
     for (const [speciesId, list] of bySpecies.entries()) {
-      if (list.length < 6) continue;
+      if (list.length < 4) continue;
       list.sort((a, b) => (a.uid || 0) - (b.uid || 0));
 
-      // Apply subtle convergence attraction when 6+ same-species mobs are within 140px
-      this._applyConvergenceNudge(list);
+      // Apply convergence attraction (stronger when 10+ level gap is active!)
+      const hasGap10 = (playerLv - (list[0]?.level || 1)) >= 10;
+      this._applyConvergenceNudge(list, hasGap10 ? 280 : 140);
 
       if (list.length < FUSION_RULES.requiredCount) continue;
 
-      // Find contact-connected components (two mobs touch if dist <= r1 + r2 + 12)
+      // Find contact-connected components (wider touch tolerance when gathering for fusion)
+      const touchPad = hasGap10 ? 26 : 16;
       const visited = new Set();
       for (let i = 0; i < list.length; i++) {
         const seed = list[i];
@@ -333,7 +449,7 @@ export class FusionManager {
             const other = list[j];
             if (visited.has(other)) continue;
             const d = Math.hypot(cur.x - other.x, cur.y - other.y);
-            if (d <= cur.radius + other.radius + 14) {
+            if (d <= cur.radius + other.radius + touchPad) {
               visited.add(other);
               queue.push(other);
             }
@@ -341,7 +457,7 @@ export class FusionManager {
         }
 
         if (component.length >= FUSION_RULES.requiredCount) {
-          // Pick the 10 closest to the component centroid and verify they fit within 96px
+          // Pick the 10 closest to the component centroid
           let cx = 0;
           let cy = 0;
           for (let k = 0; k < component.length; k++) {
@@ -366,12 +482,13 @@ export class FusionManager {
           fx /= FUSION_RULES.requiredCount;
           fy /= FUSION_RULES.requiredCount;
 
-          // Check bounded 96px gathering radius
+          // Check gathering radius
           let fitsRadius = true;
           let totalHp = 0;
+          const allowedRad = hasGap10 ? FUSION_RULES.maxClusterRadius + 24 : FUSION_RULES.maxClusterRadius;
           for (let k = 0; k < chosen10.length; k++) {
             totalHp += chosen10[k].maxHp || 24;
-            if (Math.hypot(chosen10[k].x - fx, chosen10[k].y - fy) > FUSION_RULES.maxClusterRadius) {
+            if (Math.hypot(chosen10[k].x - fx, chosen10[k].y - fy) > allowedRad) {
               fitsRadius = false;
               break;
             }
@@ -379,15 +496,134 @@ export class FusionManager {
 
           if (fitsRadius && (!bossMechanics || !bossMechanics.isInsideForemanNoFusionField(fx, fy))) {
             this._startChannel(speciesId, chosen10, fx, fy, totalHp, particles);
-            if (this.channels.length >= FUSION_RULES.maxActiveChannels) return;
           }
         }
       }
     }
   }
 
-  _applyConvergenceNudge(list) {
-    // When 6+ same-species mobs are near each other, gently nudge them toward their local neighbor so emergent 10-mob clusters form naturally (D6)
+  /**
+   * Scans for 5 Mid-Level Fused Bosses (`tier === 'fusionBoss' && !isKingBoss`) near each other
+   * to trigger a second-stage fusion into "King <Name of the Mob>"!
+   */
+  _scanForKingClusters(spawner, player, particles, camera, bossMechanics) {
+    const allEnemies = spawner.getAllActiveEnemies ? spawner.getAllActiveEnemies() : spawner.pool;
+    const midBosses = [];
+
+    for (let i = 0; i < allEnemies.length; i++) {
+      const e = allEnemies[i];
+      if (
+        !e.active ||
+        e.hp <= 0 ||
+        e.tier !== 'fusionBoss' ||
+        e.isKingBoss ||
+        e.fusionLocked ||
+        (e.fusionBacklashTimer && e.fusionBacklashTimer > 0) ||
+        (e.statuses && e.statuses.cannotAct())
+      ) {
+        continue;
+      }
+      if (bossMechanics && bossMechanics.isInsideForemanNoFusionField(e.x, e.y)) {
+        continue;
+      }
+      midBosses.push(e);
+    }
+
+    if (midBosses.length < 2) return;
+
+    // Apply strong convergence pull between active mid-level fused bosses so they group up for King Fusion!
+    this._applyConvergenceNudge(midBosses, 520);
+
+    const reqKingCount = FUSION_RULES.kingRequiredCount || 5;
+    if (midBosses.length < reqKingCount) return;
+
+    // Group by baseSpeciesId first; if any group has >= 5, check cluster. Also check all midBosses together!
+    const groups = new Map();
+    for (let i = 0; i < midBosses.length; i++) {
+      const mb = midBosses[i];
+      const key = mb.baseSpeciesId || mb.id || 'tinRat';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(mb);
+    }
+    // Also add a combined pool fallback so 5 mid-bosses near together ALWAYS fuse into a King!
+    groups.set('__all_mid_bosses__', midBosses);
+
+    const kingRad = FUSION_RULES.kingClusterRadius || 165;
+
+    for (const [groupKey, list] of groups.entries()) {
+      if (list.length < reqKingCount) continue;
+
+      const visited = new Set();
+      for (let i = 0; i < list.length; i++) {
+        const seed = list[i];
+        if (seed.fusionLocked || visited.has(seed)) continue;
+
+        const component = [];
+        const queue = [seed];
+        visited.add(seed);
+
+        while (queue.length > 0) {
+          const cur = queue.shift();
+          component.push(cur);
+          for (let j = 0; j < list.length; j++) {
+            const other = list[j];
+            if (other.fusionLocked || visited.has(other)) continue;
+            const d = Math.hypot(cur.x - other.x, cur.y - other.y);
+            if (d <= cur.radius + other.radius + 95) {
+              visited.add(other);
+              queue.push(other);
+            }
+          }
+        }
+
+        if (component.length >= reqKingCount) {
+          let cx = 0;
+          let cy = 0;
+          for (let k = 0; k < component.length; k++) {
+            cx += component[k].x;
+            cy += component[k].y;
+          }
+          cx /= component.length;
+          cy /= component.length;
+
+          component.sort(
+            (a, b) =>
+              Math.hypot(a.x - cx, a.y - cy) - Math.hypot(b.x - cx, b.y - cy)
+          );
+          const chosen5 = component.slice(0, reqKingCount);
+
+          let fx = 0;
+          let fy = 0;
+          let totalHp = 0;
+          let fitsRadius = true;
+          for (let k = 0; k < chosen5.length; k++) {
+            fx += chosen5[k].x;
+            fy += chosen5[k].y;
+            totalHp += chosen5[k].maxHp || 340;
+          }
+          fx /= reqKingCount;
+          fy /= reqKingCount;
+
+          for (let k = 0; k < chosen5.length; k++) {
+            if (Math.hypot(chosen5[k].x - fx, chosen5[k].y - fy) > kingRad) {
+              fitsRadius = false;
+              break;
+            }
+          }
+
+          if (fitsRadius && (!bossMechanics || !bossMechanics.isInsideForemanNoFusionField(fx, fy))) {
+            const domSpecies = groupKey === '__all_mid_bosses__'
+              ? (chosen5[0].baseSpeciesId || 'tinRat')
+              : groupKey;
+            const domMobName = chosen5[0].baseMobName || this._getCleanBaseMobName(domSpecies, chosen5[0].name);
+            this._startKingChannel(domSpecies, domMobName, chosen5, fx, fy, totalHp, particles);
+          }
+        }
+      }
+    }
+  }
+
+  _applyConvergenceNudge(list, maxRange = 140) {
     for (let i = 0; i < list.length; i++) {
       const a = list[i];
       a.convergeX = 0;
@@ -397,7 +633,7 @@ export class FusionManager {
         if (i === j) continue;
         const b = list[j];
         const d = Math.hypot(b.x - a.x, b.y - a.y);
-        if (d > 8 && d < 120) {
+        if (d > 8 && d < maxRange) {
           a.convergeX += (b.x - a.x) / d;
           a.convergeY += (b.y - a.y) / d;
           count++;
@@ -417,11 +653,15 @@ export class FusionManager {
       members10[i].fusionChannelId = chId;
     }
 
+    const baseMobName = this._getCleanBaseMobName(speciesId, members10[0]?.name);
     const fusionCfg = FUSION_BOSSES_CONFIG[speciesId];
     this.channels.push({
       id: chId,
+      isKingFusion: false,
+      requiredCount: FUSION_RULES.requiredCount,
       speciesId,
-      targetName: fusionCfg ? fusionCfg.name : 'Amalgam',
+      baseMobName,
+      targetName: fusionCfg ? fusionCfg.name : `Fused ${baseMobName}`,
       members: members10,
       centroidX: Math.round(cx),
       centroidY: Math.round(cy),
@@ -442,11 +682,52 @@ export class FusionManager {
     }
   }
 
+  _startKingChannel(speciesId, baseMobName, members5, cx, cy, totalHp, particles) {
+    const chId = `king_fusion_ch_${this.nextChannelId++}`;
+    for (let i = 0; i < members5.length; i++) {
+      members5[i].fusionLocked = true;
+      members5[i].fusionChannelId = chId;
+    }
+
+    const kingName = `King ${baseMobName}`;
+    const duration = FUSION_RULES.kingChannelDuration || 2.2;
+    this.channels.push({
+      id: chId,
+      isKingFusion: true,
+      requiredCount: FUSION_RULES.kingRequiredCount || 5,
+      speciesId,
+      baseMobName,
+      targetName: kingName,
+      members: members5,
+      centroidX: Math.round(cx),
+      centroidY: Math.round(cy),
+      elapsed: 0,
+      duration,
+      damageTaken: 0,
+      staggerThreshold: Math.max(80, Math.round(totalHp * 0.25)),
+    });
+
+    sound.playBossAlert?.();
+    if (particles) {
+      particles.spawnShockwave(cx, cy, 110, '#FFC83D', 0.35);
+      particles.spawnFloatingText(
+        cx,
+        cy - 32,
+        `👑 5× MID-BOSS FUSION → ${kingName.toUpperCase()}!`,
+        '#FFC83D'
+      );
+    }
+  }
+
   getHudChannelSummary() {
     if (this.channels.length === 0) return null;
-    const ch = this.channels[0];
+    // Prioritize showing King Fusion channel if active
+    const kingCh = this.channels.find((c) => c.isKingFusion);
+    const ch = kingCh || this.channels[0];
     return {
       id: ch.id,
+      isKingFusion: Boolean(ch.isKingFusion),
+      activeCount: this.channels.length,
       targetName: ch.targetName,
       progressPct: Math.min(100, Math.round((ch.elapsed / ch.duration) * 100)),
       staggerPct: Math.min(100, Math.round((ch.damageTaken / ch.staggerThreshold) * 100)),
@@ -462,18 +743,26 @@ export class FusionManager {
 
     for (let i = 0; i < this.channels.length; i++) {
       const ch = this.channels[i];
-      if (!camera.isVisible(ch.centroidX, ch.centroidY, 120)) continue;
+      if (!camera.isVisible(ch.centroidX, ch.centroidY, 160)) continue;
 
       const sx = Math.round(ch.centroidX - camX);
       const sy = Math.round(ch.centroidY - camY);
       const progress = Math.min(1, ch.elapsed / ch.duration);
-      const ringR = Math.round(FUSION_RULES.maxClusterRadius * (1 - progress * 0.55));
+      const baseR = ch.isKingFusion
+        ? (FUSION_RULES.kingClusterRadius || 165)
+        : FUSION_RULES.maxClusterRadius;
+      const ringR = Math.round(baseR * (1 - progress * 0.55));
       const isLate = ch.elapsed >= ch.duration - FUSION_RULES.backlashWindow;
-      const col = isLate ? PALETTE.blood : PALETTE.brass;
+      const col = ch.isKingFusion
+        ? (isLate ? '#C042FF' : '#FFC83D')
+        : (isLate ? PALETTE.blood : PALETTE.brass);
 
       drawBresenhamCircle(ctx, sx, sy, ringR, col, 1.0);
+      if (ch.isKingFusion) {
+        drawBresenhamCircle(ctx, sx, sy, Math.max(8, ringR - 6), '#C042FF', 0.85);
+      }
 
-      // Draw tether lines from each of the 10 members to the fusion centroid
+      // Draw tether lines from each member to the fusion centroid
       for (let mIdx = 0; mIdx < ch.members.length; mIdx++) {
         const m = ch.members[mIdx];
         if (!m || !m.active) continue;
@@ -484,14 +773,14 @@ export class FusionManager {
           sx,
           sy,
           col,
-          1
+          ch.isKingFusion ? 2 : 1
         );
       }
 
       // Draw overhead channel progress & stagger bar
-      const barW = 44;
-      const bx = sx - 22;
-      const by = sy - 34;
+      const barW = ch.isKingFusion ? 56 : 44;
+      const bx = sx - (barW >> 1);
+      const by = sy - 38;
       ctx.fillStyle = PALETTE.soot;
       ctx.fillRect(bx - 1, by - 1, barW + 2, 7);
       ctx.fillStyle = col;

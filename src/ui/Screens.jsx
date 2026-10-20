@@ -162,60 +162,92 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
     <div className="fixed inset-0 z-30 flex flex-col justify-between bg-[#0B0D10] p-8 select-none">
       <ParallaxWastelandCanvas />
 
-      <div className="relative z-10 flex items-center justify-between text-xs text-[#9E9789]">
-        <span>YEARS AFTER THE SKY CAME DOWN IN PIECES</span>
-        <span>SENA IBUKI · ROOK MATSUDA · INES CALLOWAY</span>
+      {/* Layer 1: Wasteland Skyline Background Image */}
+      <img
+        src="/assets/main_menu_bg.png"
+        alt="Industrial Wasteland Skyline"
+        className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none opacity-85 z-0"
+        referrerPolicy="no-referrer"
+      />
+
+      {/* Live Particle & Dust Layer */}
+      <ParallaxWastelandCanvas />
+
+      {/* Layer 2: Elevated Industrial Overpass Bridge */}
+      <div className="absolute bottom-6 left-0 right-0 w-full pointer-events-none select-none z-1 overflow-hidden">
+        <img
+          src="/assets/main_menu_bridge.png"
+          alt="Overpass Bridge Layer"
+          className="w-full h-[140px] md:h-[175px] object-cover opacity-95"
+          referrerPolicy="no-referrer"
+        />
       </div>
 
-      <div className="relative z-10 my-auto max-w-2xl">
-        <svg
-          viewBox="0 0 560 110"
-          className="w-full max-w-xl h-auto block"
-          aria-label="HellsAdvent"
-        >
-          <rect
-            x="0"
-            y="12"
-            width="520"
-            height="72"
-            fill="#0B0D10"
-            stroke="#3A3F47"
-            strokeWidth="3"
+      {/* Layer 3: Hero Character Showcase (Sena Ibuki with Railcut Katana) */}
+      <div className="absolute bottom-[92px] md:bottom-[120px] right-[6%] md:right-[15%] lg:right-[20%] z-10 pointer-events-none select-none flex flex-col items-center">
+        <div className="relative group">
+          {/* Subtle cyan energy aura behind hero */}
+          <div className="absolute -inset-4 bg-[#00F0FF]/15 blur-xl rounded-full animate-pulse" />
+          <img
+            src="/assets/main_menu_hero.png"
+            alt="Sena Ibuki — Spatial Blade Executioner"
+            className="relative h-[250px] md:h-[310px] w-auto drop-shadow-[0_8px_20px_rgba(0,0,0,0.9)] filter brightness-105"
+            referrerPolicy="no-referrer"
           />
-          <line x1="0" y1="84" x2="545" y2="84" stroke="#00F0FF" strokeWidth="4" />
-          <polygon points="520,12 548,12 520,84" fill="#8B3A1E" />
-          <text
-            x="22"
-            y="65"
-            fill="#D9D2C3"
-            fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-            fontWeight="900"
-            fontSize="52"
-            letterSpacing="4"
-          >
-            HELLSADVENT
-          </text>
-          <text
-            x="24"
-            y="104"
-            fill="#00F0FF"
-            fontFamily="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
-            fontWeight="700"
-            fontSize="13"
-            letterSpacing="4"
-          >
-            FLOOR 1 · RUST · ASH · DEAD WATER · THREE TRADES
-          </text>
-        </svg>
+          {/* Character Tag / Class Label Badge */}
+          <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#0B0D10]/90 border border-[#00F0FF]/60 px-2.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-widest text-[#00F0FF] shadow-lg whitespace-nowrap">
+            SENA IBUKI · MELEE
+          </div>
+        </div>
+      </div>
 
-        <p className="mt-4 text-sm text-[#D9D2C3]/90 max-w-lg leading-relaxed bg-[#0B0D10] border border-[#3A3F47] p-3.5">
-          Kettle&apos;s boiler is still burning. Pick your trade—Railcut melee, Springgun ranged, or Magnetist coil—interrupt 10-mob convergence rituals, and liberate Lye Marsh, Route 9, Slab Town, and the Copper Flats.
-        </p>
+      {/* Top Status Ticker */}
+      <div className="relative z-20 flex items-center justify-between text-xs font-mono text-[#D9D2C3]/80 bg-[#0B0D10]/60 px-3 py-1.5 border border-[#3A3F47]/50 backdrop-blur-xs">
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-[#00F0FF] animate-ping" />
+          <span>YEARS AFTER THE SKY CAME DOWN IN PIECES</span>
+        </div>
+        <div className="hidden sm:flex items-center gap-3 text-[#FFC83D]">
+          <span>SENA IBUKI</span>
+          <span>·</span>
+          <span>ROOK MATSUDA</span>
+          <span>·</span>
+          <span>INES CALLOWAY</span>
+        </div>
+      </div>
 
-        <div className="mt-6 w-72 bg-[#0B0D10] border-2 border-[#3A3F47] p-4 space-y-2.5">
+      {/* Main Content Area: Title Emblem + Lore + Interactive Menu Panel */}
+      <div className="relative z-20 my-auto max-w-2xl">
+        {/* Layer 4: Title Logo Emblem Image */}
+        <div className="relative inline-block mb-2">
+          <img
+            src="/assets/main_menu_logo.png"
+            alt="HELLSADVENT / GRAVEL SKY Logo"
+            className="w-[460px] md:w-[540px] max-w-full h-auto drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+
+        {/* Trade Crest & Lore Narrative Box */}
+        <div className="mt-1 flex flex-col sm:flex-row gap-3 items-start max-w-xl">
+          <div className="shrink-0 hidden md:block">
+            <img
+              src="/assets/main_menu_crest.png"
+              alt="Floor 1 Trade Crest"
+              className="w-[140px] h-auto border border-[#3A3F47] shadow-md"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+          <p className="text-xs sm:text-sm text-[#D9D2C3]/95 leading-relaxed bg-[#0B0D10]/85 border border-[#3A3F47] p-3 shadow-xl backdrop-blur-xs">
+            Duskhollow&apos;s Sanctuary Pyre still burns beneath the eclipse. Visit the 6 RPG Masters in town, ascend the 5-Floor Abyssal Spire, conquer 60 evolved Boss Bloodlines (Warden → Executioner → Overlord), and defend Wandering Merchants in the dark.
+          </p>
+        </div>
+
+        {/* Layer 5: Interactive Navigation Menu (Fully Editable HTML/React Buttons) */}
+        <div className="mt-5 w-72 bg-[#0B0D10]/95 border-2 border-[#3A3F47] p-4 space-y-2.5 shadow-2xl backdrop-blur-sm">
           <div className="flex items-center justify-between border-b border-[#3A3F47] pb-2 text-[11px] font-bold tracking-widest text-[#9E9789]">
             <span>MAIN MENU</span>
-            <span className="text-[#00F0FF]">PRESS ENTER</span>
+            <span className="text-[#00F0FF] animate-pulse">PRESS ENTER</span>
           </div>
 
           <button
@@ -223,7 +255,7 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
               sound.playUiClick();
               onStart();
             }}
-            className="w-full px-5 py-3 bg-[#00F0FF] text-[#0B0D10] font-bold text-sm tracking-widest border-2 border-[#00F0FF] hover:bg-[#D9D2C3] hover:border-[#D9D2C3] transition-colors flex items-center justify-between cursor-pointer"
+            className="w-full px-5 py-3 bg-[#00F0FF] text-[#0B0D10] font-bold text-sm tracking-widest border-2 border-[#00F0FF] hover:bg-[#D9D2C3] hover:border-[#D9D2C3] transition-colors flex items-center justify-between cursor-pointer shadow-[0_0_12px_rgba(0,240,255,0.35)]"
           >
             <span>START</span>
             <span className="text-xs font-bold">[ENTER]</span>
@@ -234,7 +266,7 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
               sound.playUiClick();
               setShowOptions(true);
             }}
-            className="w-full px-5 py-3 bg-[#161A20] text-[#D9D2C3] font-bold text-sm tracking-widest border-2 border-[#3A3F47] hover:border-[#00F0FF] hover:text-[#00F0FF] transition-colors flex items-center justify-between cursor-pointer"
+            className="w-full px-5 py-2.5 bg-[#161A20] text-[#D9D2C3] font-bold text-sm tracking-widest border-2 border-[#3A3F47] hover:border-[#00F0FF] hover:text-[#00F0FF] transition-colors flex items-center justify-between cursor-pointer"
           >
             <span>OPTIONS</span>
             <span className="text-xs text-[#9E9789]">CFG</span>
@@ -246,10 +278,10 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
                 sound.playUiClick();
                 onOpenGallery();
               }}
-              className="w-full px-5 py-2.5 bg-[#0B0D10] text-[#FFC83D] font-bold text-xs tracking-wider border border-[#3A3F47] hover:border-[#FFC83D] transition-colors flex items-center justify-between cursor-pointer"
+              className="w-full px-5 py-2 bg-[#0B0D10] text-[#FFC83D] font-bold text-xs tracking-wider border border-[#3A3F47] hover:border-[#FFC83D] transition-colors flex items-center justify-between cursor-pointer"
             >
               <span>SPRITE GALLERY</span>
-              <span>?gallery</span>
+              <span className="font-mono">?gallery</span>
             </button>
           )}
 
@@ -261,16 +293,17 @@ export function TitleScreen({ engine, onStart, onOpenGallery }) {
             className="w-full px-5 py-2 bg-[#0B0D10] text-[#9E9789] font-bold text-xs tracking-wider border border-[#3A3F47] hover:border-[#00F0FF] hover:text-[#D9D2C3] transition-colors flex items-center justify-between cursor-pointer"
           >
             <span>CONTROLS MANUAL</span>
-            <span>[?]</span>
+            <span className="font-mono">[?]</span>
           </button>
         </div>
       </div>
 
-      <div className="relative z-10 flex items-center justify-between border-t border-[#3A3F47] pt-3 text-xs text-[#D9D2C3]/80">
-        <span>
+      {/* Bottom Controls Bar */}
+      <div className="relative z-20 flex items-center justify-between border-t border-[#3A3F47]/60 pt-3 text-xs text-[#D9D2C3]/80 bg-[#0B0D10]/60 px-3 py-1.5 backdrop-blur-xs">
+        <span className="truncate">
           WASD Move · Mouse Aim · LMB Attack · SPACE Dodge · 1/2/3 Skills · R Ultimate · E Interact · I Gear · K Skill Tree · ESC Pause
         </span>
-        <span className="text-[#FFC83D]">F11 FULLSCREEN</span>
+        <span className="text-[#FFC83D] shrink-0 font-bold ml-2">F11 FULLSCREEN</span>
       </div>
 
       {showOptions && (
@@ -927,17 +960,17 @@ export function OptionsModal({ engine, onClose, onOpenControls }) {
 
 export function ControlsModal({ onClose }) {
   const rows = [
-    ['WASD / Arrows', 'Move your Runner across the wasteland'],
-    ['Mouse Cursor', 'Aim basic attacks, projectiles, and skills'],
-    ['Left Click (LMB)', 'Basic Attack (Railcut 3-hit combo / Springgun bolts / Magnetist scrap throw)'],
-    ['Right Click / Key V', 'Rook: Manual Active Reload · Sena (Anvil): Toggle Guard Stance'],
-    ['SPACE', 'Dodge Roll (0.25s invulnerable, 1.2s cooldown)'],
-    ['Keys 1 / 2 / 3', 'Class Active Skills 1, 2, and 3'],
-    ['Key R', 'Class Ultimate (Seven Cuts / Ten Count / Scrapfall)'],
-    ['Keys Q / F / Z / X / C', 'Quick-use Gauze Roll, Sugar Tin, Lye Wash, Hot Stew, Stim Stick'],
-    ['Key E', 'Talk to Ume (Pawn Counter) or Harlow (Trade Register Promotions)'],
-    ['Key I', 'Open Runner Pack & Equipment'],
-    ['Key K', 'Open 3-Tier Class Skill Tree & Promotions'],
+    ['WASD / Arrows + SHIFT', 'Move and Sprint across Duskhollow Town & the Abyssal Spire'],
+    ['Mouse Cursor', 'Aim basic attacks, projectiles, and dark fantasy skills'],
+    ['Left Click (LMB)', 'Basic Attack (Cursed Blade / Witch-Hunter Crossbow / Soul-Weaver / Hellfire Lance / Eldritch Grimoire)'],
+    ['Right Click / Key V', 'Rook: Manual Active Reload · Sena: Toggle Guard · Kaelen: Vent · Vespera: Recall'],
+    ['SPACE', 'Shadow-Step Dodge Roll (0.25s invulnerable, 1.2s cooldown)'],
+    ['Keys 1 / 2 / 3 / 4', 'Active Class & Specialization Techniques'],
+    ['Key R', 'Awakening Ultimate Technique'],
+    ['Keys Q / F / Z / X / C', 'Use Bloodvine Bandage, Soul-Salt Vial, Purifying Tincture, Wyrm Broth, Crimson Adrenaline'],
+    ['Key E', 'Interact with Duskhollow Town Buildings, Abyssal Spire Gate, Dual Portals, & Wandering Merchants'],
+    ['Key I', 'Open Equipment & Relic Pack'],
+    ['Key K', 'Open Spire Floor Selector, 60-Boss Bloodline Tree, Story Quests, & Dual Talent Trees'],
     ['ESC / F11', 'Pause Menu / Toggle Fullscreen'],
   ];
 
@@ -1114,19 +1147,19 @@ export function DeathScreen({ engine }) {
           />
         </div>
         <h2 className="text-xl font-bold tracking-widest text-[#FF3B3B]">
-          DOWN IN THE ASH
+          CLAIMED BY THE ABYSS
         </h2>
         <p className="text-xs text-[#D9D2C3] leading-relaxed">
           {DIALOGUE.deathMessage}
         </p>
         <div className="py-2 bg-[#161A20] border border-[#3A3F47] text-xs font-bold text-[#FFC83D] tabular-nums">
-          HAUL FEE LOST: -{engine.lastGoldLost} GOLD (10%)
+          SOUL-TOLL LOST: -{engine.lastGoldLost} GOLD (10%)
         </div>
         <button
           onClick={() => engine.respawnAfterDeath()}
-          className="w-full py-3 bg-[#00F0FF] text-[#0B0D10] font-bold text-xs tracking-widest hover:bg-[#D9D2C3] cursor-pointer"
+          className="w-full py-3 bg-[#c084fc] text-[#0B0D10] font-bold text-xs tracking-widest hover:bg-[#D9D2C3] cursor-pointer"
         >
-          WAKE UP AT KETTLE [ENTER]
+          AWAKEN IN DUSKHOLLOW TOWN [ENTER]
         </button>
       </div>
     </div>

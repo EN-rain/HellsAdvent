@@ -9,6 +9,7 @@ import { HUD } from './ui/HUD.jsx';
 import { ShopModal } from './ui/ShopModal.jsx';
 import { InventoryModal } from './ui/InventoryModal.jsx';
 import { SkillPanel } from './ui/SkillPanel.jsx';
+import { QuestModal } from './ui/QuestModal.jsx';
 import { ClassChoiceModal } from './ui/ClassChoiceModal.jsx';
 import { DevSettingsModal } from './ui/DevSettingsModal.jsx';
 import { GalleryView } from './ui/GalleryView.jsx';
@@ -155,6 +156,14 @@ export default function App() {
         <SkillPanel
           engine={engine}
           isHarlowMode={uiState === 'harlow'}
+          onClose={() => engine.setUiState('playing')}
+        />
+      )}
+
+      {/* Action RPG Quest Journal & Contracts Modal */}
+      {!galleryOpen && uiState === 'quests' && engine && (
+        <QuestModal
+          engine={engine}
           onClose={() => engine.setUiState('playing')}
         />
       )}

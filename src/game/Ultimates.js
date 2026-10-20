@@ -182,9 +182,8 @@ export class UltimateSequencer {
   }
 
   isChargeGainPaused(player) {
-    if (this.chargePaused) return true;
+    if (this.chargePaused || this.active) return true;
     if (player && player.statuses && player.statuses.has('dugIn')) return true;
-    if (this.active && this.ultDef && this.ultDef.pauseChargeWhileActive) return true;
     return false;
   }
 
@@ -232,11 +231,15 @@ export class UltimateSequencer {
   }
 
   onSkillHitLanded(player, enemyHitCountInThisCast = 1) {
-    // Counted for at most 3 enemies per cast so area skills cannot spike the meter
+    // Counted for at most 3 enemies per cast (9.0 max charge gain per cast) so area skills cannot spike the meter
     if (enemyHitCountInThisCast > ULTIMATE_CHARGE_CONFIG.skillHitMaxEnemiesPerCast) {
       return 0;
     }
-    return this._applyChargeDelta(player, ULTIMATE_CHARGE_CONFIG.skillHitGain, true);
+    const maxCastGain = ULTIMATE_CHARGE_CONFIG.skillCastMaxChargeGain || 9.0;
+    const prevCastGain = (enemyHitCountInThisCast - 1) * ULTIMATE_CHARGE_CONFIG.skillHitGain;
+    const allowedRaw = Math.max(0, Math.min(ULTIMATE_CHARGE_CONFIG.skillHitGain, maxCastGain - prevCastGain));
+    if (allowedRaw <= 0) return 0;
+    return this._applyChargeDelta(player, allowedRaw, true);
   }
 
   onDamageTaken(player, finalDamage, maxHp, isBlock = false) {
@@ -1203,6 +1206,52 @@ export class UltimateSequencer {
           player.classBehavior.addScrapPiece(player.classBehavior.getMaxScrap());
         }
 
+        // Section 4.1 Class Capstone runtime effects on Ultimate cast:
+        const treeNodes = player.treeNodes || {};
+        // 1. Sena — Limitless Echo: refund 35% of active skill cooldowns and grant +20% Attack Speed for 4s
+        if (player.classId === 'sena' && treeNodes['sena:class:capstone-center']) {
+          if (player.cooldowns) {
+            for (const k of Object.keys(player.cooldowns)) {
+              if (player.cooldowns[k] > 0) {
+                player.cooldowns[k] = Math.max(0, +(player.cooldowns[k] * 0.65).toFixed(2));
+              }
+            }
+          }
+          player.statuses.apply('haste', { duration: 4.0, value: 0.20, sourceName: 'Limitless Echo' }, player, particles);
+        }
+        // 2. Ines — Colossus Magnet: pull enemies within 260px inward by 80px and grant +25% scrap damage for 6s
+        if (player.classId === 'ines' && treeNodes['ines:class:capstone-center']) {
+          if (spawner && typeof spawner.queryRadius === 'function') {
+            const near = spawner.queryRadius(player.x, player.y, 260);
+            for (const e of near) {
+              if (!e.active || e.hp <= 0 || e.tier === 'boss') continue;
+              const ang = Math.atan2(player.y - e.y, player.x - e.x);
+              e.x = player.clampCoord(e.x + Math.cos(ang) * 80);
+              e.y = player.clampCoord(e.y + Math.sin(ang) * 80);
+            }
+          }
+          player.statuses.apply('colossusMagnetBuff', { duration: 6.0, atkBonus: 0.25, sourceName: 'Colossus Magnet' }, player, particles);
+        }
+        // 3. Kaelen — Reactor Core: vent 360° steam for 180% ATK, cleanse 1 debuff, and grant +20% Burn/Corrode damage for 6s
+        if (player.classId === 'kaelen' && treeNodes['kaelen:class:capstone-center']) {
+          player.statuses.cleanseAllDebuffs?.();
+          player.statuses.apply('reactorCoreBuff', { duration: 6.0, atkBonus: 0.20, sourceName: 'Reactor Core' }, player, particles);
+          if (particles) {
+            particles.spawnShockwave(player.x, player.y, 160, PALETTE.ember, 0.28);
+          }
+          if (spawner && typeof spawner.queryRadius === 'function') {
+            const near = spawner.queryRadius(player.x, player.y, 160);
+            for (const e of near) {
+              if (!e.active || e.hp <= 0) continue;
+              e.takeDamage(Math.max(1, Math.round(player.atk * 1.8)), Math.atan2(e.y - player.y, e.x - player.x), 80, false, player, spawner, particles, camera);
+            }
+          }
+        }
+        // 4. Vespera — Swarm Singularity: deploy 1 bonus temporary Arc-Drone for 6s and +25% drone fire rate
+        if (player.classId === 'vespera' && treeNodes['vespera:class:capstone-center']) {
+          player.statuses.apply('swarmSingularityBuff', { duration: 6.0, fireRateMult: 1.25, bonusDrones: 1, sourceName: 'Swarm Singularity' }, player, particles);
+        }
+
         sound.playUltimateStart();
         break;
       }
@@ -1409,9 +1458,10 @@ export class UltimateSequencer {
         }
 
         // Ring of bone debris bursts outward around Sena
+        const boneCount = p.classFlourish?.boneDebrisCount || 8;
         if (particles) {
           particles.spawnShockwave(player.x, player.y, 120, PALETTE.bone, 0.28);
-          particles.spawnDebris(player.x, player.y, 'shardBone', 8);
+          particles.spawnDebris(player.x, player.y, 'shardBone', boneCount);
         }
 
         // Sena ends where the final cut was, facing the target
@@ -1422,6 +1472,67 @@ export class UltimateSequencer {
           );
           player.facingDir = angleTo4Facing(faceAng);
           player.facingX = Math.cos(faceAng) >= 0 ? 1 : -1;
+        }
+        break;
+      }
+
+      case 'senaRainOfSwords': {
+        // Nine Cuts Tier 3/4 finisher: Rain of Swords radial barrage (12 falling phantom blades across 220px)
+        const rad = p.radius || 220;
+        const bladeCount = p.bladeCount || 12;
+        const zx = player.x;
+        const zy = player.y;
+
+        sound.playUltimateReleaseCrack();
+        if (camera) {
+          camera.shake(p.shakePx || 11, 0.26);
+        }
+
+        this.slamStreaks.push({
+          x: zx,
+          y: zy,
+          radius: rad,
+          life: 0.34,
+          maxLife: 0.34,
+          color: PALETTE.blood,
+        });
+
+        if (particles) {
+          particles.spawnShockwave(zx, zy, rad, PALETTE.blood, 0.35);
+          particles.spawnShockwave(zx, zy, Math.round(rad * 0.55), PALETTE.signal, 0.25);
+          for (let b = 0; b < bladeCount; b++) {
+            const a = (b / bladeCount) * Math.PI * 2;
+            const d = 35 + ((b * 37) % Math.max(40, rad - 35));
+            const bx = zx + Math.cos(a) * d;
+            const by = zy + Math.sin(a) * d;
+            particles.spawnCrossCutFlash?.(bx, by);
+            particles.spawnDirectionalSparks?.(bx, by, -Math.PI * 0.5, 0.6, 4, PALETTE.signal);
+          }
+        }
+
+        const atkBuffPct = this._getUltimateAtkBuffPct(player);
+        const targets = (spawner && typeof spawner.queryRadius === 'function')
+          ? spawner.queryRadius(zx, zy, rad + 28)
+          : [];
+
+        for (const e of targets) {
+          if (!e.active || e.hp <= 0) continue;
+          if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
+            const pipe = computeDamagePipeline({
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 1.80),
+              atkBuffPct,
+              isCrit: false,
+              critMult: 1.0,
+              targetStatuses: e.statuses,
+              targetBaseDef: e.def || 0,
+              sourceName: 'Rain of Swords',
+              targetName: e.name,
+            });
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 110, false, player, spawner, particles, camera);
+            if (p.applyBleed && e.active && e.hp > 0) {
+              e.statuses.apply('bleed', { duration: 4.0, sourceAtk: player.atk, sourceName: 'Rain of Swords' }, e, particles);
+            }
+          }
         }
         break;
       }
@@ -2647,6 +2758,7 @@ export class UltimateSequencer {
         this.worldFrozen = false;
         this.twoToneWorld = false;
         const rad = p.radius || 270;
+        const frostCol = PALETTE.frost || PALETTE.signal;
         this.cryoBlizzard = {
           x: player.x,
           y: player.y,
@@ -2668,8 +2780,8 @@ export class UltimateSequencer {
         }
         sound.playUltimateStart();
         if (particles) {
-          particles.spawnShockwave(player.x, player.y, rad, PALETTE.signal, 0.28);
-          particles.spawnBurst(player.x, player.y, 20, PALETTE.signal, 30, 120, 2, 0.3);
+          particles.spawnShockwave(player.x, player.y, rad, frostCol, 0.28);
+          particles.spawnBurst(player.x, player.y, 20, frostCol, 30, 120, 2, 0.3);
         }
         break;
       }
@@ -2678,12 +2790,13 @@ export class UltimateSequencer {
         const rad = p.radius || 260;
         const zx = this.cryoBlizzard ? this.cryoBlizzard.x : player.x;
         const zy = this.cryoBlizzard ? this.cryoBlizzard.y : player.y;
+        const frostCol = PALETTE.frost || PALETTE.signal;
 
         sound.playSkillGroundBreak();
         if (camera) camera.shake(p.shakePx || 7, 0.18);
         if (particles) {
-          particles.spawnShockwave(zx, zy, rad, PALETTE.signal, 0.32);
-          particles.spawnBurst(zx, zy, 25, PALETTE.signal, 45, 160, 2, 0.32);
+          particles.spawnShockwave(zx, zy, rad, frostCol, 0.32);
+          particles.spawnBurst(zx, zy, 25, frostCol, 45, 160, 2, 0.32);
           particles.spawnBurst(zx, zy, 15, PALETTE.bone, 35, 130, 2, 0.25);
         }
 
@@ -2702,7 +2815,7 @@ export class UltimateSequencer {
               e.y = player.clampCoord(e.y + Math.sin(pullAng) * p.pullInwardPx);
             }
             const pipe = computeDamagePipeline({
-              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.1),
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 2.5),
               atkBuffPct,
               isCrit: false,
               critMult: 1.0,
@@ -2714,6 +2827,10 @@ export class UltimateSequencer {
             e.takeDamage(pipe.finalDamage, Math.atan2(zy - e.y, zx - e.x), 40, false, player, spawner, particles, camera);
             if (e.active && e.hp > 0) {
               e.statuses.apply('slow', { duration: 4.0, value: 0.50, sourceName: 'Whiteout Rupture' }, e, particles);
+              const brittleCount = p.brittleStacks || 3;
+              for (let b = 0; b < brittleCount; b++) {
+                e.statuses.apply('corrode', { duration: 6.0, sourceName: 'Whiteout Brittle' }, e, particles);
+              }
               if (p.freezeDuration > 0) {
                 e.statuses.apply('stun', { duration: p.freezeDuration, sourceName: 'Whiteout Freeze' }, e, particles);
               }
@@ -2727,6 +2844,7 @@ export class UltimateSequencer {
         const rad = p.radius || 270;
         const zx = this.cryoBlizzard ? this.cryoBlizzard.x : player.x;
         const zy = this.cryoBlizzard ? this.cryoBlizzard.y : player.y;
+        const frostCol = PALETTE.frost || PALETTE.signal;
 
         sound.playUltimateReleaseCrack();
         if (typeof sound.playConcussiveBlast === 'function') sound.playConcussiveBlast();
@@ -2737,9 +2855,9 @@ export class UltimateSequencer {
         }
 
         if (particles) {
-          particles.spawnShockwave(zx, zy, rad, PALETTE.signal, 0.42);
+          particles.spawnShockwave(zx, zy, rad, frostCol, 0.42);
           particles.spawnShockwave(zx, zy, Math.round(rad * 0.6), PALETTE.bone, 0.28);
-          particles.spawnBurst(zx, zy, 40, PALETTE.signal, 60, 230, 3, 0.48);
+          particles.spawnBurst(zx, zy, 40, frostCol, 60, 230, 3, 0.48);
           particles.spawnBurst(zx, zy, 25, PALETTE.bone, 50, 180, 2, 0.38);
         }
 
@@ -2752,16 +2870,16 @@ export class UltimateSequencer {
           if (!e.active || e.hp <= 0) continue;
           if (Math.hypot(e.x - zx, e.y - zy) <= rad + (e.radius || 12)) {
             const pipe = computeDamagePipeline({
-              baseDamage: player.baseAtkForPipeline * (p.damageMult || 3.6),
+              baseDamage: player.baseAtkForPipeline * (p.damageMult || 4.0),
               atkBuffPct,
-              isCrit: true,
-              critMult: 1.5,
+              isCrit: false,
+              critMult: 1.0,
               targetStatuses: e.statuses,
               targetBaseDef: e.def || 0,
               sourceName: 'Whiteout Rupture',
               targetName: e.name,
             });
-            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 190, true, player, spawner, particles, camera);
+            e.takeDamage(pipe.finalDamage, Math.atan2(e.y - zy, e.x - zx), 190, false, player, spawner, particles, camera);
             if (p.stunDuration > 0 && e.active && e.hp > 0) {
               e.statuses.apply('stun', { duration: p.stunDuration, sourceName: 'Whiteout Rupture' }, e, particles);
             }
@@ -3649,6 +3767,16 @@ export class UltimateSequencer {
         player.statuses.remove('untouchable');
 
         this.cutAssignments = [];
+
+        // Section 4.1 Rook Capstone — Final Count: If your Ultimate hits 3 or more targets (or if 3+ enemies were in range), refund 10 Ultimate Charge after the cast ends.
+        if (player && player.classId === 'rook' && player.treeNodes?.['rook:class:capstone-center']) {
+          const nearbyCount = (spawner && typeof spawner.queryRadius === 'function')
+            ? spawner.queryRadius(player.x, player.y, 620).filter((e) => e && e.active).length
+            : 3;
+          if (nearbyCount >= 3 || this.ultDef?.id === 'railSlug' || this.ultDef?.id === 'deadGround' || this.ultDef?.id === 'blackoutCascade') {
+            player.ultimateCharge = Math.min(ULTIMATE_CHARGE_CONFIG.maxCharge, (player.ultimateCharge || 0) + 10);
+          }
+        }
 
         if (camera && camera.setZoom) {
           camera.setZoom(1.0);
@@ -5320,8 +5448,118 @@ export class UltimateSequencer {
         const a = (r / 16) * Math.PI * 2;
         drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * 220, sy + Math.sin(a) * 220, r % 2 === 0 ? primaryLineCol : secondaryLineCol, 2);
       }
+    } else if (data.kind === 'faultline') {
+      // Sena Worldsplitter Impact Frame: 3 concentric jagged tectonic fault rings + radial magma fractures
+      for (const ringR of [50, 95, 145]) {
+        drawBresenhamCircle(ctx, sx, sy, ringR, secondaryLineCol, 1.0);
+      }
+      for (let r = 0; r < 18; r++) {
+        const a = (r / 18) * Math.PI * 2;
+        const len = 85 + (r % 3) * 65;
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len, r % 2 === 0 ? primaryLineCol : secondaryLineCol, r % 3 === 0 ? 3 : 2);
+      }
+    } else if (data.kind === 'soundstage') {
+      // Sena Perfect Frequency Impact Frame: 8-band radial equalizer wave towers + harmonic rings
+      drawBresenhamCircle(ctx, sx, sy, 115, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 58, primaryLineCol, 1.0);
+      for (let b = 0; b < 16; b++) {
+        const a = (b / 16) * Math.PI * 2;
+        const len = b % 2 === 0 ? 210 : 120;
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len, b % 2 === 0 ? primaryLineCol : secondaryLineCol, b % 2 === 0 ? 3 : 1);
+      }
+    } else if (data.kind === 'empGrid') {
+      // Rook Blackout Cascade Impact Frame: triangular pylon grid + digital glitch scanlines
+      drawBresenhamCircle(ctx, sx, sy, 105, secondaryLineCol, 1.0);
+      for (let g = 0; g < 10; g++) {
+        const gy = Math.round(((g + 1) / 11) * height);
+        drawPixelLine(ctx, 0, gy, width, gy, g % 2 === 0 ? secondaryLineCol : primaryLineCol, g % 3 === 0 ? 2 : 1);
+      }
+      for (let i = 0; i < 3; i++) {
+        const a1 = -Math.PI * 0.5 + (i / 3) * Math.PI * 2;
+        const a2 = -Math.PI * 0.5 + (((i + 1) % 3) / 3) * Math.PI * 2;
+        drawPixelLine(ctx, sx + Math.cos(a1) * 105, sy + Math.sin(a1) * 105, sx + Math.cos(a2) * 105, sy + Math.sin(a2) * 105, primaryLineCol, 3);
+      }
+    } else if (data.kind === 'gantrySlam') {
+      // Ines Crane Drop Impact Frame: overhead industrial girder + vertical suspension cables + compactor crush
+      ctx.fillStyle = secondaryLineCol;
+      ctx.fillRect(0, 14, width, 12);
+      drawPixelLine(ctx, sx - 18, 26, sx - 18, sy, primaryLineCol, 3);
+      drawPixelLine(ctx, sx + 18, 26, sx + 18, sy, primaryLineCol, 3);
+      ctx.fillStyle = primaryLineCol;
+      ctx.fillRect(sx - 28, sy - 24, 56, 32);
+      drawBresenhamCircle(ctx, sx, sy, 68, secondaryLineCol, 1.0);
+    } else if (data.kind === 'polarityFlip') {
+      // Ines Zero-Point Reversal Impact Frame: dual-polarity spiral arms + inversion core
+      drawBresenhamCircle(ctx, sx, sy, 110, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 52, primaryLineCol, 1.0);
+      for (let r = 0; r < 20; r++) {
+        const a = (r / 20) * Math.PI * 2;
+        const curveA = a + (r % 2 === 0 ? 0.45 : -0.45);
+        drawPixelLine(ctx, sx + Math.cos(a) * 35, sy + Math.sin(a) * 35, sx + Math.cos(curveA) * 185, sy + Math.sin(curveA) * 185, r % 2 === 0 ? primaryLineCol : secondaryLineCol, 2);
+      }
+    } else if (data.kind === 'meltdownVent') {
+      // Kaelen Supercritical Meltdown Impact Frame: thermobaric flare + radial pressure burst
+      drawBresenhamCircle(ctx, sx, sy, 88, secondaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 42, primaryLineCol, 1.0);
+      for (let r = 0; r < 24; r++) {
+        const a = (r / 24) * Math.PI * 2;
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * 200, sy + Math.sin(a) * 200, r % 2 === 0 ? secondaryLineCol : primaryLineCol, 2);
+      }
+    } else if (data.kind === 'foundryPress') {
+      // Kaelen Cathedral of Iron Impact Frame: 4 corner girder pillars + descending 80-ton press
+      ctx.fillStyle = primaryLineCol;
+      ctx.fillRect(sx - 44, sy - 34, 88, 38);
+      drawPixelLine(ctx, sx - 28, 0, sx - 28, sy - 34, secondaryLineCol, 4);
+      drawPixelLine(ctx, sx + 28, 0, sx + 28, sy - 34, secondaryLineCol, 4);
+      drawBresenhamCircle(ctx, sx, sy, 96, secondaryLineCol, 1.0);
+    } else if (data.kind === 'cryoShatter') {
+      // Kaelen Whiteout Rupture Impact Frame: 6-arm Koch snowflake fractal + ice knife shards
+      const frostCol = PALETTE.frost || secondaryLineCol;
+      drawBresenhamCircle(ctx, sx, sy, 98, frostCol, 1.0);
+      for (let arm = 0; arm < 6; arm++) {
+        const a = (arm / 6) * Math.PI * 2;
+        const ex = sx + Math.cos(a) * 210;
+        const ey = sy + Math.sin(a) * 210;
+        drawPixelLine(ctx, sx, sy, ex, ey, primaryLineCol, 3);
+        const mx = sx + Math.cos(a) * 110;
+        const my = sy + Math.sin(a) * 110;
+        drawPixelLine(ctx, mx, my, mx + Math.cos(a + 0.6) * 45, my + Math.sin(a + 0.6) * 45, frostCol, 2);
+        drawPixelLine(ctx, mx, my, mx + Math.cos(a - 0.6) * 45, my + Math.sin(a - 0.6) * 45, frostCol, 2);
+      }
+    } else if (data.kind === 'armadaLaunch') {
+      // Vespera Overclocked Armada Impact Frame: 12-drone dual orbital rings + Faraday web
+      drawBresenhamCircle(ctx, sx, sy, 48, primaryLineCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 86, secondaryLineCol, 1.0);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const r = i % 2 === 0 ? 48 : 86;
+        const dx = Math.round(sx + Math.cos(a) * r);
+        const dy = Math.round(sy + Math.sin(a) * r);
+        ctx.fillStyle = primaryLineCol;
+        ctx.fillRect(dx - 3, dy - 3, 6, 6);
+        drawPixelLine(ctx, sx, sy, dx, dy, secondaryLineCol, 1);
+      }
+    } else if (data.kind === 'colossusSlam') {
+      // Vespera Colossus Directive Impact Frame: automaton double-hammer core slam + puppet wires
+      ctx.fillStyle = secondaryLineCol;
+      ctx.fillRect(sx - 26, sy - 58, 52, 44);
+      ctx.fillStyle = primaryLineCol;
+      ctx.fillRect(sx - 18, sy - 14, 36, 20);
+      drawBresenhamCircle(ctx, sx, sy, 84, secondaryLineCol, 1.0);
+      for (let r = 0; r < 16; r++) {
+        const a = (r / 16) * Math.PI * 2;
+        drawPixelLine(ctx, sx, sy, sx + Math.cos(a) * 170, sy + Math.sin(a) * 170, r % 2 === 0 ? primaryLineCol : secondaryLineCol, 2);
+      }
+    } else if (data.kind === 'radarSweep') {
+      // Vespera Worldstorm Atlas Impact Frame: holographic weather radar + sweeping azimuth + isobars
+      const holoCol = PALETTE.cyanHolo || secondaryLineCol;
+      drawBresenhamCircle(ctx, sx, sy, 115, holoCol, 1.0);
+      drawBresenhamCircle(ctx, sx, sy, 68, primaryLineCol, 1.0);
+      drawPixelLine(ctx, sx - 140, sy, sx + 140, sy, holoCol, 1);
+      drawPixelLine(ctx, sx, sy - 140, sx, sy + 140, holoCol, 1);
+      drawPixelLine(ctx, sx, sy, sx + 115, sy - 65, primaryLineCol, 3);
     } else {
-      // Ines Scrapfall / Crane Drop / Junkyard Rain Magnetic Crush Impact Frame:
+      // Ines Scrapfall Magnetic Crush Impact Frame:
       // Heavy vertical gravity streaks slamming into (sx, sy) + radial crater shockwave
       for (let k = -6; k <= 6; k++) {
         const vx = sx + k * 22;

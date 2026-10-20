@@ -363,6 +363,40 @@ export class StatusSystem {
       this.exposedFlashTimer = 2 / 24;
     }
 
+    // Visual pop-up feedback for major combat statuses (Burn, Stun, Slow)
+    if (particles && entity) {
+      if (statusId === 'burn') {
+        particles.spawnDamageNumber(
+          entity.x,
+          entity.y - (entity.radius || 12) - 8,
+          0,
+          false,
+          '🔥 BURN!',
+          '#FF6B2B'
+        );
+        particles.spawnBurst(entity.x, entity.y, 4, '#FF6B2B', 15, 50, 2, 0.2);
+      } else if (statusId === 'stun' || statusId === 'lifted') {
+        particles.spawnDamageNumber(
+          entity.x,
+          entity.y - (entity.radius || 12) - 8,
+          0,
+          true,
+          '⚡ STUN!',
+          '#FFD700'
+        );
+        particles.spawnBurst(entity.x, entity.y, 4, '#00F0FF', 20, 60, 2, 0.22);
+      } else if (statusId === 'slow') {
+        particles.spawnDamageNumber(
+          entity.x,
+          entity.y - (entity.radius || 12) - 8,
+          0,
+          false,
+          '❄ SLOW!',
+          '#7CE8FF'
+        );
+      }
+    }
+
     // --- STACKING RULES ---
     const existing = this.map.get(statusId);
     const maxStacks = options.maxStacks || def.maxStacks || 1;
@@ -685,13 +719,16 @@ export class StatusSystem {
           const shown = Math.max(1, Math.round(inst.dotAccumulatedDamage));
           inst.dotAccumulatedDamage = 0;
           if (particles && ownerEntity) {
+            const dotType = id === 'bleed' ? 'physical' : 'magical';
+            const tgtType = this.entityTier === 'player' ? 'player' : 'enemy';
             particles.spawnDamageNumber(
               ownerEntity.x + (Math.random() * 8 - 4),
               ownerEntity.y - (ownerEntity.radius || 12) - 4,
               shown,
               false,
-              `${shown}`,
-              def.color
+              null,
+              def.color,
+              { damageType: dotType, targetType: tgtType }
             );
           }
         }
@@ -720,13 +757,16 @@ export class StatusSystem {
           const shown = Math.max(1, Math.round(inst.dotAccumulatedDamage));
           inst.dotAccumulatedDamage = 0;
           if (particles && ownerEntity) {
+            const dotType = id === 'bleed' ? 'physical' : 'magical';
+            const tgtType = this.entityTier === 'player' ? 'player' : 'enemy';
             particles.spawnDamageNumber(
               ownerEntity.x + (Math.random() * 8 - 4),
               ownerEntity.y - (ownerEntity.radius || 12) - 4,
               shown,
               false,
-              `${shown}`,
-              def.color
+              null,
+              def.color,
+              { damageType: dotType, targetType: tgtType }
             );
           }
         }
@@ -754,8 +794,9 @@ export class StatusSystem {
               ownerEntity.y - (ownerEntity.radius || 12),
               Math.round(dropDmg),
               true,
-              `${Math.round(dropDmg)}`,
-              PALETTE.verdigris
+              null,
+              PALETTE.verdigris,
+              { damageType: 'magical', targetType: this.entityTier === 'player' ? 'player' : 'enemy' }
             );
           }
         }

@@ -8,11 +8,16 @@
 
 import { PALETTE, WORLD_CONFIG, ENEMIES_CONFIG } from '../data/config.js';
 import {
+  DARK_FANTASY_FLOORS,
+  DUSKHOLLOW_TOWN,
+} from '../data/darkFantasyConfig.js';
+import {
   drawBresenhamCircle,
   drawDitheredGlowRings,
   passDither,
   MATERIAL_RAMPS,
 } from './PixelArt.js';
+import { getChibiNpcCanvas, drawPixelText } from './Sprites.js';
 import { worldLedger } from './WorldLedger.js';
 
 export class World {
@@ -22,14 +27,13 @@ export class World {
     this.chunkTiles = WORLD_CONFIG.chunkTiles;
     this.chunkPixelSize = this.tileSize * this.chunkTiles; // 256px
     this.chunkCache = new Map();
-    this.maxCachedChunks = 120;
+    this.maxCachedChunks = 140;
 
     this.cycleTime = 0;
     this.stormFactor = 0;
     this.timeOfDayFactor = 0;
     this.windPhase = 0;
 
-    // Ambient floating ash/sparks/spores/sand in 480x270 space
     this.ambientMotes = Array.from({ length: 42 }, (_, i) => ({
       x: (i * 89) % 480,
       y: (i * 53) % 270,
@@ -46,6 +50,59 @@ export class World {
   }
 
   getAreaAt(wx, wy) {
+    const fl = worldLedger.currentFloor ?? 0;
+
+    // FLOOR 0: DUSKHOLLOW TOWN (Explorable Safe RPG Town)
+    if (fl === 0) {
+      // Check if near the Top-Center Abyssal Tower Gatehouse
+      const tdx = wx - DUSKHOLLOW_TOWN.towerEntrance.x;
+      const tdy = wy - DUSKHOLLOW_TOWN.towerEntrance.y;
+      if (tdx * tdx + tdy * tdy <= 150 * 150) {
+        return {
+          id: 'abyssal_tower_gate',
+          name: 'Abyssal Spire Gatehouse',
+          subtitle: 'Top-Center Tower · Floors 1–5 Portal',
+          levelBand: [1, 50],
+          safe: true,
+          groundColor: '#16141C',
+          detailColor: '#342D42',
+          particleType: 'ash',
+        };
+      }
+      // Check if near any of the 6 RPG Town Buildings
+      for (const b of DUSKHOLLOW_TOWN.buildings) {
+        const bdx = wx - b.x;
+        const bdy = wy - b.y;
+        if (bdx * bdx + bdy * bdy <= 145 * 145) {
+          return {
+            id: `town_${b.id}`,
+            name: b.name,
+            subtitle: `${b.npcName} · ${b.npcTitle}`,
+            levelBand: [1, 50],
+            safe: true,
+            groundColor: '#16141C',
+            detailColor: '#342D42',
+            particleType: 'sparks',
+          };
+        }
+      }
+      return {
+        id: 'duskhollow_town',
+        name: DUSKHOLLOW_TOWN.name,
+        subtitle: DUSKHOLLOW_TOWN.subtitle,
+        levelBand: [1, 50],
+        safe: true,
+        groundColor: DUSKHOLLOW_TOWN.palette?.ground || DUSKHOLLOW_TOWN.groundColor || '#16141C',
+        detailColor: DUSKHOLLOW_TOWN.palette?.stone || DUSKHOLLOW_TOWN.detailColor || '#342D42',
+        particleType: 'ash',
+      };
+    }
+
+    // FLOORS 1–5: ABYSSAL SPIRE REALMS (No Central Safe Zone; only Wandering Merchant Repellent Ward is safe!)
+    const floorCfg = DARK_FANTASY_FLOORS[fl] || DARK_FANTASY_FLOORS[1] || {};
+    const lvlBand = floorCfg.expectedLevelBand || floorCfg.levelBand || [1, 10];
+    const inRepellent = worldLedger.isInsideMobRepellentWard(wx, wy);
+
     const cx = WORLD_CONFIG.kettleCenter.x;
     const cy = WORLD_CONFIG.kettleCenter.y;
     const dx = wx - cx;
@@ -53,14 +110,38 @@ export class World {
     const distSq = dx * dx + dy * dy;
 
     if (distSq <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius) {
-      return WORLD_CONFIG.areas.kettle;
+      return {
+        ...WORLD_CONFIG.areas.kettle,
+        name: `${floorCfg.name || 'Abyssal Spire'} · Crossroads`,
+        subtitle: `Floor ${fl} Waystone · Expected Lv ${lvlBand[0]}–${lvlBand[1]}`,
+        levelBand: lvlBand,
+        safe: inRepellent,
+      };
     }
 
+    let baseKey = 'slabTown';
     if (Math.abs(dy) >= Math.abs(dx)) {
-      return dy < 0 ? WORLD_CONFIG.areas.slabTown : WORLD_CONFIG.areas.copperFlats;
+      baseKey = dy < 0 ? 'slabTown' : 'copperFlats';
     } else {
-      return dx < 0 ? WORLD_CONFIG.areas.route9 : WORLD_CONFIG.areas.lyeMarsh;
+      baseKey = dx < 0 ? 'route9' : 'lyeMarsh';
     }
+
+    const baseArea = WORLD_CONFIG.areas[baseKey];
+    const sectorOverride = floorCfg.sectors?.[baseKey];
+    const stageIdx = worldLedger.getSectorStage(baseKey, fl);
+    const stageText =
+      stageIdx >= 3
+        ? 'CLEANSED'
+        : `Boss Stage ${stageIdx + 1}/3 (${stageIdx === 0 ? 'Warden' : stageIdx === 1 ? 'Executioner' : 'Overlord'})`;
+
+    return {
+      ...baseArea,
+      name: sectorOverride?.name || baseArea.name,
+      subtitle: `${sectorOverride?.subtitle || baseArea.subtitle} · ${stageText}`,
+      levelBand: lvlBand,
+      safe: inRepellent,
+      particleType: floorCfg.weather || floorCfg.particleType || baseArea.particleType,
+    };
   }
 
   getZoneAt(wx, wy) {
@@ -75,13 +156,16 @@ export class World {
     this.drawGround(ctx, camera, spawner);
   }
 
+  /**
+   * True ONLY in Duskhollow Town (Floor 0) or inside an active Wandering Merchant Mob-Repellent Ward!
+   * The central safe zone on dungeon floors has been removed per user request.
+   */
   isInsideKettle(wx, wy) {
-    const dx = wx - WORLD_CONFIG.kettleCenter.x;
-    const dy = wy - WORLD_CONFIG.kettleCenter.y;
-    return dx * dx + dy * dy <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius;
+    if ((worldLedger.currentFloor ?? 0) === 0) return true;
+    return worldLedger.isInsideMobRepellentWard(wx, wy);
   }
 
-  _buildChunkCanvas(cx, cy) {
+  _buildChunkCanvas(cx, cy, floorNum = 0) {
     const canvas = document.createElement('canvas');
     canvas.width = this.chunkPixelSize;
     canvas.height = this.chunkPixelSize;
@@ -102,15 +186,68 @@ export class World {
         const h = this._hash(worldTx, worldTy);
         const area = this.getAreaAt(wx, wy);
 
-        this._drawTile(ctx, px, py, worldTx, worldTy, wx, wy, h, area);
+        this._drawTile(ctx, px, py, worldTx, worldTy, wx, wy, h, area, floorNum);
       }
     }
 
     return canvas;
   }
 
-  _drawTile(ctx, px, py, tx, ty, wx, wy, h, area) {
+  _drawTile(ctx, px, py, tx, ty, wx, wy, h, area, floorNum = 0) {
     const s = this.tileSize;
+
+    // FLOOR 0: DUSKHOLLOW TOWN COBBLESTONE PLAZA & LANTERN AVENUES
+    if (floorNum === 0) {
+      const dx = Math.abs(wx - 3000);
+      const dy = Math.abs(wy - 3000);
+      const onNorthTowerRoad = dx < 56 && wy <= 3020 && wy >= 2520;
+      const onCrossRoad = (dy < 44 && dx < 460) || (dx < 44 && dy < 380);
+      const inPlaza = dx * dx + dy * dy <= 210 * 210;
+
+      if (onNorthTowerRoad || onCrossRoad || inPlaza) {
+        ctx.fillStyle = (tx + ty) % 2 === 0 ? '#241F31' : '#1D1828';
+        ctx.fillRect(px, py, s, s);
+        ctx.fillStyle = '#342D42';
+        ctx.fillRect(px + 1, py + 1, s - 3, 1);
+        if (onNorthTowerRoad && tx % 3 === 0 && ty % 4 === 0) {
+          ctx.fillStyle = '#D4AF37';
+          ctx.fillRect(px + 6, py + 6, 3, 3);
+        }
+      } else {
+        ctx.fillStyle = (tx + ty) % 2 === 0 ? '#16141C' : '#121018';
+        ctx.fillRect(px, py, s, s);
+        if (h % 17 === 0) {
+          ctx.fillStyle = '#252030';
+          ctx.fillRect(px + 3, py + 4, 6, 5);
+        }
+      }
+      return;
+    }
+
+    // FLOORS 2–5 BIOME TINT OVERRIDES
+    const floorCfg = DARK_FANTASY_FLOORS[floorNum] || DARK_FANTASY_FLOORS[1] || {};
+    if (floorNum >= 2) {
+      const pal = floorCfg.palette || {
+        ground: floorCfg.groundColor || '#121318',
+        stone: floorCfg.detailColor || '#252730',
+        accent: floorCfg.accentColor || '#00F0FF',
+      };
+      const isRoad = Math.abs(wx - 3000) < 32 || Math.abs(wy - 3000) < 32;
+      ctx.fillStyle = isRoad ? pal.stone : (tx + ty) % 2 === 0 ? pal.ground : PALETTE.soot;
+      ctx.fillRect(px, py, s, s);
+      if (tx % 2 === 0) {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(px + s - 1, py, 1, s);
+      }
+      if (h % 19 === 0) {
+        ctx.fillStyle = pal.stone;
+        ctx.fillRect(px + 2, py + 3, 8, 6);
+      } else if (h % 43 === 0) {
+        ctx.fillStyle = pal.accent;
+        ctx.fillRect(px + 5, py + 5, 3, 3);
+      }
+      return;
+    }
 
     if (area.id === 'kettle') {
       ctx.fillStyle = (tx + ty) % 2 === 0 ? MATERIAL_RAMPS.coat[1] : MATERIAL_RAMPS.steel[0];
@@ -122,7 +259,7 @@ export class World {
         ctx.fillStyle = MATERIAL_RAMPS.steel[1];
         ctx.fillRect(px + 1, py + 1, s - 2, s - 2);
         ctx.fillStyle = MATERIAL_RAMPS.steel[2];
-        ctx.fillRect(px + 1, py + 1, s - 3, 1); // Top-left highlight
+        ctx.fillRect(px + 1, py + 1, s - 3, 1);
       } else if (h % 11 === 0) {
         ctx.fillStyle = MATERIAL_RAMPS.rust[1];
         ctx.fillRect(px + (h % 9), py + ((h >> 4) % 9), 3, 2);
@@ -136,7 +273,6 @@ export class World {
         isMallZone && (tx + ty) % 2 === 0 ? MATERIAL_RAMPS.steel[1] : MATERIAL_RAMPS.coat[1];
       ctx.fillRect(px, py, s, s);
 
-      // Top-left lit slab edge & soot seam
       ctx.fillStyle = PALETTE.soot;
       if (tx % 2 === 0) ctx.fillRect(px + s - 1, py, 1, s);
       if (ty % 2 === 0) ctx.fillRect(px, py + s - 1, s, 1);
@@ -195,7 +331,6 @@ export class World {
       return;
     }
 
-    // Copper Flats
     ctx.fillStyle = h % 2 === 0 ? MATERIAL_RAMPS.rust[1] : MATERIAL_RAMPS.rust[2];
     ctx.fillRect(px, py, s, s);
 
@@ -212,11 +347,12 @@ export class World {
   }
 
   getChunk(cx, cy) {
-    const key = `${cx},${cy}`;
+    const fl = worldLedger.currentFloor ?? 0;
+    const key = `${fl}:${cx},${cy}`;
     if (this.chunkCache.has(key)) {
       return this.chunkCache.get(key);
     }
-    const canvas = this._buildChunkCanvas(cx, cy);
+    const canvas = this._buildChunkCanvas(cx, cy, fl);
     if (this.chunkCache.size >= this.maxCachedChunks) {
       const oldestKey = this.chunkCache.keys().next().value;
       this.chunkCache.delete(oldestKey);
@@ -266,202 +402,235 @@ export class World {
       }
     }
 
-    this._drawKettleCamp(ctx, camera);
-    this._drawBossArenas(ctx, camera, spawner);
+    if ((worldLedger.currentFloor ?? 0) === 0) {
+      this._drawDuskhollowTown(ctx, camera);
+    } else {
+      this._drawTowerFloorFeatures(ctx, camera);
+      this._drawBossArenas(ctx, camera, spawner);
+    }
   }
 
-  _drawKettleCamp(ctx, camera) {
-    const cx = WORLD_CONFIG.kettleCenter.x;
-    const cy = WORLD_CONFIG.kettleCenter.y;
-    if (!camera.isVisible(cx, cy, WORLD_CONFIG.kettleRadius + 60)) return;
-
+  /**
+   * Renders Duskhollow Town (Floor 0):
+   * - Top-Center Abyssal Spire Gatehouse (3000, 2560)
+   * - Central Town Well & Sanctuary Brazier (3000, 3000)
+   * - 6 Interactive Dark Fantasy RPG Buildings & their Chibi NPC Masters
+   */
+  _drawDuskhollowTown(ctx, camera) {
     const camX = camera.renderX;
     const camY = camera.renderY;
+    const animFrame = Math.floor(this.windPhase * 2) % 2;
 
-    // Safe-zone boundary dithered ring
-    drawBresenhamCircle(
-      ctx,
-      cx - camX,
-      cy - camY,
-      WORLD_CONFIG.kettleRadius,
-      MATERIAL_RAMPS.steel[2],
-      0.5
-    );
-
-    // Central Old Boiler monument at (3000, 2955) with top-left light highlight
-    const bx = Math.round(3000 - camX);
-    const by = Math.round(2955 - camY);
-    ctx.fillStyle = PALETTE.soot;
-    ctx.fillRect(bx - 24, by - 22, 48, 38);
-    ctx.fillStyle = MATERIAL_RAMPS.rust[1];
-    ctx.fillRect(bx - 22, by - 20, 44, 34);
-    ctx.fillStyle = MATERIAL_RAMPS.rust[2];
-    ctx.fillRect(bx - 22, by - 20, 42, 16);
-    ctx.fillStyle = MATERIAL_RAMPS.rust[3]; // Top-left lit edge
-    ctx.fillRect(bx - 22, by - 20, 42, 1);
-    ctx.fillRect(bx - 22, by - 20, 1, 34);
-    // Smokestack
-    ctx.fillStyle = MATERIAL_RAMPS.steel[2];
-    ctx.fillRect(bx - 7, by - 32, 14, 14);
-    ctx.fillStyle = MATERIAL_RAMPS.steel[3];
-    ctx.fillRect(bx - 7, by - 32, 14, 1);
-
-    // Glowing boiler firebox grate + 2 stacked 1px dithered glow rings
-    const flicker = Math.sin(this.windPhase * 3) > 0 ? PALETTE.brass : MATERIAL_RAMPS.rust[3];
-    ctx.fillStyle = PALETTE.soot;
-    ctx.fillRect(bx - 9, by + 1, 18, 9);
-    ctx.fillStyle = flicker;
-    ctx.fillRect(bx - 7, by + 3, 14, 5);
-    drawDitheredGlowRings(ctx, bx, by + 5, 11, PALETTE.brass);
-
-    // Campfire at (3000, 3024) + fake dithered glow rings
-    const fx = Math.round(3000 - camX);
-    const fy = Math.round(3024 - camY);
-    ctx.fillStyle = MATERIAL_RAMPS.steel[1];
-    ctx.fillRect(fx - 8, fy - 5, 16, 10);
-    ctx.fillStyle = PALETTE.rust;
-    ctx.fillRect(fx - 5, fy - 4, 10, 7);
-    ctx.fillStyle = PALETTE.brass;
-    const fH = 5 + (Math.floor(this.windPhase * 4) % 2);
-    ctx.fillRect(fx - 3, fy - fH, 6, fH);
-    ctx.fillStyle = PALETTE.bone;
-    ctx.fillRect(fx - 1, fy - 2, 2, 2);
-    drawDitheredGlowRings(ctx, fx, fy - 2, 12, PALETTE.brass);
-
-    // Ume's Pawn Counter & Ume NPC at (2940, 2925)
-    const ux = Math.round(WORLD_CONFIG.umePosition.x - camX);
-    const uy = Math.round(WORLD_CONFIG.umePosition.y - camY);
-    // Bog tarp awning with top-left highlight
-    ctx.fillStyle = MATERIAL_RAMPS.bog[1];
-    ctx.fillRect(ux - 18, uy - 18, 36, 12);
-    ctx.fillStyle = MATERIAL_RAMPS.bog[2];
-    ctx.fillRect(ux - 17, uy - 17, 34, 8);
-    ctx.fillStyle = MATERIAL_RAMPS.bog[3];
-    ctx.fillRect(ux - 17, uy - 17, 34, 1);
-
-    // Ume NPC sprite
-    ctx.fillStyle = PALETTE.soot;
-    ctx.fillRect(ux - 5, uy - 9, 10, 12);
-    ctx.fillStyle = PALETTE.bone; // Headscarf
-    ctx.fillRect(ux - 4, uy - 8, 8, 4);
-    ctx.fillStyle = MATERIAL_RAMPS.skin[2];
-    ctx.fillRect(ux - 3, uy - 4, 6, 3);
-    ctx.fillStyle = PALETTE.rust;
-    ctx.fillRect(ux - 4, uy - 1, 8, 5);
-
-    // Counter bench + Brass lantern with dithered glow ring
-    ctx.fillStyle = MATERIAL_RAMPS.steel[2];
-    ctx.fillRect(ux - 17, uy + 4, 34, 8);
-    ctx.fillStyle = MATERIAL_RAMPS.steel[3];
-    ctx.fillRect(ux - 17, uy + 4, 34, 1);
-    ctx.fillStyle = PALETTE.brass;
-    ctx.fillRect(ux + 8, uy + 1, 4, 4);
-    drawDitheredGlowRings(ctx, ux + 10, uy + 3, 5, PALETTE.brass);
-
-    // Harlow's Trade Register Desk & Harlow NPC at (3062, 2925)
-    const hx = Math.round(WORLD_CONFIG.harlowPosition.x - camX);
-    const hy = Math.round(WORLD_CONFIG.harlowPosition.y - camY);
-    // Rust sheet-metal roof canopy
-    ctx.fillStyle = MATERIAL_RAMPS.rust[1];
-    ctx.fillRect(hx - 18, hy - 18, 36, 11);
-    ctx.fillStyle = MATERIAL_RAMPS.rust[2];
-    ctx.fillRect(hx - 17, hy - 17, 34, 7);
-    ctx.fillStyle = MATERIAL_RAMPS.rust[3];
-    ctx.fillRect(hx - 17, hy - 17, 34, 1);
-    // Harlow NPC (clerk with bone hair, brass visor, bog coat)
-    ctx.fillStyle = PALETTE.soot;
-    ctx.fillRect(hx - 5, hy - 9, 10, 12);
-    ctx.fillStyle = PALETTE.bone;
-    ctx.fillRect(hx - 4, hy - 8, 8, 3);
-    ctx.fillStyle = PALETTE.brass; // Clerk visor
-    ctx.fillRect(hx - 4, hy - 5, 8, 1);
-    ctx.fillStyle = MATERIAL_RAMPS.skin[2];
-    ctx.fillRect(hx - 3, hy - 4, 6, 3);
-    ctx.fillStyle = MATERIAL_RAMPS.bog[2];
-    ctx.fillRect(hx - 4, hy - 1, 8, 5);
-    // Steel ledger desk + open bone trade book + iron stamp
-    ctx.fillStyle = MATERIAL_RAMPS.steel[1];
-    ctx.fillRect(hx - 16, hy + 4, 32, 8);
-    ctx.fillStyle = MATERIAL_RAMPS.steel[3];
-    ctx.fillRect(hx - 16, hy + 4, 32, 1);
-    ctx.fillStyle = PALETTE.bone; // Ledger pages
-    ctx.fillRect(hx - 6, hy + 2, 9, 4);
-    ctx.fillStyle = PALETTE.rust; // Spine
-    ctx.fillRect(hx - 2, hy + 2, 1, 4);
-    ctx.fillStyle = PALETTE.brass; // Heavy iron stamp
-    ctx.fillRect(hx + 6, hy + 1, 4, 5);
-
-    // Hand-painted directional signs around Kettle + Territory Liberation Brass Ribbons
-    const signs = [
-      { x: 3000, y: 2790, bossId: 'theForeman' },
-      { x: 2790, y: 3000, bossId: 'bigAxle' },
-      { x: 3210, y: 3000, bossId: 'motherSump' },
-      { x: 3000, y: 3210, bossId: 'theLongDry' },
-    ];
-    for (let i = 0; i < signs.length; i++) {
-      const sg = signs[i];
-      if (!camera.isVisible(sg.x, sg.y, 40)) continue;
-      const sx = Math.round(sg.x - camX);
-      const sy = Math.round(sg.y - camY);
-      const liberated = !!worldLedger.confirmedBossKills?.[sg.bossId];
-      ctx.fillStyle = MATERIAL_RAMPS.rust[1];
-      ctx.fillRect(sx - 1, sy - 4, 3, 10);
-      ctx.fillStyle = liberated ? MATERIAL_RAMPS.brass[2] : MATERIAL_RAMPS.steel[2];
-      ctx.fillRect(sx - 7, sy - 8, 14, 5);
-      ctx.fillStyle = liberated ? PALETTE.bone : MATERIAL_RAMPS.bone[2];
-      ctx.fillRect(sx - 7, sy - 8, 14, 1);
-    }
-
-    // Boss Trophy Monuments around the Kettle Campfire
-    if (worldLedger.confirmedBossKills?.theForeman) {
-      // Foreman Hard-Hat & Gear Trophy
-      const tx = Math.round(2972 - camX);
-      const ty = Math.round(3012 - camY);
+    // 1. Central Town Well & Sanctuary Brazier at (3000, 3000)
+    if (camera.isVisible(3000, 3000, 180)) {
+      const wx = Math.round(3000 - camX);
+      const wy = Math.round(3000 - camY);
+      drawBresenhamCircle(ctx, wx, wy, 52, '#342D42', 0.65);
       ctx.fillStyle = PALETTE.soot;
-      ctx.fillRect(tx - 5, ty - 10, 10, 12);
+      ctx.fillRect(wx - 14, wy - 10, 28, 20);
       ctx.fillStyle = MATERIAL_RAMPS.steel[2];
-      ctx.fillRect(tx - 4, ty - 2, 8, 3);
-      ctx.fillStyle = PALETTE.brass;
-      ctx.fillRect(tx - 3, ty - 9, 6, 7);
-      ctx.fillStyle = PALETTE.signal;
-      ctx.fillRect(tx - 2, ty - 8, 3, 5);
+      ctx.fillRect(wx - 12, wy - 8, 24, 16);
+      ctx.fillStyle = '#00F0FF';
+      ctx.fillRect(wx - 7, wy - 4, 14, 8);
+      drawDitheredGlowRings(ctx, wx, wy, 14, PALETTE.brass);
+      drawPixelText(ctx, 'DUSKHOLLOW PLAZA · NORTH TO ABYSSAL SPIRE ▲', wx, wy + 24, '#D4AF37', 'center');
     }
-    if (worldLedger.confirmedBossKills?.bigAxle) {
-      // Big Axle Cracked Piston Trophy
-      const tx = Math.round(2966 - camX);
-      const ty = Math.round(3034 - camY);
+
+    // 2. Top-Center ABYSSAL TOWER GATEHOUSE at (3000, 2560)
+    const tx = DUSKHOLLOW_TOWN.towerEntrance.x;
+    const ty = DUSKHOLLOW_TOWN.towerEntrance.y;
+    if (camera.isVisible(tx, ty, 240)) {
+      const sx = Math.round(tx - camX);
+      const sy = Math.round(ty - camY);
+
+      // Massive Obsidian Citadel Base & Twin Gargoyle Pillars
       ctx.fillStyle = PALETTE.soot;
-      ctx.fillRect(tx - 5, ty - 9, 10, 11);
-      ctx.fillStyle = PALETTE.bone;
-      ctx.fillRect(tx - 4, ty - 8, 8, 2);
-      ctx.fillRect(tx - 3, ty - 5, 6, 2);
-      ctx.fillStyle = PALETTE.brass;
-      ctx.fillRect(tx - 1, ty - 8, 2, 8);
+      ctx.fillRect(sx - 64, sy - 68, 128, 84);
+      ctx.fillStyle = '#241B35';
+      ctx.fillRect(sx - 60, sy - 64, 120, 76);
+      // Left & Right Spire Towers
+      ctx.fillStyle = '#342D42';
+      ctx.fillRect(sx - 60, sy - 76, 26, 88);
+      ctx.fillRect(sx + 34, sy - 76, 26, 88);
+      ctx.fillStyle = '#D4AF37';
+      ctx.fillRect(sx - 60, sy - 76, 26, 2);
+      ctx.fillRect(sx + 34, sy - 76, 26, 2);
+
+      // Swirling Soulfire Rift Archway in Center
+      ctx.fillStyle = '#09070E';
+      ctx.fillRect(sx - 24, sy - 42, 48, 54);
+      ctx.fillStyle = animFrame === 0 ? '#00F0FF' : '#8A2BE2';
+      ctx.fillRect(sx - 18, sy - 36, 36, 44);
+      ctx.fillStyle = '#E8DFD1';
+      ctx.fillRect(sx - 8, sy - 24, 16, 24);
+      drawDitheredGlowRings(ctx, sx, sy - 14, 24, '#00F0FF');
+
+      drawPixelText(ctx, '▲ THE ABYSSAL SPIRE (FLOORS 1–5) ▲', sx, sy - 88, '#00F0FF', 'center');
+      drawPixelText(ctx, '[E] ASCEND THE SPIRE', sx, sy + 20, '#FFC83D', 'center');
     }
-    if (worldLedger.confirmedBossKills?.motherSump) {
-      // Mother Sump Dried Bog Lantern
-      const tx = Math.round(3028 - camX);
-      const ty = Math.round(3012 - camY);
+
+    // 3. The 6 Dark Fantasy RPG Town Buildings + Chibi NPC Masters
+    const roleByBuildingId = {
+      runesmith_forge: 'forge',
+      alchemist_apothecary: 'apothecary',
+      hunters_guild: 'guild',
+      arcane_sanctum: 'sanctum',
+      ravens_rest_tavern: 'tavern',
+      mystic_enchanter: 'gambler',
+    };
+
+    for (const b of DUSKHOLLOW_TOWN.buildings) {
+      if (!camera.isVisible(b.x, b.y, 160)) continue;
+      const bx = Math.round(b.x - camX);
+      const by = Math.round(b.y - camY);
+
+      // Gothic Building Footprint & Pitched Roof
       ctx.fillStyle = PALETTE.soot;
-      ctx.fillRect(tx - 4, ty - 10, 8, 12);
-      ctx.fillStyle = MATERIAL_RAMPS.bog[2];
-      ctx.fillRect(tx - 3, ty - 9, 6, 7);
-      ctx.fillStyle = PALETTE.lye;
-      ctx.fillRect(tx - 2, ty - 7, 4, 4);
-      drawDitheredGlowRings(ctx, tx, ty - 5, 5, PALETTE.lye);
+      ctx.fillRect(bx - 42, by - 46, 84, 52);
+      ctx.fillStyle = b.roofColor || '#342D42';
+      ctx.fillRect(bx - 40, by - 44, 80, 22);
+      ctx.fillStyle = b.accentColor || '#D4AF37';
+      ctx.fillRect(bx - 40, by - 44, 80, 2);
+      ctx.fillStyle = '#1B1824';
+      ctx.fillRect(bx - 36, by - 22, 72, 26);
+
+      // Doorway & Warm Lanterns
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(bx - 10, by - 14, 20, 18);
+      ctx.fillStyle = b.accentColor || '#D4AF37';
+      ctx.fillRect(bx - 24, by - 12, 4, 5);
+      ctx.fillRect(bx + 20, by - 12, 4, 5);
+      drawDitheredGlowRings(ctx, bx - 22, by - 10, 6, b.accentColor || PALETTE.brass);
+
+      // Render Building's Chibi NPC Master out front using the 2-Head Chibi Base!
+      const npcRole = roleByBuildingId[b.id] || 'guild';
+      const npcCanvas = getChibiNpcCanvas(npcRole, animFrame);
+      if (npcCanvas) {
+        ctx.drawImage(npcCanvas, bx - 24, by - 16);
+      }
+
+      drawPixelText(ctx, b.name.toUpperCase(), bx, by - 55, b.accentColor || '#E8DFD1', 'center');
+      drawPixelText(ctx, `${b.npcName}`, bx, by + 26, '#E8DFD1', 'center');
     }
-    if (worldLedger.confirmedBossKills?.theLongDry) {
-      // The Long Dry Shattered Bore Plate Trophy
-      const tx = Math.round(3034 - camX);
-      const ty = Math.round(3034 - camY);
+  }
+
+  /**
+   * Renders Tower Floor (Floors 1–5) features:
+   * - Central Waystone Crossroads (contested — no safe zone)
+   * - Active Portals (Return to Town Portal + Floor Ascent Portal)
+   * - 20% Cleansed-Territory Sanctuary Pilgrim NPCs
+   * - 20% Corner Wandering Merchants with 30s Defense Quest or 260px Mob-Repellent Sanctuary Ward
+   */
+  _drawTowerFloorFeatures(ctx, camera) {
+    const camX = camera.renderX;
+    const camY = camera.renderY;
+    const animFrame = Math.floor(this.windPhase * 2) % 2;
+
+    // 1. Central Spire Crossroads Waystone at (3000, 3000)
+    if (camera.isVisible(3000, 3000, 120)) {
+      const fx = Math.round(3000 - camX);
+      const fy = Math.round(3000 - camY);
+      drawBresenhamCircle(ctx, fx, fy, 42, MATERIAL_RAMPS.steel[2], 0.5);
       ctx.fillStyle = PALETTE.soot;
-      ctx.fillRect(tx - 5, ty - 9, 10, 11);
-      ctx.fillStyle = PALETTE.brass;
-      ctx.fillRect(tx - 4, ty - 8, 8, 5);
-      ctx.fillStyle = PALETTE.bone;
-      ctx.fillRect(tx - 4, ty - 8, 8, 1);
-      ctx.fillStyle = MATERIAL_RAMPS.rust[2];
-      ctx.fillRect(tx - 2, ty - 3, 4, 4);
+      ctx.fillRect(fx - 10, fy - 14, 20, 24);
+      ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+      ctx.fillRect(fx - 8, fy - 12, 16, 20);
+      ctx.fillStyle = '#00F0FF';
+      ctx.fillRect(fx - 3, fy - 7, 6, 10);
+      drawDitheredGlowRings(ctx, fx, fy - 2, 10, '#00F0FF');
+    }
+
+    // 2. Active Portals (Town Return Portal & Next Floor Ascent Portal)
+    for (const p of worldLedger.spawnedPortals || []) {
+      if (!camera.isVisible(p.x, p.y, 80)) continue;
+      const px = Math.round(p.x - camX);
+      const py = Math.round(p.y - camY);
+      drawBresenhamCircle(ctx, px, py, 20, p.color || '#00F0FF', 0.85);
+      ctx.fillStyle = PALETTE.soot;
+      ctx.fillRect(px - 11, py - 16, 22, 28);
+      ctx.fillStyle = p.color || '#00F0FF';
+      ctx.fillRect(px - 8, py - 13, 16, 22);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(px - 3, py - 8, 6, 12);
+      drawDitheredGlowRings(ctx, px, py - 2, 14, p.color || '#00F0FF');
+      drawPixelText(ctx, p.label, px, py - 26, p.color || '#00F0FF', 'center');
+      drawPixelText(ctx, p.sublabel || '[E] Enter Portal', px, py + 16, '#E8DFD1', 'center');
+    }
+
+    // 3. Cleansed-Territory Sanctuary Pilgrim NPCs (20% spawn after sector Overlord is slain)
+    for (const npc of worldLedger.cleansedNpcs || []) {
+      if (!camera.isVisible(npc.x, npc.y, 90)) continue;
+      const nx = Math.round(npc.x - camX);
+      const ny = Math.round(npc.y - camY);
+      drawBresenhamCircle(ctx, nx, ny + 8, 22, '#00F0FF', 0.6);
+      const npcCanvas = getChibiNpcCanvas('pilgrim', animFrame);
+      if (npcCanvas) {
+        ctx.drawImage(npcCanvas, nx - 24, ny - 28);
+      }
+      drawPixelText(ctx, npc.name.toUpperCase(), nx, ny - 32, '#00F0FF', 'center');
+      drawPixelText(
+        ctx,
+        npc.used ? 'BLESSING BESTOWED' : '[E] RECEIVE SANCTUARY BLESSING',
+        nx,
+        ny + 18,
+        '#FFC83D',
+        'center'
+      );
+    }
+
+    // 4. Corner Wandering Merchants (30s Defense Sudden Quest + Mob-Repellent Sanctuary Ward)
+    for (const m of worldLedger.wanderingMerchants || []) {
+      if (m.state === 'fled') continue;
+      if (!camera.isVisible(m.x, m.y, m.repellentRadius + 40)) continue;
+      const mx = Math.round(m.x - camX);
+      const my = Math.round(m.y - camY);
+
+      if (m.repellentActive && m.state === 'protected') {
+        // Shimmering 260px Mob-Repellent Sanctuary Ward where enemies cannot see or enter!
+        drawBresenhamCircle(ctx, mx, my, m.repellentRadius, '#00F0FF', 0.75);
+        drawBresenhamCircle(ctx, mx, my, m.repellentRadius - 6, '#D4AF37', 0.45);
+      } else if (m.state === 'defending') {
+        drawBresenhamCircle(ctx, mx, my, 120, '#E03C31', 0.75);
+      }
+
+      // Merchant Lantern Cart & Chibi Sprite
+      ctx.fillStyle = '#342D42';
+      ctx.fillRect(mx - 22, my - 12, 18, 16);
+      ctx.fillStyle = '#D4AF37';
+      ctx.fillRect(mx - 20, my - 10, 14, 3);
+      const merchCanvas = getChibiNpcCanvas('merchant', animFrame);
+      if (merchCanvas) {
+        ctx.drawImage(merchCanvas, mx - 16, my - 28);
+      }
+
+      drawPixelText(ctx, `${m.name.toUpperCase()}`, mx, my - 36, '#FFC83D', 'center');
+      if (m.state === 'defending') {
+        // HP Bar & 30s Sudden Quest Timer
+        const hpRatio = Math.max(0, m.hp / m.maxHp);
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(mx - 24, my - 26, 48, 5);
+        ctx.fillStyle = '#2EE6A8';
+        ctx.fillRect(mx - 23, my - 25, Math.round(46 * hpRatio), 3);
+        drawPixelText(
+          ctx,
+          `PROTECT MERCHANT: ${Math.ceil(m.defenseTimer)}S`,
+          mx,
+          my + 18,
+          '#FF5A26',
+          'center'
+        );
+      } else if (m.state === 'protected') {
+        drawPixelText(
+          ctx,
+          '[E] BLACK-MARKET RELICS (MOB REPELLENT ACTIVE)',
+          mx,
+          my + 18,
+          '#00F0FF',
+          'center'
+        );
+      } else {
+        drawPixelText(ctx, 'APPROACH TO AID MERCHANT', mx, my + 18, '#E8DFD1', 'center');
+      }
     }
   }
 

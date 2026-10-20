@@ -1,131 +1,163 @@
-# GRAVEL SKY — Action JRPG Implementation Plan
+# Full Dark Fantasy Overhaul, Chibi Character Base, 5-Act Story & Quests, Explorable RPG Town & 5-Floor Abyssal Tower
 
-A complete, 60fps pixel-art anime action JRPG set in a ruined industrial wasteland years after the sky collapsed. Players control **Sena Ibuki**, a salvage runner wielding the **Railcut**, battling across five distinct open-world zones, upgrading skills, trading scrap gear at the Kettle camp, and hunting four multi-phase bosses—all rendered entirely through procedural pixel art and synthesized Web Audio.
+This plan transforms the entire game into a **Dark Fantasy Action RPG** (*HELLS ADVENT: ABYSSAL DESCENT*) using your uploaded **2-Head Chibi Pixel-Art Base (`/public/assets/aistudio/image_c95e226e.png`)** as the anatomical template for all playable characters and humanoid NPCs, paired with a **5-Act Main Story Campaign & 3-Tier Quest System**, an explorable **Dark Fantasy Town (Duskhollow)** with 6 interactive RPG buildings and the **Abyssal Tower** at the top-center, **5 hostile Tower Floors** with **3 sequential bosses per territory (12 bosses per floor, 60 total)** linked by an evolving **Boss Bloodline Family Tree**, **20% Cleansed-Territory NPCs**, **20% Corner Wandering Merchants** with a **30-second Sudden Defense Quest & Mob-Repellent Ward**, dual floor-completion portals, an **uncapped level system**, and a **10-Level Gap "Abyssal Enrage" Buff**.
 
 ---
 
-## User Review & Critical Decisions
+### User Review & Critical Decisions
 
 > [!IMPORTANT]
-> Because the specification states *"Do not ask me questions. Make any unspecified detail a decision yourself"*, all architectural, balance, and visual details have been resolved directly in this plan. Review the decisions below and click **Proceed** to build the full game.
+> This revised plan integrates your uploaded **Chibi Pixel-Art Base Template (`image_c95e226e.png`)** for all character sprites, animations, portraits, and NPCs alongside the full Dark Fantasy Story, Town, and 5-Floor Tower systems.
 
-- **Zero External Assets (Procedural Pixel & Audio Pipeline)**: All 32×32 character/enemy sprites, 64×64 dynamic anime portraits, 16×16 world tiles, item icons, and multi-phase boss rigs are rendered from palette-indexed matrices cached onto offscreen canvases (`image-rendering: pixelated`). All combat, UI, and ambient sounds are synthesized in real time via the Web Audio API.
-- **Strict 60fps Simulation Decoupling**: The entire game simulation runs inside plain JavaScript/TypeScript classes (`src/game/*`) on a single `<canvas>` using a fixed-timestep accumulator and `requestAnimationFrame`. React (`src/ui/*`) never re-renders per frame; the HUD polls game state on a 10 Hz (`100ms`) tick, while modal panels (Shop, Inventory, Skills, Pause, Death) subscribe on state change events.
-- **Dual Runtime (Browser + Electron Desktop)**: Includes Electron main/preload scripts (`electron/main.cjs`) configured for a 1280×720 window (min 960×540, F11 fullscreen, menu-bar hidden) with automatic 30-second and on-quit JSON saves to `app.getPath("userData")`, seamlessly falling back to `localStorage` inside a `try/catch` when running in the browser preview.
-
----
-
-## 1. Overview & Core Concept
-
-- **What It Does**: Delivers an immediate, high-impact top-down action RPG with a 3-hit melee combo, directional dodge roll with i-frames, 3 upgradeable active skills (**Lunge**, **Ground Break**, **Rail Spike**), a time-stopping ultimate (**Seven Cuts**), an open 6000×6000 px world streamed in 16px tile chunks, spatial-grid enemy swarming, and a full equipment/consumable economy.
-- **Setting & Tone**: Grounded, worn-down industrial post-apocalypse. Short, blunt, practical names and dialogue from Ume at the pawn counter. Strictly adheres to the banned-word rules (no generic fantasy/sci-fi buzzwords or hype adjectives).
-- **Key Value**: Playable within seconds of launch with responsive game feel—50ms hit-stop on heavy hits, decaying camera shake, knockback physics, white hit flashes, pooled damage numbers (brass crits), and a 15+ minute progression loop across four boss arenas.
-
----
-
-## 2. User Experience & Visual Design
-
-- **Key User Flows**:
-  1. **Title Screen**: Full-viewport live parallax wasteland backdrop with drifting ash, bespoke inline `<svg>` **GRAVEL SKY** industrial lockup, `"PRESS ENTER"` start prompt, and a quick Controls modal toggle.
-  2. **Kettle Camp (Safe Zone)**: Players spawn by the old boiler fire near Ume's pawn counter (`[E] Talk to Ume`). Hand-painted directional signs point North (Slab Town), West (Route 9), East (Lye Marsh), and South (Copper Flats).
-  3. **Exploration & Combat**: Smooth-follow camera with dark vignette, day and dust-storm lighting cycle, biome-specific ambient particles (falling concrete dust, highway sparks, pale marsh spores, red sandstorms), and an objective tracker pointing to the nearest unbeaten boss.
-  4. **Progression & Shop**: Killing enemies awards XP and gold (`±20%` variance). Pressing `K` opens the Skill Panel to invest skill points; pressing `I` opens Inventory & Equipment; pressing `E` near Ume opens the 4-tab Shop (`Head`, `Body`, `Legs`, `Supplies`) with one-click Buy & Equip, 40% sell-back, and live green/red stat comparison tooltips. Equipped armor dynamically recolors Sena's sprite.
-  5. **Death & Recovery**: Losing all HP triggers the 5-frame death animation and Death Screen, deducting 10% gold before waking Sena back by the Kettle boiler at full HP.
-
-- **Visual Identity & Palette (`src/data/config.js`)**:
-  - **Soot (`#0B0D10`)**: Deep dominant background, vignette, and UI surface base.
-  - **Slag (`#3A3F47`)**: Structural concrete, borders, and muted steel surfaces.
-  - **Rust (`#8B3A1E`)**: Sena's hair, oxidized machinery, Copper Flats terrain, and worn accents.
-  - **Bog (`#1F4D4A`)**: Lye Marsh chemical pools, Salvaged-grade item trim.
-  - **Bone (`#D9D2C3`)**: Primary readable typography, Sena's wind-animated scarf, and clean data readouts.
-  - **Signal (`#00F0FF`)**: The sole high-contrast electric accent—reserved strictly for Sena's Railcut blade edge, active skill effects, ultimate slashes, and primary UI focus states.
-  - **Blood (`#FF3B3B`)**: HP bar fill, elite enemy outlines, and 0.8s telegraphed hazard zones.
-  - **Brass (`#FFC83D`)**: Critical hit numbers, Relic-grade gear, gold counter, and boss phase warnings.
-
-- **HUD & Low-Occlusion Discipline**:
-  - Keeps over 85% of the viewport clear with `pointer-events: none` on HUD wrappers and zero `backdrop-filter` blur over the canvas.
-  - **Top-Left Cluster**: 64×64 pixel-art anime portrait of Sena (dynamically switches between Normal, Hurt/Grimace, and Ultimate/Focused expressions), HP bar (`blood`), Stamina bar (`signal`), XP bar (`bone`), Level badge, and Gold (`brass`) in `tabular-nums` monospace.
-  - **Top-Center**: Single-line objective tracker naming the nearest unbeaten boss and distance, plus the Boss Health Bar & Name Card when inside an active boss arena.
-  - **Top-Right**: Chunk-rendered Minimap showing biome boundaries, Kettle camp, boss arenas, and Sena's position.
-  - **Bottom-Center**: 3 Skill slots (`1` Lunge, `2` Ground Break, `3` Rail Spike) with radial/vertical cooldown sweeps, stamina checks, quick-use consumable slots (`Q` Gauze Roll, `F` Sugar Tin), and the circular **Seven Cuts** (`R`) Ultimate charge ring.
+- **Confirmed Decision 1 — Chibi Pixel-Art Character Base (`image_c95e226e.png`) for All Classes & NPCs**:
+  - Every playable hero, portrait, character-select card, and humanoid NPC (Town masters, Wandering Merchant, Cleansed-Territory pilgrims) is constructed directly on the **2-Head Chibi Pixel-Art Base** proportions from `/public/assets/aistudio/image_c95e226e.png`:
+    - **Head & Face Anatomy**: Large rounded `16x14px` chibi cranium, prominent `3x5px` side ears, soft cheek blush pixels, warm dark-plum/obsidian 1px pixel outline (`#5D3A43` / `#2A1B24`), and expressive **`3x4px` vertical anime eyes** with thick upper lashes and a `1x2px` vertical highlight pixel.
+    - **Torso & Limb Proportions**: Compact `10x11px` chibi torso, slightly splayed `3x6px` stubby arms, and short `4x5px` chibi legs with a crisp center separation and 1px outline.
+    - **Layered Dark Fantasy Class Regalia**:
+      1. **Sena Ibuki — Abyssal Blade Knight**: Crimson-auburn hair locks, glowing violet-cyan anime eyes, obsidian knight breastplate & frayed abyssal cape over the chibi base, wielding *Duskrend*.
+      2. **Rook Matsuda — Inquisitor Marksman**: Ash-silver hair & witch-hunter cowl, amber-gold anime eyes, dark leather inquisitor coat over the chibi base, wielding *Hexbane Arbalest*.
+      3. **Ines Calloway — Ossuary Necromancer**: Bone-white twin locks & skull hairpins, emerald-rose anime eyes, gothic necromancer vestments over the chibi base, wielding *Gravelord Scepter*.
+      4. **Kaelen Vos — Hellfire Dragoon**: Fiery ember hair & dragon-horn circlet, molten-orange anime eyes, hellforged demonplate over the chibi base, wielding *Cinderlance*.
+      5. **Vespera Locke — Eldritch Soulbinder**: Starlight-violet hair & arcane witch hat, astral-violet anime eyes, eldritch runic robes over the chibi base, with floating *Astral Grimoire*.
+- **Confirmed Decision 2 — 5-Act Dark Fantasy Story Campaign & 3-Tier Quest System**:
+  - **Overarching Story (*"The Eclipse of Duskhollow"*)**: Guided by **Chronicler Malakor**, you ascend the **Abyssal Spire** across 5 acts, severing the 4 immortal **Boss Bloodlines** (*Malgorth*, *Varkos*, *Hagra*, *Skarath*) across Main Story Quests, Town NPC Side Quests, and Emergent Sudden Quests (tracked on the HUD and in the **`[J]` Quest Journal**).
+- **Confirmed Decision 3 — Explorable Dark Fantasy Town, Top-Center Tower & Emergent Field NPCs**:
+  - **Duskhollow Town (`Floor 0`)**: Features **6 interactive RPG buildings** (*Runesmith Forge*, *Alchemist Apothecary*, *Hunters Guild & Bloodline Hall*, *Arcane Sanctum*, *Raven's Rest Tavern*, *Mystic Enchanter & Curio Broker*) and the **Abyssal Tower Gatehouse** at the **top-center**.
+  - **Field Events (`Floors 1–5`)**: **20% Cleansed-Territory NPC** after defeating a territory's 3-boss chain, **20% Corner Wandering Merchant** with a **30s Sudden Defense Quest** that activates a **Mob-Repellent Sanctuary Ward** (or flees in a smoke bomb if defeated), and **Dual Floor-Clear Portals** (*Next Floor* + *Return to Town*).
+- **Confirmed Decision 4 — 5 Dark Fantasy Floors, 60 Bloodline Bosses, Uncapped XP & 10-Level Gap Enrage**:
+  - **Floors 1–5**: *Blighted Catacombs* (`Lv 1–10`), *Frostbound Crypt* (`Lv 11–20`), *Hellfire Abyss* (`Lv 21–30`), *Rotwood Mire* (`Lv 31–40`), and *Void Citadel* (`Lv 41–50`).
+  - **Uncapped Levels + 10-Level Gap Enrage Buff**: Levels are uncapped (paced at ~10 levels/floor toward `Lv 100+` by future Floor 10), low-level kills suffer steep XP decay (`100%` down to `1%`), and enemies `10+` levels below the player gain the massive **`☠ ABYSS ENRAGED`** stat and speed buff.
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
-
-- **Decision 1: Pre-Baked Offscreen Sprite Sheets vs. Per-Frame Pixel Loops**
-  - *Chosen Approach*: Define all sprite frames, portraits, tiles, and icons as compact palette-indexed arrays, then bake them once at startup (and when Sena equips new armor colors) onto offscreen HTML5 canvases.
-  - *Why*: Drawing pre-baked offscreen canvases via `ctx.drawImage()` is orders of magnitude faster than iterating pixel arrays every frame, guaranteeing locked 60fps even with 40 active enemies, boss telegraphs, and hundreds of particles.
-- **Decision 2: Object Pooling & Spatial Hash Grid**
-  - *Chosen Approach*: Pre-allocate fixed pools for `Particles` (500), `Projectiles` (64), and `DamageNumbers` (64), and partition the 6000×6000 world into 250×250 px spatial grid cells.
-  - *Why*: Eliminates garbage-collection pauses during intense combat and keeps melee arc checks, piercing Rail Spikes, and enemy separation $O(1)$ per cell.
-- **Decision 3: Unified JavaScript/TypeScript Module Interop**
-  - *Chosen Approach*: Provide `src/data/config.js` and modular classes in `src/game/*` and `src/ui/*` that work seamlessly with Vite's bundler and Electron's desktop wrapper.
-  - *Why*: Satisfies the exact folder structure (`/src/game`, `/src/ui`, `/src/data/config.js`) while maintaining clean imports and zero console warnings.
-
----
-
-## 4. Technical Architecture & Data Strategy
-
-### Architecture & Component Diagram
+### 1. Chibi Character Base & Dark Fantasy Class Design
 
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        App Shell (React + Vite)                         │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │                 GameCanvas Wrapper (<canvas>)                     │  │
-│  │   requestAnimationFrame -> Fixed Timestep (dt clamped <= 0.05s)   │  │
-│  └─────────────────────────────────┬─────────────────────────────────┘  │
-│                                    │                                    │
-│        10 Hz HUD Poll (100ms)      ▼       Direct Event Triggers        │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │                   Game Engine Singleton (JS)                      │  │
-│  │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────────────┐  │  │
-│  │  │  World   │  │  Camera  │  │  Player   │  │     Spawner      │  │  │
-│  │  │ (6000px  │  │ (Smooth  │  │  (Sena +  │  │ (Spatial Grid +  │  │  │
-│  │  │  Chunks) │  │  +Shake) │  │  Scarf)   │  │  4 Boss Arenas)  │  │  │
-│  │  └──────────┘  └──────────┘  └───────────┘  └────────┬─────────┘  │  │
-│  │  ┌────────────────────────┐  ┌───────────┐           │            │  │
-│  │  │ Object Pools           │  │ Web Audio │           ▼            │  │
-│  │  │ • Projectiles          │  │ Procedural│  ┌──────────────────┐  │  │
-│  │  │ • Particles & Numbers  │  │ Synth SFX │  │ Enemies & Bosses │  │  │
-│  │  └────────────────────────┘  └───────────┘  └──────────────────┘  │  │
-│  └─────────────────────────────────┬─────────────────────────────────┘  │
-│                                    │                                    │
-│                                    ▼                                    │
-│  ┌───────────────────────────────────────────────────────────────────┐  │
-│  │              React UI Overlays (src/ui/*)                         │  │
-│  │  • TitleScreen & ControlsModal    • HUD (Portrait, Bars, Minimap) │  │
-│  │  • ShopModal (Ume's Pawn Counter) • SkillPanel (K) & Inventory (I)│  │
-│  │  • PauseMenu (ESC + Scanlines)    • DeathScreen (Respawn Kettle)  │  │
-│  └───────────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────────┐
+│           2-HEAD CHIBI PIXEL-ART BASE ANATOMY (image_c95e226e.png)         │
+├──────────────────────────────────┬─────────────────────────────────────────┤
+│ BASE ANATOMY LAYER               │ DARK FANTASY CLASS & NPC OVERLAYS       │
+├──────────────────────────────────┼─────────────────────────────────────────┤
+│ • Head: 16×14px rounded cranium  │ • Modular Hair Back / Front / Bangs     │
+│ • Ears: 3×5px prominent side ears│ • Headgear: Crowns, Cowls, Witch Hats   │
+│ • Eyes: 3×4px vertical anime iris│ • Class Armor: Obsidian Plate, Robes,   │
+│   with dark lash + 1×2px shine   │   Inquisitor Cloaks & Armor Tiers       │
+│ • Blush: 2×1px soft cheek tint   │ • Animated 4-Dir Walk, Idle Bounce,     │
+│ • Torso: 10×11px compact body    │   Dodge Roll & 3-Step Weapon Combo      │
+│ • Arms: 3×6px splayed chibi arms │ • Applies to all 5 Playable Heroes +    │
+│ • Legs: 4×5px stubby chibi legs  │   6 Town Masters + Wandering Merchant   │
+└──────────────────────────────────┴─────────────────────────────────────────┘
 ```
 
-### World Geography & Boss Arenas (`6000 x 6000 px`)
+---
 
-- **Kettle (Center Safe Zone)**: `(2600..3400, 2600..3400)` — Old boiler centerpiece, glowing campfire, Ume's counter, zero enemy spawns, health/stamina trickle recovery near fire.
-- **Slab Town (North, Lvl 1–8)**: `y < 2400` — Collapsed concrete blocks, dead mall tiles, falling dust particles.
-  - *Commons*: Tin Rat, Dust Dog. *Elite*: Cleaver Hauler (line charge).
-  - *Boss*: **The Foreman** at `(3000, 900)` — Wrecked construction rig with wrecking-ball slam, rebar volley, and overdrive bulldoze across 3 phases (`100%`, `60%`, `30%`).
-- **Route 9 (West, Lvl 5–14)**: `x < 2400` — Cracked asphalt highway, burnt car husks, drifting sparks.
-  - *Commons*: Wire Kite (flying drone), Tin Rat. *Elite*: Cleaver Hauler / Flats Harvester.
-  - *Boss*: **Big Axle** at `(900, 3000)` — Armored road train engine executing turbo rams, exhaust flame rings, and shrapnel barrages.
-- **Lye Marsh (East, Lvl 10–20)**: `x > 3600` — Dark chemical bog pools, boardwalks, pale spores, fog overlay.
-  - *Commons*: Lye Leech, Sump Bat. *Elite*: Lye Strider (0.8s telegraphed acid mortar).
-  - *Boss*: **Mother Sump** at `(5100, 3000)` — Bloated chemical vat horror spawning acid geysers, toxic waves, and leech broods.
-- **Copper Flats (South, Lvl 15–25)**: `y > 3600` — Oxidized red sand, wrecked excavators, high-wind dust storms.
-  - *Commons*: Dust Dog, Wire Kite. *Elite*: Flats Harvester (0.8s telegraphed whirlwind spin cut).
-  - *Boss*: **The Long Dry** at `(3000, 5100)` — Giant mechanical-plated sand worm burrowing under the arena, erupting with boulder rings and sand-laser sweeps.
+### 2. Story Campaign, Town Layout & 5-Floor Progression
 
-### Interactive Component & State Mapping
+#### Narrative Progression Flow (Prologue + 5 Acts)
+1. **Prologue: *The Ashen Oath* (Duskhollow Town · Lv 1)** — Speak with Chronicler Malakor at the Hunters Guild, equip your starting oath-arms at Vaelen's Forge, and enter the **Top-Center Abyssal Tower**.
+2. **Act I: *Chains of the Ossuary* (Floor 1: Blighted Catacombs · Lv 1–10)** — Cleanse all 4 Catacomb territories (`Warden` $\rightarrow$ `Executioner` $\rightarrow$ `Overlord`) to spawn the **Floor 2 Ascent Portal** and **Duskhollow Town Portal**.
+3. **Act II: *Rime of the Fallen* (Floor 2: Frostbound Crypt · Lv 11–20)** — Return to Town for Act II briefings and *Frost-Runed* gear, unlock your **Level 15 Specialization** at Archmage Solen's Arcane Sanctum, and defeat the 2nd-generation Frostbound Bloodlines.
+4. **Act III: *Crucible of Damnation* (Floor 3: Hellfire Abyss · Lv 21–30)** — Brew Brimstone Wards at Sister Isolde's Apothecary, awaken your **Level 30 Transformed Ultimate**, and conquer the 3rd-generation Infernal Bloodlines.
+5. **Act IV: *Roots of Contagion* (Floor 4: Rotwood Mire · Lv 31–40)** — Aid Vex and Isolde in purging the plague miasma threatening Duskhollow by severing the 4th-generation Pestilent Bloodlines.
+6. **Act V: *Throne of the Eclipsed Star* (Floor 5: Void Citadel · Lv 41–50)** — Master your **Level 45 Tier 4 Ultimate**, forge *Void-Tempered Regalia*, and vanquish the 5th-generation Eternal Bloodline Sovereigns.
 
-- **Combat & Skills (`Player.js`)**:
-  - **3-Hit Basic Combo (LMB)**: Alternating slash arcs toward cursor (`100%`, `115%`, `140%` ATK) with step-forward momentum and cyan blade trails.
-  - **Dodge Roll (`SPACE`)**: `0.25s` invulnerability, `1.2s` base cooldown (`0.9s` with Hydraulic Shins), afterimage trail.
-  - **Skill 1 — Lunge (`1`)**: Dash `160px` toward cursor, cutting all enemies along the line (`160% ATK`, `+20%/lvl`, `5s` CD `-0.4s/lvl`, `10` Stamina).
-  - **Skill 2 — Ground Break (`2`)**: Slam the Railcut for a `110px` radius shockwave + `1s` stun (`140% ATK`, `+15%/lvl`, `+12px/lvl`, `9s` CD, `20` Stamina).
-  - **Skill 3 — Rail Spike (`3`)**: Hurl a high-velocity piece of sharpened rail (`420px` range, `180% ATK`, `+20%/lvl`, `+1 pierce/lvl`, `6s` CD, `15` Stamina).
-  - **Ultimate — Seven Cuts (`R`)**: Requires 100% charge (gained from dealing/taking damage). Freezes world time for `1.1s`, renders 7 rapid lightning-cyan slashes across all enemies within `300px` for `500% ATK` total shared across the cuts, then shatters the screen on the final frame.
-- **Persistence (`SaveSystem`)**:
-  - Automatically serializes level, XP, gold, skill levels, equipped items, inventory, boss defeat flags, and settings every 30 seconds and on window unload/quit via Electron IPC (`window.electronAPI.saveGame`) with automatic fallback to `localStorage.getItem('gravel_sky_save_v1')`.
+#### Duskhollow Town Layout (Safe Hub Map)
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                             DUSKHOLLOW TOWN                                │
+│                                                                            │
+│                     ╔════════════════════════════════╗                     │
+│                     ║     ABYSSAL TOWER GATEHOUSE    ║                     │
+│                     ║   (Top-Center Floor 1–5 Entry) ║                     │
+│                     ╚═══════════════╤════════════════╝                     │
+│                                     │                                      │
+│   ┌──────────────────────┐          │          ┌──────────────────────┐    │
+│   │   RUNESMITH FORGE    │          │          │ ALCHEMIST APOTHECARY │    │
+│   │   & ARMORY (Vaelen)  │          │          │    (Sister Isolde)   │    │
+│   └──────────────────────┘          │          └──────────────────────┘    │
+│                                     │                                      │
+│   ┌──────────────────────┐    ╔═════╧═════╗    ┌──────────────────────┐    │
+│   │   HUNTERS GUILD &    │────╢ TOWN WELL ║────│    ARCANE SANCTUM    │    │
+│   │ BLOODLINE HALL (Mal) │    ║  & PLAZA  ║    │  & GRIMOIRE (Solen)  │    │
+│   └──────────────────────┘    ╚═════╤═════╝    └──────────────────────┘    │
+│                                     │                                      │
+│   ┌──────────────────────┐          │          ┌──────────────────────┐    │
+│   │  RAVEN'S REST TAVERN │          │          │ MYSTIC ENCHANTER &   │    │
+│   │  & INN (Meal Buffs)  │          │          │ CURIO GAMBLER (Vex)  │    │
+│   └──────────────────────┘          ▼          └──────────────────────┘    │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Dark Fantasy Visual Identity & 5-Floor Palettes (60-30-10 Distribution)
+
+| Location / Floor | Realm Name | Expected Band | 60% Dominant Ground / Canvas | 30% Structural Stone & Trim | 10% Arcane / Hazard Accent | Ambient Particle Weather |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Town Hub** | **Duskhollow Town** | `Safe Haven` | Cobblestone Slate (`#16141C`) | Timber & Iron (`#342D42`) | Lantern Gold (`#D4AF37`) | Warm Hearth Embers & Mist |
+| **Floor 1** | **Blighted Catacombs** | `Lv 1–10` | Crypt Slate (`#121318`) | Ossuary Bone & Iron (`#3A3842`) | Soulfire Cyan (`#00F0FF`) | Grave Ash & Soul Wisps |
+| **Floor 2** | **Frostbound Crypt** | `Lv 11–20` | Glacial Barrow (`#0D1822`) | Rime-Crusted Stone (`#2A465E`) | Pale Frostbite (`#7CE8FF`) | Blinding Hoarfrost & Ice Shards |
+| **Floor 3** | **Hellfire Abyss** | `Lv 21–30` | Charred Basalt (`#1C0E0C`) | Demonforged Iron (`#4D2016`) | Hellfire Ember (`#FF5A26`) | Brimstone Cinders & Blood Sparks |
+| **Floor 4** | **Rotwood Mire** | `Lv 31–40` | Putrid Fen (`#0E1D16`) | Blighted Timber (`#284E3C`) | Venomous Blight (`#C9F24B`) | Plague Spores & Swamp Miasma |
+| **Floor 5** | **Void Citadel** | `Lv 41–50` | Eldritch Obsidian (`#110C1D`) | Starforged Brass (`#3E2E63`) | Astral Gold & Rift (`#FFC83D`) | Void Singularities & Starlight |
+
+---
+
+### 3. Key Product Decisions & Trade-Offs
+
+- **Decision 1: Unified Chibi Pixel-Art Sprite Generator (`Sprites.js`)**
+  - *Chosen Approach*: Refactor the character sprite builder around a shared `drawChibiBase(grid, cx, cy, dir, anim, frameIdx, skinTone, eyeColor)` helper modeled directly on `/public/assets/aistudio/image_c95e226e.png` (big rounded head, side ears, 3x4 vertical anime eyes with highlight, splayed stubby arms, and compact legs), then layer class-specific hair, headgear, armor, capes, and weapons on top. Also display `/public/assets/aistudio/image_c95e226e.png` in the Sprite Gallery / Character Reference view.
+  - *Why*: Ensures every playable class and NPC shares the exact cohesive, expressive chibi proportion and anime eye style from your reference image while supporting 4-directional movement, dodge rolls, and attack animations.
+
+- **Decision 2: Wandering Merchant 30s Defense Sudden Quest & Mob-Repellent Stealth Ward**
+  - *Chosen Approach*: Corner merchant spawns (`20%` per corner) trigger a `30s` wave defense when approached. Surviving activates `merchant.repellentActive = true`, projecting a `260px` ward where enemy AI cannot detect, target, or enter to attack the player or merchant, and unlocking Morwen's Black-Market Shop (`-35%` discount gear, Cursed Relics, XP/Gold Elixirs). If the merchant's HP reaches `0`, she vanishes in a smoke bomb.
+  - *Why*: Turns exploring floor corners into a thrilling risk-reward event that creates a temporary safe oasis inside a dangerous dungeon floor.
+
+- **Decision 3: Uncapped Level Progression + 10-Level Gap "Abyssal Enrage" Buff**
+  - *Chosen Approach*:
+    - Uncapped player levels (`levelCap = Infinity`) with reduced base XP and steep over-level XP decay (`100%` $\rightarrow$ `60%` $\rightarrow$ `30%` $\rightarrow$ `10%` $\rightarrow$ `1%`) calibrated for `~10 levels per floor` (`~Lv 50` at Floor 5, `~Lv 100+` by future Floor 10).
+    - When `player.level - enemy.level >= 10`, enemies trigger **`☠ ABYSS ENRAGED`**, gaining massive stat multipliers (`HP`, `ATK`, `DEF`, `+25% Speed`) and a crimson curse aura.
+  - *Why*: Keeps progression disciplined for future floors while preventing high-level players from trivially farming lower floors.
+
+---
+
+### 4. Technical Architecture & Data Strategy *(Technical Reference)*
+
+#### Architecture & Component Diagram
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│     CHIBI SPRITE ENGINE, STORY, TOWN, 5-FLOOR TOWER & BLOODLINE SYSTEM     │
+└──────────────────────────────────┬─────────────────────────────────────────┘
+                                   │
+       ┌───────────────────────────┼───────────────────────────┐
+       ▼                           ▼                           ▼
+┌──────────────────────┐  ┌──────────────────────┐  ┌────────────────────────┐
+│  Chibi Base Pipeline │  │ Duskhollow Town &    │  │ Story, Quests & Enrage │
+│  (image_c95e226e)    │  │ 5-Floor Abyssal Tower│  │ ────────────────────── │
+│ ──────────────────── │  │ ──────────────────── │  │ • 5-Act Main Storyline │
+│ • 16×14 Chibi Head   │  │ • Top-Center Tower   │  │ • Town NPC Side Quests │
+│ • 3×4 Anime Eyes     │  │ • 6 RPG Buildings    │  │ • 20% Cleansed NPC     │
+│ • Compact Body/Limbs │  │ • 60 Bloodline Bosses│  │ • 20% Corner Merchant  │
+│ • Layered Dark       │  │   (3 Stages/Sector)  │  │   30s Sudden Quest &   │
+│   Fantasy Class Gear │  │ • Dual Clear Portals │  │   Mob-Repellent Ward   │
+└──────────┬───────────┘  └──────────┬───────────┘  └───────────┬────────────┘
+           │                         │                          │
+           └─────────────────────────┼──────────────────────────┘
+                                     ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│                  Gothic Dark Fantasy HUD, Menus & Displays                 │
+│ ────────────────────────────────────────────────────────────────────────── │
+│ • Reliquary HUD: Chibi Portrait, Blood HP, Soul Stamina & Quest Tracker    │
+│ • [J] Quest Journal & Story Tome · [B] Boss Bloodline Family Tree Modal    │
+│ • [K] Arcane Grimoire & Talent Tome · [I] Reliquary Gear & Runesmith Shop  │
+│ • Town Building Modals & Wandering Merchant Black-Market Shop              │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Data Model & State
+- **Chibi Sprite Builder (`src/game/Sprites.js`)**:
+  - `drawChibiBodyBase(g, cx, topY, dir, anim, frameIdx, paletteOpts)`: Renders the exact silhouette, ear placement, blush, 3x4 anime eyes, and stubby limb animation frames matching `image_c95e226e.png`, used by all 5 playable classes and all Town/Field NPCs.
+- **Location, Quest & Portal State (`WorldLedger`)**:
+  - `currentFloor`: `0` (Duskhollow Town) or `1..5` (Abyssal Tower Floors 1–5).
+  - `sectorProgress`: Tracks `stage` (`0 = Warden`, `1 = Executioner`, `2 = Overlord`, `3 = Cleansed`) for all 20 sectors across 5 floors.
+  - `quests`: Tracks `currentAct (1..5)`, `mainQuestStep`, `sideQuests`, and `suddenQuest` (`30s` Wandering Merchant defense & `repellentActive` sanctuary zone).

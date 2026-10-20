@@ -1,0 +1,458 @@
+# GRAVEL SKY / HELLS ADVENT: Ultimates, Skills, Upgrade System and Skill Trees (REVISED)
+
+**Document status:** DESIGN ONLY. No project files or code were changed.
+**Companion to:** `gravel-sky-ultimates-rewrite.md` (the five rewritten ult lines, node renames, no-ult-frame and free-moving-mobs rules).
+**Read from the project:** `src/data/talentTreeData.js`, `src/data/ultimates.js`, and the design docs in the project root.
+
+This revision applies the balance review to the original document. The open decisions in Section 9 are now resolved, with the recommended answers built into the rules below.
+
+Values marked **(proposed)** are new and untested. Values marked **(code)** were read from `ultimates.js` or `talentTreeData.js`. Everything else is carried over from the original doc.
+
+## What changed from the original
+
+| Area | Change |
+|------|--------|
+| Count cap | +3 becomes **+4** (FIELD +2, nodes and capstones up to +2) |
+| Stun cap | +1.0s becomes **+0.6s per ult, total stun on any ult ≤ 3.0s** |
+| Freeze | Whiteout Rupture "freeze" removed (converted to Brittle). The rule now also covers the code's `freezeDuration` |
+| Cooldown cap | The 50% cap is now a **floor of 50% of the Rank 1 cooldown**, and it includes the rank track |
+| Radius | Colossus Magnet drops from +25% to **+15%** |
+| Rank track | Rivet Spread, Spin Up, Lump, Vent Supernova and Phase Blink retuned |
+| Capstones | Limitless Echo trimmed. **Rook gets an ult capstone** (Final Count) |
+| FIELD / BURST | Redefined so the two forks are within +8–10% of each other. Counts corrected to +2 and Sena to 22 |
+| Tier 3 totals | New Section 4.7 with target totals |
+| Charge | Class multipliers normalized. New per-cast charge cap |
+| Trees | Kaelen and Vespera class trees deepened. Missing baseline skills listed |
+| Animation and VFX identity | **New Section 10.** Every class gets its own rhythm, motion, palette, impact frames, camera and payoff. No shared beat map, impact kind, accent color or pull-in |
+| Open decisions | All six resolved. Remaining playtest items listed in Section 9 |
+
+---
+
+## 1. Progression timeline
+
+Skill points follow the compendium: 1 per level from Lv 2–30 (29) plus 3 per promotion (6) = **35 points total**. After Section 5's tree changes, no class can buy everything.
+
+| Level | Ultimate | Baseline skills | Trees and traits |
+|-------|----------|-----------------|------------------|
+| 1 | Tier 1 unlocks (Seven Cuts, Ten Count, Scrapfall, Sunfall Cataclysm, Orbital Ion Singularity) | Rank 1 of all 3 baseline skills | Intrinsic trait Rank I |
+| 2–14 | none | none | Skill points go to class-tree passives and the first choice nodes. Class tree rows 1–3 open up |
+| 15 | Tier 2 (count +1 step) | Rank 2 (count +1 step) | Spec skills 1–2 and their forks, spec trait Rank I, intrinsic Rank II |
+| 30 | Tier 3 (transformed; spec-dependent except Sena) and the Awakening Mutation fork (FIELD / BURST) | Rank 3 | Spec skills 3–4 and their forks, spec trait Rank II, intrinsic Rank III, class capstones reachable |
+| 45 | Tier 4 (Mastery) | Rank 4 | Spec trait Rank III, intrinsic Rank IV |
+| 50 | Level cap | | |
+
+**Design rule:** tiers and skill ranks come free from level, not from skill points. Skill points buy choices (nodes, forks, capstones) on top. This keeps count-based upgrades predictable and makes the 35 points matter for build identity.
+
+**Tier rule (new):** a Tier 3 ult's total must be **at least 1.10× the same class's Tier 2 total**. In the current code, Crane Drop (600%) is 16% *below* Scrapfall at Tier 2 (715%), which this rule forbids.
+
+---
+
+## 2. The modifier layer model
+
+Every ult is built in the same order. Later layers can only modify what earlier layers established.
+
+| Layer | Source | What it can change | Examples |
+|-------|--------|--------------------|----------|
+| 0 | Tier (level) | The ult itself: mechanic, primary count, radius, base damage | Eight Cuts at Lv 15, Rain of Swords at Lv 30 |
+| 1 | Class capstone (class tree, bottom row) | One rider on the payoff | Limitless Echo, Satellite Relay, Final Count |
+| 2 | Class passives (class tree) | Stats that feed ult damage | Iron Grip, Hemorrhage |
+| 3 | Branch nodes (Journeyman / Master) | Count, cost, status riders | Extra Cut, Floating Yard |
+| 4 | Spec fork (Awakening Mutation, spec tree row 6) | FIELD (coverage) or BURST (payoff) | FIELD: +2 swords. BURST: Great Sword +20% |
+| 5 | Traits (intrinsic and spec, rank by level) | Conditional riders | Syncopation Rank III |
+
+### 2.1 Hard caps (apply after all layers)
+
+| Stat | Cap on node, capstone and fork bonuses combined |
+|------|-------------------------------------------------|
+| Primary count | **+4 over the tier's base count**: FIELD gives +2, nodes and capstones give at most +2 |
+| Radius | +35% (Colossus Magnet +15% plus FIELD +15% = +30%, which fits) |
+| Damage bonus from nodes (pooled, additive) | +35%. **BURST counts inside this pool.** Tier scaling is not part of the pool |
+| Stun duration | **+0.6s from nodes and forks, and total stun on any ult ≤ 3.0s** |
+| Charge cost reduction | 15% (existing Extra Cut / Hold the Line value) |
+| Skill cooldown | **No skill may drop below 50% of its Rank 1 cooldown.** This counts the rank track, class passives, nodes and Flow State together |
+
+Why the stun and cooldown caps changed:
+- Base stun is already 2.5–2.8s at Tier 3 **(code)**. Adding +0.5s per tier, a +0.3s fork and the old +1.0s node cap reaches about 4.6s, which is a freeze in practice.
+- Lunge goes 5.0s → 3.4s on the rank track alone. A further 50% reduction used to reach about 1.7s. The floor now stops it at **2.5s**.
+
+### 2.2 What can never be unlocked by any node, fork or trait
+
+- **No ult frame:** no cut-in, letterbox, zoom-lock or world freeze, ever.
+- **No mob freeze outside Sena's Tier 1–2.** No node may restore a freeze, a held pull or a sustained root. This includes the `freezeDuration` values currently in Whiteout Rupture **(code)**, which become Slow plus Brittle stacks.
+- **No telegraph shortening below 0.4s.** Telegraphs are the counterplay.
+- **No second ult.** Nodes modify the active ult, they never add a different one.
+- **No ult crits.** Existing `neverCrit: true` stays.
+
+---
+
+## 3. Skill Rank Track (baseline skills)
+
+The baseline skills follow the same count-based upgrade rule as ults. Ranks arrive at Lv 1 / 15 / 30 / 45 and raise a visible count. Cooldown, radius and stamina scale linearly to the compendium's stated endpoints (for example Lunge cooldown 5.0s → 3.4s, Ground Break radius 110px → 158px). Cells show **count · total ATK**.
+
+**Rule:** every rank must change a visible count. Rank 1 → Rank 4 total growth should land between **×1.4 and ×1.5**. Outliers from the first draft (Rivet Spread ×2.45, Spin Up ×2.3, Lump ×1.3) are retuned below.
+
+| Class | Skill | Rank 1 (Lv 1) | Rank 2 (Lv 15) | Rank 3 (Lv 30) | Rank 4 (Lv 45) |
+|-------|-------|---------------|----------------|----------------|----------------|
+| Sena | Lunge | 1 cut · 160% | 2 cuts · 185% | 3 cuts · 215% | 4 cuts · 240% |
+| Sena | Ground Break | 1 shock ring · 140% | 2 rings · 160% | 3 rings · 180% | 4 rings · 200% (stun stays 1.0s) |
+| Sena | Rail Parry | 1 crescent · 350% | 2 crescents · 400% (2 × 200%) | 3 crescents · 450% (3 × 150%) | 4 crescents · 500% (4 × 125%) |
+| Rook | Rivet Spread | 5 bolts · 300% (60% each) | 6 bolts · 360% (60%) | 7 bolts · 399% (57%) | 8 bolts · 440% (55%) |
+| Rook | Kickback | 1 bolt · 200% | 2 bolts · 225% | 3 bolts · 255% | 4 bolts · 280% |
+| Rook | Rapid Fire | 4.0s | 4.7s | 5.3s | 6.0s (buff skill: duration is its count) |
+| Ines | Pull | 1 pulse · 90% | 2 pulses · 100% | 3 pulses · 115% | 4 pulses · 130% |
+| Ines | Spin Up | 3 blades · 60%/s, 5.0s (300%) | 4 blades · 64%/s, 5.4s (346%) | 5 blades · 68%/s, 5.8s (394%) | 6 blades · 72%/s, 6.0s (432%) |
+| Ines | Lump | 0 fragments · 250% | 4 fragments · 280% | 6 fragments · 320% | 8 fragments · 360% |
+| Kaelen | Naphtha Jet | 1 fire pool · 175% | 2 pools · 200% | 3 pools · 230% | 4 pools · 255% |
+| Kaelen | Caustic Mortar | 1 canister · 190% | 2 canisters · 215% | 3 canisters · 245% | 4 canisters · 270% |
+| Kaelen | Vent Supernova | 1 ring · 250% | 2 rings · 285% | 3 rings · 320% | 4 rings · 350% |
+| Vespera | Tesla Pylon | 1 zap target · 85% | 2 targets · 100% | 3 targets · 115% | 4 targets · 133% |
+| Vespera | Seeker Swarm | 4 micro-drones · 175% | 5 drones · 200% | 6 drones · 230% | 8 drones · 255% |
+| Vespera | Phase Blink | 1 decoy blast · 220% | 2 blasts · 255% | 3 blasts · 290% | 4 blasts · 320% |
+
+What changed from the first draft:
+- **Rivet Spread:** 300 → 736% became 300 → 440%. At Rank 4 it was above Rook's Tier 1 ult (650%).
+- **Spin Up:** 300 → 700% became 300 → 432%.
+- **Lump:** 250 → 330% became 250 → 360%.
+- **Vent Supernova and Phase Blink:** each repeated "2 rings / 2 blasts" at Rank 2 and 3. They now gain one visible unit each rank.
+
+### 3.1 How nodes modify skills
+
+- Skill-rank counts are the base. Node bonuses add on top and obey the Section 2.1 caps (primary count +4 combined across nodes and forks).
+- Existing nodes that set a fixed count are re-read as "+N over the current rank count", capped at +2. Example: Overclocked Swarm ("6 micro-drones") becomes +2 micro-drones.
+- Spec skill forks (Shadow Pin Fork A/B and the rest of each specialization's skill forks) are unchanged. They sit on spec skills, not baseline skills, and have no rank track.
+- Skill cooldown reduction (Flow State, Quick Edge, Flashpoint and similar) never affects ult charge. Ults run on charge, not cooldown.
+
+---
+
+## 4. Tree nodes and ultimates
+
+### 4.1 Class-tree capstones
+
+| Class | Capstone | Status | Rewrite / rule |
+|-------|----------|--------|----------------|
+| Sena | Limitless Echo | **Trimmed** | Ult refunds **35%** of skill cooldowns (was 50%) and gives **+20%** attack speed for 6s (was +30%). Refund timing: at payoff for Tier 1–2 (she is locked in), at cast start for Tier 3–4 (she is free to use the refunded skills during the rain). Target value: about +15% ult-equivalent |
+| Ines | Colossus Magnet | Conflict fixed | Ult radius **+15%** (was +25%). Each payoff leaves a 6s magnetized crater that slows enemies 30% (no pull) |
+| Kaelen | Hellfire Overdrive | Rewritten for clarity | At the payoff, all current Boiler Pressure vents: +0.1% ult damage per 1% Pressure (max +10%). Pressure resets to 0 |
+| Vespera | Satellite Relay (was Orbital Singularity) | Renamed (name clashed with her Tier 1 ult) | Every Vespera ult gains one extra orbital strike on the payoff point (+100% ATK, 0.4s after the payoff) |
+| Rook | **Final Count (new)** | **New** | Ult applies Marked for **+4s** longer and refunds **10 charge** if it hits 3 or more enemies. Sits on a new bottom-row node, parented to Kill Zone and Suppression Barrage. Target value: +10–15% ult-equivalent |
+| Rook | Dead Eye / Overcharge Battery | No ult interaction by design | Ult bolts do not count toward the "every 8th shot" counter. Dead Eye's guaranteed crit does not apply (ults never crit) |
+
+Why these changes:
+- Limitless Echo was worth several hundred % ATK at Lv 45. Satellite Relay is about +14% of a 700% ult and Hellfire is at most +10%.
+- Rook was the only class with no ult capstone, and his crit, distance and Clean Mag stats do not apply to ults.
+- Final Count must never add crits, distance bonus or Clean Mag.
+
+### 4.2 Class-tree passives: what applies to ults
+
+Based on the `ULTIMATE_CAST_RULES` flags **(code)**: `neverCrit`, `applyAtkBuffs`, `applyMomentum`, `applyMarked`, `applyDistanceBonus`, `applyCleanMag`.
+
+| Source | Applies to ult? | Notes |
+|--------|-----------------|-------|
+| ATK stats (Iron Grip, Kinetic Orbit, Conductive Coils and similar) | Yes | `applyAtkBuffs: true` |
+| Crit chance / crit damage (Keen Edge, Lethal Precision, Precision Overload) | No | `neverCrit: true` |
+| Sena Momentum stacks | Yes | `applyMomentum: true` |
+| Rook Marked (+20% damage taken) | Yes | `applyMarked: true`. Tier 2+ ults also apply Marked |
+| Rook distance bonus / Clean Mag | No | `applyDistanceBonus: false`, `applyCleanMag: false` |
+| Bleed Mastery (Hemorrhage) | Yes | Raises the Bleed Sena's ult applies |
+| White Heat (Burn +30%) | Yes | Raises Burn applied by Kaelen's ult |
+| Execution Doctrine: Culling Blade (+40% below 35% HP) | **Payoff hit only (decided)** | Prevents it multiplying a whole rain or volley. Worth about +20% of total ult damage at most |
+| Slag Barrier (shield on skill use) | Yes, once at cast start | Ult counts as one skill use |
+| Cooldown reduction (Flow State) | No | Ults use charge |
+
+Each ult's "payoff" must be named in the rewrite doc (for example Eight Cuts: the release hit; Rain of Swords: the Great Sword).
+
+### 4.3 Branch nodes (Journeyman / Master)
+
+The renamed and rewritten master nodes are listed in Part C of `gravel-sky-ultimates-rewrite.md`. How they behave across tiers:
+
+- A master node that modifies the base ult line (Extra Cut, Hold the Line, Floating Yard, Heavy Yard, Crimson Sun, Orbital Ion Grid, Valkyrie Protocol, Slug Round and similar) applies at Tiers 1–2 with its full effect and gives a small rider at Tiers 3–4, so it never becomes dead after Lv 30.
+- Master-node count bonuses count toward the Section 2.1 cap (**+4**).
+- Anvil / Counterweight (guarding fills ult charge at 2× speed) keeps using `counterweightBlockMultiplier: 2.0`.
+
+### 4.4 Traits (intrinsic and spec)
+
+| Trait | Ult interaction |
+|-------|-----------------|
+| Intrinsic Rank I–III (Fighting Instinct, Field Awareness, Flux Sense, Pressure Instinct, Circuit Intuition) | Recovery and utility riders: no ult interaction |
+| Fighting Instinct Rank IV (guaranteed crit finisher after four varied actions) | Not applied to ult hits (`neverCrit`). The ult cast does count as one "varied action" |
+| Spec trait Rank I (Lv 15) | Applies to the Tier 2 ult only if it grants a stat. Otherwise no interaction |
+| Spec trait Rank II (Lv 30) | Gives the Sena spec riders in 4.5. Other classes' spec ults already embody their spec |
+| Spec trait Rank III (Lv 45) | Adds one conditional rider to the Tier 4 ult (see 4.5 for Sena; others: the existing rank text applies to the ult's payoff) |
+
+### 4.5 Sena's spec riders on the single Rain of Swords line
+
+**Decision: keep the single ult line with riders** (not three separate Tier 3 ults). Riders cannot add swords or change the zone.
+
+| Spec | Rider at Lv 30 (trait Rank II) | Rider at Lv 45 (trait Rank III) |
+|------|-------------------------------|--------------------------------|
+| Phantom Edge | Each Echo Anchor / decoy inside the zone attracts 2 of the swords onto its marked enemy (they cannot miss) | A perfect evasion during the rain refunds an Echo Anchor charge |
+| Rift Breaker | Faultline Stomp fractures inside the zone double the Bleed duration of swords embedded in them | The Great Sword leaves a secondary seismic fracture that detonates after 1.0s |
+| Pulse Dancer | The 3 (or 4) rain waves land on the beat and each builds 1 Harmony | At 5 Harmony the Great Sword chains lightning to up to 3 nearby foes |
+
+### 4.6 Awakening Mutation (spec tree row 6 fork)
+
+It applies to **Tier 3 and Tier 4 forms only (decided)**.
+
+**The forks are now defined by role so they stay even:**
+- **FIELD = coverage.** +2 primary count (or +1 for ults with 3 or fewer counts) and +15% radius. The added units are tuned so FIELD's **total damage gain is +8–10%**. If it would be more, reduce the per-unit damage of the whole ult so the pool is shared.
+- **BURST = payoff.** +20% payoff damage and **+0.3s stun** (only where the ult has a payoff stun). At 45–62% payoff share this lands at about +9–12% total.
+- Fork bonuses count toward the Section 2.1 caps.
+
+Why: with the original numbers FIELD was worth +33–50% of the counted portion of damage and BURST about +9–12% of the total, so FIELD was roughly 2–3× stronger.
+
+| Ult (Tier 3 → Tier 4) | FIELD | BURST |
+|-----------------------|-------|-------|
+| Sena: Rain of Swords | 20 swords → **22** swords, zone +15% | Great Sword +20% damage, +0.3s stun |
+| Rook: Rail Slug → Twin Slug | Follow-up blasts 4 → 6, slug +10px wide | Slug damage +20% |
+| Rook: Dead Ground | Mines 14 → **16**, zone +15% | Final chain pop +20%, +0.3s stun |
+| Rook: Blackout Cascade | Fence spacing +20% (longer fence), EMP radius +15% | EMP +20%, +0.3s stun |
+| Ines: Grand Press | Slam radius +15%, each slam leaves a 3s magnet crater | Final slam +20% |
+| Ines: Thousand-Knife Typhoon | Shard rings 4 → 6 | Razor wave +20% |
+| Ines: Zero-Point Reversal | Polarity pulses 4 → 6 | Inversion burst +20% |
+| Kaelen: Crimson Flyover | Lanes 6 → 8 | Crater +20% |
+| Kaelen: Cathedral of Iron | Pillars 5 → 7 | Forge press +20% |
+| Kaelen: Whiteout Rupture | Blizzard pulses 4 → 6, radius +15% | Shatter +20%, **+2 Brittle stacks (no freeze)** |
+| Vespera: Cataclysm Edge | X marks 5 → 7 | Skybolt +20% |
+| Vespera: Colossus Directive | Construct radius +15%, longer shock decals | Final slam +20%, +0.3s stun |
+| Vespera: Worldstorm Atlas | Ion strikes 6 → 8 | Supercell pillar +20%, +0.3s stun |
+
+Sena's BURST no longer adds +20px radius (it was the only BURST that did). Tier 1 and 2 ults have no fork; their customization comes from branch nodes and the class capstone.
+
+### 4.7 Tier 3 ult totals (new)
+
+Totals are in % ATK. Current figures are **(code)** and assume every hit lands. Targets are **(proposed)**. Totals are comparable only when the table states single-target vs full-pack. Rail Slug pierces a line, while Eight Cuts hits at most 8 targets.
+
+| Class | Ult | Current | Target | Note |
+|-------|-----|---------|--------|------|
+| Sena | Nine Cuts | 720 | replaced by Rain of Swords | Set in the rewrite doc |
+| Sena | Worldsplitter | 900 | replaced by Rain of Swords | |
+| Sena | Perfect Frequency | 1,100 | replaced by Rain of Swords | |
+| Rook | Rail Slug | 1,200 + 350 per enemy | **1,000 + 250 per enemy** | Single line, pierces |
+| Rook | Dead Ground | **2,640** (12 × 220%) | **~980** (14 mines × 70%) | 2.7× the others. Mines hit overlapping targets |
+| Rook | Blackout Cascade | 1,000 | 1,000 | Keep |
+| Ines | Crane Drop | **600** | **850** (3 slams × ~280%) | Below Tier 2 Scrapfall (715) today |
+| Ines | Zero-Point Reversal | 800 | 900 | Keep above Tier 2 by ≥10% |
+| Kaelen | Supercritical Meltdown | **1,450** (8s) | **≤ 1,100** | Also grants +40% move speed, +50% DR |
+| Kaelen | Cathedral of Iron | 850 | 900 | |
+| Kaelen | Whiteout Rupture | 800 | 900 | Below Tier 2 Sunfall (832) today |
+| Vespera | Overclocked Armada | **1,500** (8s) | **≤ 1,100** | 12 drones plus finale |
+| Vespera | Colossus Directive | 880 | 920 | |
+| Vespera | Worldstorm Atlas | 900 | 920 | |
+
+Bands: burst ults **800–1,000%**, 8-second uptime ults **≤ 1,100%** (they also give buffs, so they must not out-damage burst ults). Tier 4 = Tier 3 × 1.35 **(code)**. Dead Ground's ×1.35 on 2,640 was 3,564%.
+
+---
+
+## 5. Point budget and example builds
+
+### 5.1 Tree size per class
+
+Rough node ranks available (class tree plus a ~22-point spec tree, free base skills excluded):
+
+| Class | Before | After this revision | vs 35 points |
+|-------|--------|---------------------|--------------|
+| Sena | ~50 | ~50 | 70% buyable |
+| Rook | ~44 | ~46 (adds Final Count) | 76% |
+| Ines | ~37 | ~37 | 95% (tight, see below) |
+| Kaelen | ~28 | **~38** | 92% |
+| Vespera | ~28 | **~38** | 92% |
+
+**Required tree work (proposed):**
+- **Kaelen and Vespera class trees:** add rows 4–6, about **+10 node ranks** each: two 2-rank passives (4), one choice node (1), two 2-rank passives (4) and one pre-capstone passive (1).
+- **Ines:** add one 2-rank passive pair so the total sits near 40.
+- Names and effects for the new nodes are still to be written.
+
+### 5.2 What an ult build really costs
+
+- The class capstone is not 3–6 points. The path to **Limitless Echo is about 8–9 prerequisite points**.
+- The path to the Awakening Mutation fork is about **10–12 points**.
+- A full ult-focused build therefore spends about **19–21 of the 35 points**, though most of those prerequisite nodes also give general stats.
+
+### 5.3 Example builds (counts use the new +4 cap)
+
+| Example build (Sena) | Ult-relevant picks | Effect |
+|----------------------|--------------------|--------|
+| Ult-focused | Limitless Echo + Extra Cut + FIELD | 8 → 9 cuts at Tier 1–2. 20 → **22** swords at Tier 3–4 from FIELD (up to 24 with a +2 node). Skills 35% refunded at cast start |
+| Burst-focused | Limitless Echo + BURST | Great Sword +20%, +0.3s stun, skills refunded at cast start |
+| Survivor | Hold the Line + Iron Bastion | Taunted enemies and −60% damage taken while the zone is active |
+
+---
+
+## 6. Respec and edge cases
+
+| Situation | Behavior |
+|-----------|----------|
+| Switch specialization | Tier 3–4 ult changes to the new spec's ult (Sena: unchanged line, riders change). The fork choice is cleared. Nodes tied to the old ult are inactive, not lost |
+| Level above a tier breakpoint with a missing spec | Defaults to the starting spec's ult (Rail Hunter, Magnet Crusher, Cinder Corsair, Storm Cartographer or Volt Reaver, whichever the character's `Starting Specialization` is) |
+| Respec out of a capstone | The ult runs without its rider. No refund of cooldowns in progress |
+| Ult cast while Stunned or Lifted | Blocked (`blockedByStatuses: ['stun', 'lifted']`) |
+| Charge meter during an ult | Gain is paused for all classes while an ult is active (replaces the per-node `pausedDuringUltimates` list) |
+| Two ults requested at once | Not possible. The meter resets on cast |
+| Boss and elite staggers | Existing `bossStaggerBase` and per-second stun values still apply to the payoff stun |
+
+---
+
+## 7. Charge meter and cast rules (what changes in the data)
+
+For the implementation pass (not done here):
+
+| Existing value (`src/data/ultimates.js`) | Proposed |
+|-----------------------------------------|----------|
+| `letterboxHeightRatio: 0.12` | 0 (no letterbox) |
+| `maxCameraZoom: 1.15` | 1.0 (no zoom-lock). A short pull-out is allowed on Tier 4 payoffs |
+| Cut-in steps (`cutInEnter` / `cutInExit`) | Removed from every sequence |
+| `freezeWorld: true` | Becomes `freezeMobsInRadius`, used **only by Seven Cuts / Eight Cuts** |
+| `nineCutsChargeNeeded: 85` | Rename `extraCutChargeNeeded`, still 85 |
+| `pausedDuringUltimates: ['holdTheLine','craneDrop']` | Replaced by "paused while any ult is active" |
+| `classMultipliers` (sena 1.0, rook 0.6, ines 0.7, kaelen 0.9, vespera 0.8) | **sena 1.00, rook 0.77, ines 0.83, kaelen 0.71, vespera 0.71** (value per charge was 500 / 390 / 421 / 630 / 560). Re-derive if the Tier 1 totals change |
+| `skillHitMaxEnemiesPerCast: 3` | Keep, and **add a per-cast charge cap of 9** so multi-hit skills (Rivet Spread 8 bolts) cannot out-charge single-hit ones. A Rank 4 Rivet Spread could otherwise reach about 14 per cast |
+| `impactFrames` keys | Keep. Add `greatSwordFrames`, `cascadeFrames` and per-class flash styles from the rewrite's class identity table |
+| `accessibilityDefaults.shortUltimates` | Compresses VFX-only steps by 30%. Never shortens telegraphs |
+| `reduceFlashes` | Sena's black/white inversion becomes a bone tint. Max 3 flashes per second (existing cap) |
+| `applyUltimateTierScaling()` | Apply forks **only at Tier 3 and 4**. Enforce the Section 2.1 caps (the code has none today). Stop adding +0.5s stun per tier past the 3.0s limit. Replace `freezeDuration` in Whiteout Rupture with Brittle stacks |
+
+---
+
+## 8. Things that don't match between code and docs
+
+| Item | In code | In compendium / doc | Resolution |
+|------|---------|---------------------|------------|
+| Kaelen's surname | Kaelen Vance (class tree subtitle) | Kaelen Vos | Pick one |
+| Kaelen baseline skills | **2**: Naphtha Jet and Combustion Slam | 3: Naphtha Jet, Caustic Mortar, Vent Supernova | Treat Combustion Slam as the current Vent Supernova. Add Caustic Mortar |
+| Vespera baseline skills | **2**: Tesla Pylon and Seeker Swarm | 3, including Phase Blink | Add Phase Blink |
+| Rook Rapid Fire | Three-shell burst | 4.0–6.0s buff | Settle before the rank track is built |
+| Rail Parry | 0.4s window, 8 stamina, 6.0s cooldown | 0.60s window, 16 stamina, 8.0s cooldown | Pick one |
+| Ground Break | 14 stamina, 8.5s cooldown | 20 stamina, 9.0s cooldown | Pick one |
+| Class tree depth | Ines 5 rows, Kaelen and Vespera 4 rows | Compendium assumes full trees | Deepen (Section 5.1) |
+| Ult capstones | Ines has Colossus Magnet. Rook has none | The original doc said "no Rook or Ines ult capstones" | Ines already has one. Rook gets Final Count |
+| Ult capstone name clash | Colossus Magnet and Orbital Singularity | | Rewritten in 4.1 |
+| Tier 3 totals | 600% to 2,640% | Original doc said 500% to 1,500% | Retuned in 4.7 |
+| Fork stacking | Forks multiply on top of the tier scaling with no cap | Caps in Section 2.1 | Enforce caps (Section 7) |
+
+---
+
+## 9. Decisions (resolved)
+
+| # | Decision | Resolution | Where applied |
+|---|----------|------------|---------------|
+| 1 | Free ranks vs bought ranks | **Free by level.** Bought ranks would tax Sena and Rook heavily and barely touch Kaelen and Vespera | Section 1 |
+| 2 | Cap values | Count **+4**, radius +35%, damage +35% (BURST inside it), stun **+0.6s and ≤ 3.0s**, cooldown **floor 50% of Rank 1** | Section 2.1 |
+| 3 | Culling Blade on ults | **Payoff hit only** | Section 4.2 |
+| 4 | Charge multipliers | **Normalized** to equal value per charge, plus a per-cast charge cap | Section 7 |
+| 5 | Sena spec riders | **Single ult line with riders.** Limitless Echo trimmed, Rook gets Final Count | Sections 4.1, 4.5 |
+| 6 | Awakening Mutation timing | **Tier 3 and 4 only.** FIELD redefined as coverage so it matches BURST | Section 4.6 |
+| 7 | Do classes share ult animations and effects? | **No.** Each class has a signature (Section 10.2). Shared beat maps, impact kinds, accent colors, pull-ins and openers are banned | Section 10 |
+
+### Still needs playtesting or your input
+
+- **Normalized charge multipliers** (1.00 / 0.77 / 0.83 / 0.71 / 0.71) assume equal charge rate across classes. This is untested.
+- **Tier 3 target totals** (Section 4.7) are proposals. Dead Ground (~980) and Crane Drop (~850) are the biggest changes.
+- **Final Count** values (+4s Marked, 10 charge refund) and the **new Kaelen / Vespera / Ines nodes** are placeholders.
+- **Kaelen's third baseline skill:** confirm that Combustion Slam becomes Vent Supernova and that Caustic Mortar is new.
+- **Rook's Rapid Fire:** burst or buff.
+
+---
+
+## 10. Ult animation and VFX identity (new)
+
+**Goal:** a player can tell which class cast an ult from a single frame of the effect, and from the rhythm alone with the sound off. The no-ult-frame rule (Section 2.2) removes the shared cut-in, so the class identity has to come from the ult itself.
+
+Values marked **(code)** were read from `src/data/ultimates.js`. Timings and names marked **(proposed)** are new and untested. Per-ult names follow the Section 4.6 table. Reconcile them with the class identity table in `gravel-sky-ultimates-rewrite.md`, which was not available to me.
+
+### 10.1 Audit: where the ults look the same today
+
+| # | Finding | Evidence **(code)** | Problem |
+|---|---------|---------------------|---------|
+| 1 | **Same beat map across classes** | Deploy at about 340ms, pulse about 680ms, pulse about 1100ms, final about 1580ms, end about 1950ms. Cathedral of Iron (700 / 1120 / 1580), Whiteout Rupture (680 / 1100 / 1580), Colossus Directive (680 / 1100 / 1580), Worldstorm Atlas (680 / 1100 / 1580), Zero-Point Reversal (750 / 1150 / 1580), plus the Tier 1 Sunfall Cataclysm and Orbital Ion Singularity (about 650 / 1050 / 1520) | Four different classes play the same 2-pulse-plus-final rhythm. The damage split is also the same: two pulses, then a final of 45–55% |
+| 2 | **Same opener and closer on nearly every ult** | `startCast` with `twoToneWorld`, `letterbox: 0.12`, `lockMovement`, then `cutInEnter` (title card sliding from the right with 8-direction speed lines) and `cutInExit` with a 1.05–1.22 zoom | Removed by Section 7, but it must not be replaced by a new shared opener |
+| 3 | **Pull-in on five classes' ults** | `pullInwardPx` 45–85 on Zero-Point Reversal (Ines), Whiteout Rupture (Kaelen), Ion Matrix and Worldstorm (Vespera), Blackout Cascade (Rook) | Pull is Ines's identity. It also conflicts with the Section 2.2 rule against held pulls |
+| 4 | **Same finale** | Almost every ult ends on a final burst with a 2.0–2.8s stun, `spawnCrater: true` and shake 11–15 | Every class lands the same payoff |
+| 5 | **Shared impact-frame kinds** | `beam` is used by Vespera, Sena (Perfect Frequency) and Rook (Blackout Cascade). `groundSlam` is used by Sena (Hold the Line, Worldsplitter) and Vespera (Colossus). Kaelen's Whiteout Rupture uses `slash`, which is Sena's family | The impact flash does not tell you the class |
+| 6 | **Shared accent color** | The `signal` color is the accent for all Sena ults, and also for Rook's Blackout Cascade, Kaelen's Whiteout Rupture and Vespera's Worldstorm Atlas. Sena's Perfect Frequency uses Vespera's `volt` for beat 2 | Four classes read as the same color on the biggest ults |
+| 7 | **Identical tier scaling** | `applyUltimateTierScaling` gives every class the same damage, radius and shake multipliers, +1 impact frame and +0.5s stun | Leveling up looks the same on every class |
+
+### 10.2 Class signatures
+
+Every ult of a class inherits its signature. Specs and tiers vary the ult but not the signature.
+
+| | **Sena** | **Rook** | **Ines** | **Kaelen** | **Vespera** |
+|---|----------|----------|----------|------------|-------------|
+| **Motion language** | Sharp, vertical, instant | Linear, horizontal, mechanical | Heavy, vertical, gravity-driven | Swelling, radial, lingering | Precise, geometric, aerial |
+| **Rhythm** | Staccato: many equal hits (75–90ms) ending on a 200ms silence, then the release | Ratchet charge, a held beat, one instant release, a 300ms ring-out | Slow lift, a hang (objects visible overhead), a hard slam | Continuous build, overlapping waves, no hard stop. Fire lingers 3–6s | Staggered telegraphs at pattern points, then a synchronized strike |
+| **Delivery** | Blink-cuts (Tier 1–2). Falling blades (Tier 3–4) | Hitscan lines, aim line, placed mines | Scrap lifted and dropped from above | Expanding heat, lanes, rolling waves | Sky beams, a lattice, an automaton |
+| **Accent / secondary** | signal / bone (blood for Bleed). Bone tint in reduce-flashes mode | brass / white-hot muzzle flash. Red aim line for Ten Count | verdigris / rust | ember / white-hot. Cryo uses its own frost tint | volt / cyan holographic |
+| **Impact-frame family** | `slashCut`, `slashShatter`, `greatSword` | `rail`, `pierceVector`, `mineBlast`, `emp` (new) | `crush` | `explosion`, `frostShatter` (new) | `beam`, `lattice` (new), `colossusSlam` (new) |
+| **Shake / camera** | 1–2 frame sharp shake, low amplitude, one hard final. No camera move | One directional recoil kick opposite the aim. No random shake | Low-frequency rumble with a delayed settle. A 4px downward screen shove on the slam | Ramping swell, not spikes. A heat shimmer at the edges | Crisp jitter and a short light flicker. No heavy rumble |
+| **Payoff rider** | Bleed | Marked | Slow (magnetized crater) | Burn (Brittle for cryo) | Shock chain |
+| **Ground mark** | Embedded swords, slash scars | Scorched line, mine pits | Crater | Scorch, lava lake, frost field | Ion-burn lattice |
+| **Wind-up pose** (≤ 0.4s, never freezes the world) | Crouch and blink | Plant feet, ratchet | Arms raised, scrap lifts | Vents steam, glows | Drones rise into formation |
+| **Sound signature (proposed)** | Silence beat, then bright steel | Ratchet clicks, then a boom | Grinding metal and a sub thud | Roar and a rising whoosh | Tonal arpeggio |
+
+### 10.3 Hard rules
+
+1. **No two classes share an impact-frame kind or an accent color.** `signal` belongs to Sena. Rook's Blackout Cascade becomes brass and white-hot, Kaelen's Whiteout Rupture gets a frost tint (a new palette entry), and Vespera's Worldstorm Atlas becomes volt and cyan. Perfect Frequency's volt beat becomes bone or blood.
+2. **No two ults from different classes may have the same beat map within ±150ms.** A beat map is the list of action times from the start of the cast to the last damage event.
+3. **Pull-in belongs to Ines only.** It is a short pulse of at most 85px displacement, never a held pull. Remove `pullInwardPx` from the Rook, Kaelen and Vespera ults.
+4. **Not every ult ends on "stun plus crater".** Each class uses its own payoff rider and ground mark from 10.2. Stun stays where the ult has a payoff stun (it feeds boss stagger), but its visual is the class's own.
+5. **No shared opener.** Each class has its own wind-up pose (10.2). None of them may use a letterbox, title card, zoom-lock or world freeze. The only exception is the mob freeze on Seven Cuts and Eight Cuts.
+6. **Tier scaling is class-specific** (10.5). No uniform "+1 impact frame" for everyone.
+7. **Reduce-flashes mode must still tell classes apart.** Use shape and palette tint, not just flash timing. Sena's inversion becomes a bone tint, with a maximum of 3 flashes per second (the existing cap).
+
+### 10.4 Tier 3 beat maps (proposed)
+
+Times are milliseconds from the cast. Damage is spread over these beats to match the totals in Section 4.7, rather than the current two pulses plus a final.
+
+| Class | Ult | Shape | Beat map (proposed) | What the player sees |
+|-------|-----|-------|---------------------|----------------------|
+| Sena | Rain of Swords | Staccato waves, silence, Great Sword | Telegraph marks 0–300. Waves at 600 / 900 / 1200 (a 4th at 1500 at Tier 4). 200ms silence. Great Sword | Blades falling in rhythm, then one huge blade |
+| Rook | Twin Slug | Charge, release, ring-out | Ratchet charge 0–1000. Slug 1 at 1000. Slug 2 at 1300. Follow-up blasts along the line 1000–1500. Ring-out 300 | A red aim line, a single bright line, blasts walking down it |
+| Rook | Dead Ground | Place, arm, domino | 14 mines placed in a stagger over 1200. Arm tick at 1400. Chain detonation sweeping outward 1600–2200. No pull | A field that goes off in a ripple |
+| Rook | Blackout Cascade | Draw, dim, collapse | 3 pylons slam at 0 / 200 / 400. Laser lines draw one at a time 600–1000. The area dims for 300. EMP at 1500 | A triangle drawn in light, a flash |
+| Ines | Grand Press | Lift, hang, slam, slam, slam | Lift 0–900. Hang. Slam 1 at 1100. Slam 2 at 1500. Final slam at 1900, each heavier | Metal rising, then three crushes |
+| Ines | Thousand-Knife Typhoon | Spin-up, expanding rings | Spin-up 0–800 with rising rotation. Shard rings at 900 / 1100 / 1300 / 1500. Razor wave at 1700 | Scrap whirling, then rings of blades |
+| Ines | Zero-Point Reversal | Pull, invert | Inward pulses at 700 and 1100 (the only pulls in the game's ults). Inversion burst outward at 1580 | Enemies drawn in, then thrown out |
+| Kaelen | Crimson Flyover | Strafing lanes | 6 lanes strafe edge to edge every 180ms from 300. Trails linger. Finish at 1500 | Lines of fire sweeping across |
+| Kaelen | Cathedral of Iron | Sequential crashes, press | 5 pillars crash one at a time every 220ms from 300. A 300ms hang. Forge press at 1700 | Pillars landing, then a press |
+| Kaelen | Whiteout Rupture | Creeping spread | Frost creeps outward from the center 0–1400, continuously. Shatter at 1500 | A frozen field spreading, then breaking |
+| Vespera | Cataclysm Edge | Telegraph, synchronized strike | X marks appear one by one 0–800. All skybolts strike together at 1000 | Marks, then everything at once |
+| Vespera | Colossus Directive | Character-driven beats | Construct enters at 300. Fist sweep at 800. Stomp at 1300. Double-hammer slam at 1900. Each action has a 250ms wind-up | A giant acting, not an effect |
+| Vespera | Worldstorm Atlas | Scan, ping, supercell | Radar sweep 0–700. Ion strikes ping across the grid every 150ms (6–8 of them). Supercell pillar at 1800 | A grid lighting up strike by strike |
+
+The two 8-second ults (Meltdown, Armada) are continuous. They already differ from the burst ults, but they need separate signatures from each other: Meltdown is a swelling flame torrent and slag trail (Kaelen), and Armada is a drone formation firing beams and diving at the end (Vespera).
+
+### 10.5 Tier flourishes per class (replaces the uniform scaling)
+
+| Class | Tier 2 (Lv 15) | Tier 4 (Lv 45) |
+|-------|----------------|----------------|
+| Sena | More bone debris, an extra afterimage on each blink | A fourth wave of blades, the Great Sword glows |
+| Rook | Larger muzzle flash, a longer ring-out | A second casing ejection, a heavier recoil kick |
+| Ines | About 40% more scrap pieces (existing `wreckPieceCount` scaling), a larger crater | Deeper crater with a magnetized sheen |
+| Kaelen | Longer afterburn, more embers | A larger scorch or frost field that lingers longer |
+| Vespera | +2 lattice vertices (existing `vertexCount` scaling) | A second orbit of drones |
+
+All flourishes stay inside the 3-flashes-per-second limit.
+
+### 10.6 Acceptance test for every ult
+
+- **Mute test:** with the sound off, a tester can name the class from the rhythm alone.
+- **Silhouette test:** a still frame at the payoff identifies the class by shape and color.
+- **Overlap test:** put the beat maps of every pair of ults side by side. No two different-class ults may match within ±150ms.
+- **Same-class test:** a Tier 1, 2, 3 and 4 ult of one class are clearly the same signature.
+- **Reduce-flashes test:** the class is still identifiable with flashes reduced.
+
+### 10.7 Code impact (for the implementation pass)
+
+- Add a per-class `vfxProfile` with accent, secondary, allowed impact kinds, shake style and ground mark.
+- Replace the shared "deploy, pulse, pulse, final" pattern with a per-ult beat map (10.4), and rebalance damage per beat to the Section 4.7 totals.
+- Remove the `cutInEnter` / `cutInExit` steps and the shared `startCast` flags (already planned in Section 7). Give each class its own wind-up step.
+- Remove `pullInwardPx` from every ult except Ines's Zero-Point Reversal.
+- Set `spawnCrater` only for classes whose ground mark is a crater (Ines, and Kaelen's lava lake). Others use their own mark from 10.2.
+- Swap impact kinds per 10.2, add the new kinds (`emp`, `frostShatter`, `lattice`, `colossusSlam`, `greatSword`), and retire `groundSlam` for Sena.
+- Replace `PALETTE.signal` on non-Sena ults. Add palette entries for the frost tint and the cyan holographic.
+- Replace `applyUltimateTierScaling`'s uniform scaling of shake and impact frames with the class flourishes in 10.5.
+
+### Still needs your input
+
+- **Per-ult beat maps (10.4)** are proposals. Reconcile them with the rewrite doc's ult lines and its class identity table.
+- **New palette entries** (frost, cyan holographic) and the five new impact kinds need art direction.
+- **Audio** is only noted as a proposal. I did not see any audio code.

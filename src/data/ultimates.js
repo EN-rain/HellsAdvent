@@ -9,10 +9,12 @@ import { PALETTE } from './config.js';
 
 export const ULTIMATE_CHARGE_CONFIG = {
   maxCharge: 100,
-  nineCutsChargeNeeded: 85,
+  extraCutChargeNeeded: 85,
+  nineCutsChargeNeeded: 85, // legacy alias
   basicHitGain: 1.2,
   skillHitGain: 3.0,
   skillHitMaxEnemiesPerCast: 3,
+  perCastChargeCap: 9, // Section 7: max 9 charge gained from any single skill cast
   damageTakenGainPerPctMaxHp: 0.8,
   killBonus: {
     common: 1.5,
@@ -21,14 +23,111 @@ export const ULTIMATE_CHARGE_CONFIG = {
   },
   damageDealtGainCapPerSecond: 6.0,
   classMultipliers: {
-    sena: 1.0,
-    rook: 0.6,
-    ines: 0.7,
-    kaelen: 0.9,
-    vespera: 0.8,
+    sena: 1.00,
+    rook: 0.77,
+    ines: 0.83,
+    kaelen: 0.71,
+    vespera: 0.71,
   },
   counterweightBlockMultiplier: 2.0,
+  pauseDuringAnyUltimate: true,
   pausedDuringUltimates: ['holdTheLine', 'craneDrop'],
+};
+
+export const HARD_CAPS = {
+  maxShakePx: 16,
+  maxCameraZoom: 1.25,
+  maxStunSeconds: 3.0,
+  maxCorrodeStacksPerCast: 3,
+  maxPrimaryCountBonus: 1.5,
+  maxImpactFrames: 6,
+  maxRadiusBonus: 0.35,
+  maxDamageBonus: 0.50,
+};
+
+export const ULTIMATE_HARD_CAPS = {
+  ...HARD_CAPS,
+  primaryCountBonusMax: 4, // +4 over tier base count (FIELD +2, nodes/capstones max +2)
+  fieldCountBonus: 2,
+  nodeCountBonusMax: 2,
+  radiusBonusMax: 0.35, // +35% max radius bonus
+  damageBonusMax: 0.35, // +35% pooled additive node/fork damage bonus (BURST +20% inside pool)
+  stunBonusMax: 0.6, // +0.6s max added stun from nodes and forks
+  maxTotalStun: 3.0, // total stun on any ult <= 3.0s
+  chargeCostReductionMax: 0.15, // 15% max charge cost reduction
+  skillCooldownFloorRatio: 0.50, // no skill may drop below 50% of Rank 1 cooldown
+  minTelegraphSec: 0.4,
+};
+
+export const CLASS_VFX_PROFILES = {
+  sena: {
+    classId: 'sena',
+    motionLanguage: 'Sharp, vertical, instant',
+    rhythm: 'Staccato equal hits (75-90ms) -> 200ms silence -> release',
+    delivery: 'Blink-cuts (Tier 1-2), Falling blades (Tier 3-4)',
+    accent: PALETTE.signal,
+    secondary: PALETTE.bone,
+    bleedColor: PALETTE.blood,
+    impactFamily: ['slashCut', 'slashShatter', 'greatSword'],
+    shakeStyle: 'sharpSnap',
+    payoffRider: 'bleed',
+    groundMark: 'embeddedSwords',
+    windUpPose: 'crouchAndBlink',
+  },
+  rook: {
+    classId: 'rook',
+    motionLanguage: 'Linear, horizontal, mechanical',
+    rhythm: 'Ratchet charge -> held beat -> instant release -> 300ms ring-out',
+    delivery: 'Hitscan lines, aim line, placed mines',
+    accent: PALETTE.brass,
+    secondary: PALETTE.whiteHot || '#FFFDF5',
+    aimLineColor: PALETTE.blood,
+    impactFamily: ['rail', 'pierceVector', 'mineBlast', 'emp'],
+    shakeStyle: 'directionalRecoil',
+    payoffRider: 'marked',
+    groundMark: 'scorchedLine',
+    windUpPose: 'plantFeetRatchet',
+  },
+  ines: {
+    classId: 'ines',
+    motionLanguage: 'Heavy, vertical, gravity-driven',
+    rhythm: 'Slow lift -> overhead hang -> hard slam',
+    delivery: 'Scrap lifted and dropped from above',
+    accent: PALETTE.verdigris,
+    secondary: PALETTE.rust,
+    impactFamily: ['crush'],
+    shakeStyle: 'lowFreqRumbleShove',
+    payoffRider: 'slowCrater',
+    groundMark: 'crater',
+    windUpPose: 'armsRaisedScrapLifts',
+  },
+  kaelen: {
+    classId: 'kaelen',
+    motionLanguage: 'Swelling, radial, lingering',
+    rhythm: 'Continuous build, overlapping waves, lingering fire (3-6s)',
+    delivery: 'Expanding heat, lanes, rolling waves',
+    accent: PALETTE.ember,
+    secondary: PALETTE.whiteHot || '#FFFDF5',
+    cryoAccent: PALETTE.frost || '#7CE8FF',
+    impactFamily: ['explosion', 'frostShatter'],
+    shakeStyle: 'rampingSwell',
+    payoffRider: 'burnOrBrittle',
+    groundMark: 'lavaLakeOrFrostField',
+    windUpPose: 'ventsSteamGlows',
+  },
+  vespera: {
+    classId: 'vespera',
+    motionLanguage: 'Precise, geometric, aerial',
+    rhythm: 'Staggered telegraphs at pattern points -> synchronized strike',
+    delivery: 'Sky beams, geometric lattice, automaton',
+    accent: PALETTE.volt,
+    secondary: PALETTE.cyanHolo || '#38F8E2',
+    impactFamily: ['beam', 'lattice', 'colossusSlam'],
+    shakeStyle: 'crispJitterFlicker',
+    payoffRider: 'shockChain',
+    groundMark: 'ionBurnLattice',
+    windUpPose: 'dronesRiseFormation',
+  },
 };
 
 export const ULTIMATE_CAST_RULES = {
@@ -41,45 +140,52 @@ export const ULTIMATE_CAST_RULES = {
   applyMarked: true,
   applyDistanceBonus: false,
   applyCleanMag: false,
+  cullingBladePayoffOnly: true, // Section 4.2: Culling Blade (+40% below 35% HP) applies to payoff hit only
   bossStaggerBase: 25,
   bossStaggerPerSecStun: 10,
-  maxCameraZoom: 1.15,
-  letterboxHeightRatio: 0.12, // 12% of 270px = 32px top & bottom
+  maxCameraZoom: 1.0, // Section 7: 1.0 (no zoom-lock)
+  letterboxHeightRatio: 0, // Section 7: 0 (no letterbox)
   accessibilityDefaults: {
     reduceFlashes: false,
     shortUltimates: false,
   },
-  shortUltimatesCutInMs: 120,
-  shortUltimatesNonGameplayScale: 0.7, // compresses non-gameplay steps by 30%
+  shortUltimatesCutInMs: 0,
+  shortUltimatesNonGameplayScale: 0.7, // compresses VFX-only steps by 30%, never shortens telegraphs
   reduceFlashesBoneTintFrames: 3,
   reduceFlashesMaxPerSecond: 3,
   impactFrames: {
     slashCutFrames: 2,
     slashShatterFrames: 4,
+    greatSwordFrames: 4,
+    cascadeFrames: 3,
     groundSlamFrames: 3,
     pierceVectorFrames: 2,
     pierceFinisherFrames: 3,
     railSlugFrames: 4,
     mineBlastFrames: 3,
+    empFrames: 4,
     scrapCrushFrames: 3,
     scrapFinalCrushFrames: 4,
+    frostShatterFrames: 4,
+    latticeFrames: 3,
+    colossusSlamFrames: 4,
   },
 };
 
 /**
- * Helper to build the 7 or 9 cut steps for Sena's Seven Cuts / Nine Cuts
+ * Helper to build the 7, 8, or 9 cut steps for Sena's Seven Cuts / Eight Cuts (Tier 1-2)
+ * Section 2.2 & 7: No cutInEnter/cutInExit, letterbox 0, freezeMobsInRadius: true (only Sena Tier 1-2).
  */
 function buildSenaCutSteps({
   cutsCount = 7,
-  cutIntervalMs = 90,
+  cutIntervalMs = 85,
   damageMultPerCut = 5.0 / 7,
   applyBleed = false,
-  titleCard = 'SEVEN CUTS',
 }) {
-  const cutStartMs = 380;
-  const silenceStartMs = cutStartMs + cutsCount * cutIntervalMs; // 1010ms for 7 cuts, 1055ms for 9 cuts
-  const releaseMs = silenceStartMs + 200; // 1210ms for 7 cuts, 1255ms for 9 cuts
-  const endMs = releaseMs + 290; // 1500ms for 7 cuts, 1545ms for 9 cuts
+  const cutStartMs = 240; // <= 0.4s crouch-and-blink wind-up pose
+  const silenceStartMs = cutStartMs + cutsCount * cutIntervalMs;
+  const releaseMs = silenceStartMs + 200; // 200ms silence beat
+  const endMs = releaseMs + 260;
 
   const steps = [
     {
@@ -87,29 +193,13 @@ function buildSenaCutSteps({
       action: 'startCast',
       nonGameplay: true,
       params: {
-        freezeWorld: true,
+        freezeWorld: true, // Mob freeze in radius for Sena Tier 1-2 only
+        freezeMobsInRadius: true,
         twoToneWorld: false,
-        letterbox: 0.12,
+        letterbox: 0,
         untouchable: true,
         lockMovement: true,
-      },
-    },
-    {
-      t: 80,
-      action: 'cutInEnter',
-      nonGameplay: true,
-      params: {
-        titleCard,
-        slideFromRight: true,
-        speedLines8Dir: true,
-      },
-    },
-    {
-      t: 330,
-      action: 'cutInExit',
-      nonGameplay: true,
-      params: {
-        zoom: 1.15,
+        windUpPose: 'crouchAndBlink',
       },
     },
   ];
@@ -123,7 +213,7 @@ function buildSenaCutSteps({
         cutIndex: i,
         totalCuts: cutsCount,
         blinkOffsetPx: 24,
-        shakePx: 4,
+        shakePx: 3,
         invertFrames: 1,
         damageMult: damageMultPerCut,
         applyBleed,
@@ -150,11 +240,12 @@ function buildSenaCutSteps({
       action: 'senaReleaseCuts',
       nonGameplay: false,
       params: {
+        isPayoff: true,
         totalCuts: cutsCount,
         damageMultPerCut,
         applyBleed,
         whiteFlashFrames: 1,
-        shakePx: 8,
+        shakePx: 7,
         boneDebrisCount: 16,
         letterboxOut: true,
         impactFrame: {
@@ -178,7 +269,111 @@ function buildSenaCutSteps({
 }
 
 /**
- * Helper to build Rook's Anti-Materiel Rail Slug timeline
+ * Helper to build Sena's Tier 3-4 Rain of Swords timeline (Section 4.5, 4.6, 10.4)
+ * Telegraph 0-300ms -> Staccato waves at 600 / 900 / 1200ms -> 200ms silence -> Great Sword at 1600ms.
+ * Sena and mobs remain free-moving (no world freeze).
+ */
+function buildRainOfSwordsSteps({
+  swordsCount = 20,
+  waveCount = 3,
+  waveDamageMult = 1.60, // 3 waves x 160% = 480% ATK
+  greatSwordDamageMult = 4.20, // + 420% Great Sword = 900% total ATK
+  radius = 260,
+}) {
+  const steps = [
+    {
+      t: 0,
+      action: 'startCast',
+      nonGameplay: true,
+      params: {
+        freezeWorld: false,
+        twoToneWorld: false,
+        letterbox: 0,
+        untouchable: false,
+        lockMovement: false,
+        windUpPose: 'crouchAndBlink',
+      },
+    },
+    {
+      t: 40,
+      action: 'senaStartSoundstage',
+      nonGameplay: false,
+      params: {
+        radius,
+        durationMs: 1750,
+        swordsCount,
+      },
+    },
+  ];
+
+  for (let w = 0; w < waveCount; w++) {
+    steps.push({
+      t: 600 + w * 300,
+      action: 'senaBeatWindowDrop',
+      nonGameplay: false,
+      params: {
+        beatIndex: w + 1,
+        waveIndex: w + 1,
+        totalWaves: waveCount,
+        swordsInWave: Math.round(swordsCount / waveCount),
+        radius: Math.round(radius * (0.75 + w * 0.12)),
+        damageMult: waveDamageMult,
+        applyBleed: true,
+        shakePx: 3,
+        color: PALETTE.signal,
+        impactFrame: {
+          kind: 'slashCut',
+          frames: 2,
+          color: PALETTE.signal,
+        },
+      },
+    });
+  }
+
+  const lastWaveMs = 600 + (waveCount - 1) * 300;
+  const silenceMs = lastWaveMs + 200;
+  const greatSwordMs = silenceMs + 200;
+
+  steps.push(
+    {
+      t: silenceMs,
+      action: 'silenceWindow',
+      nonGameplay: true,
+      params: { durationMs: 200 },
+    },
+    {
+      t: greatSwordMs,
+      action: 'senaForteResonanceBurst',
+      nonGameplay: false,
+      params: {
+        isPayoff: true,
+        payoffName: 'Great Sword',
+        radius,
+        damageMult: greatSwordDamageMult,
+        stunDuration: 2.2,
+        applyBleed: true,
+        shakePx: 9,
+        impactFrame: {
+          kind: 'greatSword',
+          frames: 4,
+          color: PALETTE.signal,
+        },
+      },
+    },
+    {
+      t: greatSwordMs + 280,
+      action: 'endCast',
+      nonGameplay: true,
+      params: {},
+    }
+  );
+
+  return steps;
+}
+
+/**
+ * Helper to build Rook's Twin Slug / Anti-Materiel Rail Slug timeline (Section 4.7 & 10.4)
+ * Ratchet charge 0-1000ms -> Slug 1 at 1000ms -> Slug 2 at 1300ms -> Ring-out 300ms (total 1000% + 250% AOE)
  */
 function buildRailSlugSteps() {
   const steps = [
@@ -187,31 +382,14 @@ function buildRailSlugSteps() {
       action: 'startCast',
       nonGameplay: true,
       params: {
-        freezeWorld: true,
+        freezeWorld: false,
         twoToneWorld: false,
-        letterbox: 0.12,
-        untouchable: true,
+        letterbox: 0,
+        untouchable: false,
         lockMovement: true,
-      },
-    },
-    {
-      t: 80,
-      action: 'cutInEnter',
-      nonGameplay: true,
-      params: {
-        titleCard: 'RAIL SLUG',
-        slideFromRight: true,
-        speedLines8Dir: true,
-      },
-    },
-    {
-      t: 330,
-      action: 'cutInExit',
-      nonGameplay: true,
-      params: {
-        zoom: 1.15,
+        windUpPose: 'plantFeetRatchet',
         aimLineRange: 1400,
-        aimLineColor: PALETTE.brass,
+        aimLineColor: PALETTE.blood,
         chargeDurationMs: 1000,
       },
     },
@@ -219,26 +397,54 @@ function buildRailSlugSteps() {
 
   for (let i = 0; i < 5; i++) {
     steps.push({
-      t: 380 + i * 180,
+      t: 120 + i * 175,
       action: 'rookChargeTick',
       nonGameplay: false,
       params: { tickIndex: i, totalTicks: 5 },
     });
   }
 
+  // Slug 1 at 1000ms (550% ATK + 125% kinetic wake)
+  steps.push({
+    t: 1000,
+    action: 'rookReleaseRailSlug',
+    nonGameplay: false,
+    params: {
+      slugIndex: 1,
+      damageMult: 5.5,
+      aoeDamageMult: 1.25,
+      aoeRadius: 80,
+      followUpBlasts: 4,
+      range: 1400,
+      lineWidth: 90,
+      applyMarkedDuration: 8.0,
+      whiteFlashFrames: 1,
+      shakePx: 8,
+      impactFrame: {
+        kind: 'rail',
+        frames: 3,
+        color: PALETTE.brass,
+      },
+    },
+  });
+
+  // Slug 2 (Payoff) at 1300ms (450% ATK + 125% kinetic wake = 1000% + 250% per enemy total)
   steps.push({
     t: 1300,
     action: 'rookReleaseRailSlug',
     nonGameplay: false,
     params: {
-      damageMult: 12.0, // 1200% ATK direct rail impact
-      aoeDamageMult: 3.5, // 350% ATK secondary kinetic blast
-      aoeRadius: 80, // 80px radius detonation around each hit target
+      isPayoff: true,
+      slugIndex: 2,
+      damageMult: 4.5,
+      aoeDamageMult: 1.25,
+      aoeRadius: 80,
+      followUpBlasts: 4,
       range: 1400,
       lineWidth: 90,
       applyMarkedDuration: 8.0,
       whiteFlashFrames: 1,
-      shakePx: 14,
+      shakePx: 11,
       impactFrame: {
         kind: 'rail',
         frames: 4,
@@ -248,7 +454,7 @@ function buildRailSlugSteps() {
   });
 
   steps.push({
-    t: 1650,
+    t: 1600,
     action: 'endCast',
     nonGameplay: true,
     params: {},
@@ -258,38 +464,22 @@ function buildRailSlugSteps() {
 }
 
 /**
- * Helper to build Rook's Ten Count timeline
+ * Helper to build Rook's Ten Count timeline (No cut-in, no world freeze, red aim line)
  */
-function buildTenCountSteps() {
+function buildTenCountSteps(boltCount = 10, totalMult = 6.0) {
+  const perBolt = +(totalMult / boltCount).toFixed(2);
   const steps = [
     {
       t: 0,
       action: 'startCast',
       nonGameplay: true,
       params: {
-        freezeWorld: true,
+        freezeWorld: false,
         twoToneWorld: false,
-        letterbox: 0.12,
-        untouchable: true,
+        letterbox: 0,
+        untouchable: false,
         lockMovement: true,
-      },
-    },
-    {
-      t: 80,
-      action: 'cutInEnter',
-      nonGameplay: true,
-      params: {
-        titleCard: 'TEN COUNT',
-        slideFromRight: true,
-        speedLines8Dir: true,
-      },
-    },
-    {
-      t: 330,
-      action: 'cutInExit',
-      nonGameplay: true,
-      params: {
-        zoom: 1.12,
+        windUpPose: 'plantFeetRatchet',
         aimLineRange: 520,
         aimLineColor: PALETTE.blood,
         chargeDurationMs: 1000,
@@ -297,10 +487,10 @@ function buildTenCountSteps() {
     },
   ];
 
-  // 10 ratchet clicks during the 1000ms charge (330ms..1330ms)
+  // Ratchet clicks during the 1000ms charge (0ms..1000ms)
   for (let i = 0; i < 10; i++) {
     steps.push({
-      t: 330 + i * 100,
+      t: i * 100,
       action: 'rookChargeTick',
       nonGameplay: false,
       params: {
@@ -310,21 +500,22 @@ function buildTenCountSteps() {
     });
   }
 
-  // Release: 10 bolts in a tight line down cursor direction (600% ATK total = 60% each)
-  for (let b = 0; b < 10; b++) {
+  // Release: bolts in a tight line down cursor direction
+  for (let b = 0; b < boltCount; b++) {
     const isFirst = b === 0;
-    const isLast = b === 9;
+    const isLast = b === boltCount - 1;
     steps.push({
-      t: 1330 + b * 45,
+      t: 1000 + b * 45,
       action: 'rookFireTenCountBolt',
       nonGameplay: false,
       params: {
+        isPayoff: isLast,
         boltIndex: b,
-        totalBolts: 10,
-        damageMult: 0.60, // 10 x 60% = 600% ATK total
+        totalBolts: boltCount,
+        damageMult: perBolt,
         range: 520,
         speed: 920,
-        shakePx: isLast ? 5 : 3,
+        shakePx: isLast ? 5 : 2,
         whiteFlashFrames: isFirst || isLast ? 1 : 0,
         impactFrame:
           isFirst || isLast
@@ -339,7 +530,7 @@ function buildTenCountSteps() {
   }
 
   steps.push({
-    t: 1850,
+    t: 1000 + boltCount * 45 + 300, // 300ms ring-out
     action: 'endCast',
     nonGameplay: true,
     params: {},
@@ -349,55 +540,39 @@ function buildTenCountSteps() {
 }
 
 /**
- * Helper to build Rook's Dead Ground (Minelayer Master) timeline
+ * Helper to build Rook's Dead Ground timeline (Section 4.7 & 10.4)
+ * 14 mines placed over 0-1200ms -> Arm tick at 1400ms -> Chain detonation 1600-2200ms (~980% total = 14 x 70%)
  */
-function buildDeadGroundSteps() {
+function buildDeadGroundSteps(mineCount = 14, perMineMult = 0.70) {
   const steps = [
     {
       t: 0,
       action: 'startCast',
       nonGameplay: true,
       params: {
-        freezeWorld: true,
+        freezeWorld: false,
         twoToneWorld: false,
-        letterbox: 0.12,
-        untouchable: true,
-        lockMovement: true,
-      },
-    },
-    {
-      t: 80,
-      action: 'cutInEnter',
-      nonGameplay: true,
-      params: {
-        titleCard: 'DEAD GROUND',
-        slideFromRight: true,
-        speedLines8Dir: true,
-      },
-    },
-    {
-      t: 330,
-      action: 'cutInExit',
-      nonGameplay: true,
-      params: {
-        zoom: 1.10,
+        letterbox: 0,
+        untouchable: false,
+        lockMovement: false,
+        windUpPose: 'plantFeetRatchet',
         fieldRadius: 220,
       },
     },
   ];
 
-  // Drop 12 mines over 1.5s (330ms..1830ms, 125ms apart) in a 220px field
-  for (let m = 0; m < 12; m++) {
+  const intervalMs = Math.round(1200 / mineCount);
+  for (let m = 0; m < mineCount; m++) {
     steps.push({
-      t: 330 + m * 125,
+      t: m * intervalMs,
       action: 'rookDropDeadGroundMine',
       nonGameplay: false,
       params: {
         mineIndex: m,
-        totalMines: 12,
+        totalMines: mineCount,
         fieldRadius: 220,
         blastRadius: 80,
-        damageMult: 2.20, // 220% ATK each
+        damageMult: perMineMult,
         shakePx: 2,
       },
     });
@@ -405,12 +580,20 @@ function buildDeadGroundSteps() {
 
   steps.push(
     {
-      t: 1830,
+      t: 1400,
+      action: 'rookChargeTick',
+      nonGameplay: false,
+      params: { tickIndex: 1, totalTicks: 1, armTick: true },
+    },
+    {
+      t: 1600,
       action: 'rookReleaseDeadGround',
       nonGameplay: false,
       params: {
+        isPayoff: true,
+        stunDuration: 1.8,
         whiteFlashFrames: 1,
-        shakePx: 5,
+        shakePx: 6,
         impactFrame: {
           kind: 'mineBlast',
           frames: 3,
@@ -419,7 +602,7 @@ function buildDeadGroundSteps() {
       },
     },
     {
-      t: 1980,
+      t: 2200,
       action: 'endCast',
       nonGameplay: true,
       params: {},
@@ -445,7 +628,7 @@ export const ULTIMATES = {
     accent: PALETTE.signal,
     chargeNeeded: 100,
     requiresTargetWithinPx: 300,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 5.0,
     cuts: 7,
     radius: 300,
@@ -472,18 +655,20 @@ export const ULTIMATES = {
     accent: PALETTE.signal,
     chargeNeeded: 85,
     requiresTargetWithinPx: 300,
-    pauseChargeWhileActive: false,
-    totalDamageMult: 7.2,
+    pauseChargeWhileActive: true,
+    totalDamageMult: 9.0,
     cuts: 9,
     radius: 300,
-    summary: '720% Total ATK · 9 Cuts + Bleed · 85 Charge',
-    desc: 'Needs 85 charge. Time stops for 9 cuts at 75ms each (80% ATK + 1 Bleed stack per cut, 720% single-target).',
+    summary: '900% Total ATK · 9 Cuts + Bleed + Rain of Swords · 85 Charge',
+    desc: 'Needs 85 charge. Time stops for 9 cuts at 75ms each (80% ATK + 1 Bleed stack per cut, 720% single-target) followed by a 180% ATK Rain of Swords radial blade barrage.',
     steps: buildSenaCutSteps({
       cutsCount: 9,
       cutIntervalMs: 75,
       damageMultPerCut: 0.80,
       applyBleed: true,
       titleCard: 'NINE CUTS',
+      rainOfSwords: true,
+      rainDamageMult: 1.80,
     }),
   },
 
@@ -514,7 +699,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           freezeWorld: true,
-          twoToneWorld: false,
+          twoToneWorld: true,
           letterbox: 0.12,
           untouchable: true,
           lockMovement: true,
@@ -536,6 +721,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           zoom: 1.08,
+          twoToneWorld: false,
         },
       },
       {
@@ -602,7 +788,7 @@ export const ULTIMATES = {
     accent: PALETTE.brass,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 12.0,
     range: 1400,
     lineWidth: 90,
@@ -623,7 +809,7 @@ export const ULTIMATES = {
     accent: PALETTE.brass,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 6.0,
     bolts: 10,
     range: 520,
@@ -644,7 +830,7 @@ export const ULTIMATES = {
     accent: PALETTE.brass,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 9.0,
     bolts: 1,
     range: 620,
@@ -657,7 +843,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           freezeWorld: true,
-          twoToneWorld: false,
+          twoToneWorld: true,
           letterbox: 0.12,
           untouchable: true,
           lockMovement: true,
@@ -679,6 +865,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           zoom: 1.15,
+          twoToneWorld: false,
           aimLineRange: 620,
           aimLineColor: PALETTE.brass,
           chargeDurationMs: 1600,
@@ -741,7 +928,7 @@ export const ULTIMATES = {
     accent: PALETTE.brass,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 26.4,
     mines: 12,
     radius: 220,
@@ -765,7 +952,7 @@ export const ULTIMATES = {
     accent: PALETTE.verdigris,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 5.5,
     radius: 160,
     stunDuration: 1.5,
@@ -778,7 +965,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           freezeWorld: true,
-          twoToneWorld: false,
+          twoToneWorld: true,
           letterbox: 0.12,
           untouchable: true,
           lockMovement: true,
@@ -801,6 +988,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           zoom: 1.12,
+          twoToneWorld: false,
         },
       },
       {
@@ -866,7 +1054,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           freezeWorld: true,
-          twoToneWorld: false,
+          twoToneWorld: true,
           letterbox: 0.12,
           untouchable: true,
           lockMovement: true,
@@ -889,6 +1077,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           zoom: 1.08,
+          twoToneWorld: false,
         },
       },
       {
@@ -921,7 +1110,7 @@ export const ULTIMATES = {
           shakePx: 7,
           spawnCrater: true,
           impactFrame: {
-            kind: 'crush',
+            kind: 'gantrySlam',
             frames: 3,
             color: PALETTE.verdigris,
           },
@@ -939,7 +1128,7 @@ export const ULTIMATES = {
           shakePx: 7,
           spawnCrater: true,
           impactFrame: {
-            kind: 'crush',
+            kind: 'gantrySlam',
             frames: 3,
             color: PALETTE.verdigris,
           },
@@ -957,7 +1146,7 @@ export const ULTIMATES = {
           shakePx: 8,
           spawnCrater: true,
           impactFrame: {
-            kind: 'crush',
+            kind: 'gantrySlam',
             frames: 4,
             color: PALETTE.verdigris,
           },
@@ -984,7 +1173,7 @@ export const ULTIMATES = {
     accent: PALETTE.verdigris,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 8.0,
     radius: 270,
     stunDuration: 2.0,
@@ -997,7 +1186,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           freezeWorld: true,
-          twoToneWorld: false,
+          twoToneWorld: true,
           letterbox: 0.12,
           untouchable: true,
           lockMovement: true,
@@ -1020,6 +1209,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           zoom: 1.15,
+          twoToneWorld: false,
         },
       },
       {
@@ -1042,7 +1232,7 @@ export const ULTIMATES = {
           pullInwardPx: 75,
           shakePx: 6,
           impactFrame: {
-            kind: 'crush',
+            kind: 'polarityFlip',
             frames: 3,
             color: PALETTE.verdigris,
           },
@@ -1059,7 +1249,7 @@ export const ULTIMATES = {
           pullInwardPx: 85,
           shakePx: 7,
           impactFrame: {
-            kind: 'crush',
+            kind: 'polarityFlip',
             frames: 3,
             color: PALETTE.verdigris,
           },
@@ -1076,7 +1266,7 @@ export const ULTIMATES = {
           shakePx: 12,
           spawnCrater: true,
           impactFrame: {
-            kind: 'crush',
+            kind: 'polarityFlip',
             frames: 4,
             color: PALETTE.verdigris,
           },
@@ -1121,7 +1311,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           freezeWorld: false,
-          twoToneWorld: false,
+          twoToneWorld: true,
           letterbox: 0.08,
           untouchable: false,
           lockMovement: false,
@@ -1144,6 +1334,7 @@ export const ULTIMATES = {
         params: {
           zoom: 1.06,
           unfreezeWorld: true,
+          twoToneWorld: false,
         },
       },
       {
@@ -1155,6 +1346,11 @@ export const ULTIMATES = {
           returnControl: true,
           letterboxOut: true,
           zoom: 1.0,
+          impactFrame: {
+            kind: 'meltdownVent',
+            frames: 3,
+            color: PALETTE.ember,
+          },
         },
       },
       {
@@ -1312,11 +1508,11 @@ export const ULTIMATES = {
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 8.5,
+    totalDamageMult: 9.0,
     radius: 260,
     stunDuration: 2.5,
-    summary: '850% Total ATK · 4 Foundry Pillars · 80-Ton Forge Press Slam · Lava Lake',
-    desc: 'Summons an open-sided industrial forge cathedral: 4 steel girder pillars crash into 4 corners of the arena connected by searing slag channels (220% ATK), clamping down an 80-ton hydraulic forge press that crushes the center for 400% ATK, 2.5s Stun, and leaves a bubbling molten lava lake.',
+    summary: '900% Total ATK · 4 Foundry Pillars · 80-Ton Forge Press Slam · Lava Lake',
+    desc: 'Summons an open-sided industrial forge cathedral: 4 steel girder pillars crash into 4 corners of the arena connected by searing slag channels (480% ATK across 2 pulses), clamping down an 80-ton hydraulic forge press that crushes the center for 420% ATK, 2.5s Stun, and leaves a bubbling molten lava lake.',
     steps: [
       {
         t: 0,
@@ -1366,7 +1562,7 @@ export const ULTIMATES = {
         params: {
           waveIndex: 1,
           radius: 250,
-          damageMult: 2.2,
+          damageMult: 2.4,
           burnDuration: 6.0,
           shakePx: 7,
           impactFrame: {
@@ -1383,7 +1579,7 @@ export const ULTIMATES = {
         params: {
           waveIndex: 2,
           radius: 255,
-          damageMult: 2.3,
+          damageMult: 2.4,
           burnDuration: 6.0,
           shakePx: 8,
           impactFrame: {
@@ -1399,14 +1595,14 @@ export const ULTIMATES = {
         nonGameplay: false,
         params: {
           radius: 260,
-          damageMult: 4.0,
+          damageMult: 4.2,
           stunDuration: 2.5,
           burnDuration: 8.0,
           shakePx: 14,
           spawnCrater: true,
           spawnLavaLake: true,
           impactFrame: {
-            kind: 'explosion',
+            kind: 'foundryPress',
             frames: 4,
             color: PALETTE.ember,
           },
@@ -1430,15 +1626,15 @@ export const ULTIMATES = {
     titleCard: 'WHITEOUT RUPTURE',
     hotkey: 'R',
     icon: 'blightHurricane',
-    accent: PALETTE.signal,
+    accent: PALETTE.frost,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 8.0,
+    totalDamageMult: 9.0,
     radius: 270,
     stunDuration: 2.5,
-    summary: '800% Total ATK · Subzero Chemical Blizzard · Koch Snowflake Fractals · Ice Knife Rupture',
-    desc: 'Unleashes an endothermic cryogenic blizzard across 270px: sprawling hexagonal ice fractals and creeping frost needles freeze the earth (-200°C), pulling enemies inward, dealing 440% ATK across 2 subzero pulses + 5 Brittle stacks, before violently detonating into a screen-clearing shatter of razor ice knives for 360% ATK and 2.5s Freeze/Stun.',
+    summary: '900% Total ATK · Subzero Chemical Blizzard · Koch Snowflake Fractals · Ice Knife Rupture',
+    desc: 'Unleashes an endothermic cryogenic blizzard across 270px: sprawling hexagonal ice fractals and creeping frost needles freeze the earth (-200°C), pulling enemies inward, dealing 500% ATK across 2 subzero pulses + 5 Brittle stacks, before violently detonating into a screen-clearing shatter of razor ice knives for 400% ATK and 2.5s Freeze/Stun.',
     steps: [
       {
         t: 0,
@@ -1487,14 +1683,15 @@ export const ULTIMATES = {
         params: {
           pulseIndex: 1,
           radius: 260,
-          damageMult: 2.1,
+          damageMult: 2.5,
           pullInwardPx: 60,
           shakePx: 6,
           freezeDuration: 1.5,
+          brittleStacks: 3,
           impactFrame: {
-            kind: 'slash',
+            kind: 'cryoShatter',
             frames: 3,
-            color: PALETTE.signal,
+            color: PALETTE.frost,
           },
         },
       },
@@ -1505,14 +1702,15 @@ export const ULTIMATES = {
         params: {
           pulseIndex: 2,
           radius: 265,
-          damageMult: 2.3,
+          damageMult: 2.5,
           pullInwardPx: 70,
           shakePx: 7,
           freezeDuration: 1.5,
+          brittleStacks: 2,
           impactFrame: {
-            kind: 'slash',
+            kind: 'cryoShatter',
             frames: 3,
-            color: PALETTE.signal,
+            color: PALETTE.frost,
           },
         },
       },
@@ -1522,14 +1720,14 @@ export const ULTIMATES = {
         nonGameplay: false,
         params: {
           radius: 270,
-          damageMult: 3.6,
+          damageMult: 4.0,
           stunDuration: 2.5,
           shakePx: 12,
           spawnCrater: true,
           impactFrame: {
-            kind: 'slash',
+            kind: 'cryoShatter',
             frames: 4,
-            color: PALETTE.signal,
+            color: PALETTE.frost,
           },
         },
       },
@@ -1551,7 +1749,7 @@ export const ULTIMATES = {
     classId: 'vespera',
     branch: null,
     nodeRequired: null,
-    name: 'Overclocked Armada',
+    name: 'Cataclysm Edge / Overclocked Armada',
     titleCard: 'OVERCLOCKED ARMADA',
     hotkey: 'R',
     icon: 'overclockedArmada',
@@ -1559,12 +1757,12 @@ export const ULTIMATES = {
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 15.0,
+    totalDamageMult: 11.0,
     radius: 260,
     stunDuration: 2.0,
     duration: 8.0,
-    summary: '8.0s Continuous Escort · 12 Orbiting Arc-Drones · Point Defense · Kamikaze Cluster Finale',
-    desc: 'Deploys an escort of 12 autonomous Arc-Drones in a concentric double ring for 8.0s of continuous combat. Drones auto-zap incoming projectiles within 140px, fire continuous twin neon laser beams at enemies near the cursor, and on timeout or recast [R] dive-bomb the cursor in a 12-drone cluster nuke + 240px EMP shockwave.',
+    summary: '1100% Total ATK · 8.0s Continuous Escort · 12 Orbiting Arc-Drones · Kamikaze Cluster Finale',
+    desc: 'Deploys an escort of 12 autonomous Arc-Drones in a concentric double ring for 8.0s of continuous combat (400% ATK twin neon lasers + Point Defense within 140px). On timeout or recast [R], drones dive-bomb the cursor (300% ATK cluster nuke) + 240px EMP shockwave (400% ATK + 2.0s Stun).',
     steps: [
       {
         t: 0,
@@ -1572,7 +1770,7 @@ export const ULTIMATES = {
         nonGameplay: true,
         params: {
           freezeWorld: false,
-          twoToneWorld: false,
+          twoToneWorld: true,
           letterbox: 0.08,
           untouchable: false,
           lockMovement: false,
@@ -1595,6 +1793,7 @@ export const ULTIMATES = {
         params: {
           zoom: 1.05,
           unfreezeWorld: true,
+          twoToneWorld: false,
         },
       },
       {
@@ -1606,6 +1805,11 @@ export const ULTIMATES = {
           returnControl: true,
           letterboxOut: true,
           zoom: 1.0,
+          impactFrame: {
+            kind: 'armadaLaunch',
+            frames: 3,
+            color: PALETTE.volt,
+          },
         },
       },
       {
@@ -1758,11 +1962,11 @@ export const ULTIMATES = {
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
-    totalDamageMult: 8.8,
+    totalDamageMult: 9.0,
     radius: 270,
     stunDuration: 2.5,
-    summary: '880% Total ATK · War Colossus Automaton · Puppet Wires · Pneumatic Fist & Core Slam',
-    desc: 'Vespera channels control wires from her gloves to direct a massive 68x80px War Colossus automaton. The iron construct drops in with thruster jets, executes a 220px pneumatic left fist sweep (220% ATK), stomps a hydraulic right foot shockwave (240% ATK + Stun), and locks both fists overhead for a colossal double-hammer core slam (420% ATK + 2.5s Stun + volt discharge crater).',
+    summary: '900% Total ATK · War Colossus Automaton · Puppet Wires · Pneumatic Fist & Core Slam',
+    desc: 'Vespera channels control wires from her gloves to direct a massive 68x80px War Colossus automaton. The iron construct drops in with thruster jets, executes a 220px pneumatic left fist sweep (220% ATK), stomps a hydraulic right foot shockwave (260% ATK + Stun), and locks both fists overhead for a colossal double-hammer core slam (420% ATK + 2.5s Stun + volt discharge crater).',
     steps: [
       {
         t: 0,
@@ -1813,7 +2017,7 @@ export const ULTIMATES = {
           damageMult: 2.2,
           shakePx: 8,
           impactFrame: {
-            kind: 'groundSlam',
+            kind: 'colossusSlam',
             frames: 3,
             color: PALETTE.volt,
           },
@@ -1825,11 +2029,11 @@ export const ULTIMATES = {
         nonGameplay: false,
         params: {
           radius: 250,
-          damageMult: 2.4,
+          damageMult: 2.6,
           stunDuration: 1.5,
           shakePx: 9,
           impactFrame: {
-            kind: 'groundSlam',
+            kind: 'colossusSlam',
             frames: 3,
             color: PALETTE.volt,
           },
@@ -1846,7 +2050,7 @@ export const ULTIMATES = {
           shakePx: 14,
           spawnCrater: true,
           impactFrame: {
-            kind: 'groundSlam',
+            kind: 'colossusSlam',
             frames: 4,
             color: PALETTE.volt,
           },
@@ -1870,7 +2074,7 @@ export const ULTIMATES = {
     titleCard: 'WORLDSTORM ATLAS',
     hotkey: 'R',
     icon: 'zenithThunderhead',
-    accent: PALETTE.signal,
+    accent: PALETTE.cyanHolo,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
     pauseChargeWhileActive: true,
@@ -1931,9 +2135,9 @@ export const ULTIMATES = {
           pullInwardPx: 60,
           shakePx: 8,
           impactFrame: {
-            kind: 'beam',
+            kind: 'radarSweep',
             frames: 3,
-            color: PALETTE.signal,
+            color: PALETTE.cyanHolo,
           },
         },
       },
@@ -1948,9 +2152,9 @@ export const ULTIMATES = {
           pullInwardPx: 70,
           shakePx: 9,
           impactFrame: {
-            kind: 'beam',
+            kind: 'radarSweep',
             frames: 3,
-            color: PALETTE.signal,
+            color: PALETTE.cyanHolo,
           },
         },
       },
@@ -1967,7 +2171,7 @@ export const ULTIMATES = {
           impactFrame: {
             kind: 'beam',
             frames: 4,
-            color: PALETTE.signal,
+            color: PALETTE.cyanHolo,
           },
         },
       },
@@ -2037,7 +2241,7 @@ export const ULTIMATES = {
           radius: 240,
           shakePx: 12,
           impactFrame: {
-            kind: 'groundSlam',
+            kind: 'faultline',
             frames: 3,
             color: PALETTE.ember,
           },
@@ -2053,7 +2257,7 @@ export const ULTIMATES = {
           knockbackPx: 120,
           shakePx: 10,
           impactFrame: {
-            kind: 'groundSlam',
+            kind: 'faultline',
             frames: 3,
             color: PALETTE.brass,
           },
@@ -2069,7 +2273,7 @@ export const ULTIMATES = {
           stunDuration: 2.8,
           shakePx: 15,
           impactFrame: {
-            kind: 'groundSlam',
+            kind: 'faultline',
             frames: 4,
             color: PALETTE.ember,
           },
@@ -2153,7 +2357,7 @@ export const ULTIMATES = {
           shakePx: 6,
           color: PALETTE.signal,
           impactFrame: {
-            kind: 'beam',
+            kind: 'soundstage',
             frames: 2,
             color: PALETTE.signal,
           },
@@ -2170,7 +2374,7 @@ export const ULTIMATES = {
           shakePx: 8,
           color: PALETTE.volt,
           impactFrame: {
-            kind: 'beam',
+            kind: 'soundstage',
             frames: 2,
             color: PALETTE.volt,
           },
@@ -2185,7 +2389,7 @@ export const ULTIMATES = {
           damageMult: 2.8,
           shakePx: 10,
           impactFrame: {
-            kind: 'beam',
+            kind: 'soundstage',
             frames: 3,
             color: PALETTE.signal,
           },
@@ -2201,7 +2405,7 @@ export const ULTIMATES = {
           stunDuration: 2.5,
           shakePx: 14,
           impactFrame: {
-            kind: 'beam',
+            kind: 'soundstage',
             frames: 4,
             color: PALETTE.bone,
           },
@@ -2228,7 +2432,7 @@ export const ULTIMATES = {
     accent: PALETTE.signal,
     chargeNeeded: 100,
     requiresTargetWithinPx: 0,
-    pauseChargeWhileActive: false,
+    pauseChargeWhileActive: true,
     totalDamageMult: 10.0, // 380% grid + 620% collapse
     radius: 260,
     summary: '1000% Total ATK · 3 Tesla Relay Pylons · High-Voltage Laser Grid · Superconductor EMP',
@@ -2284,7 +2488,7 @@ export const ULTIMATES = {
           pullInwardPx: 45,
           shakePx: 9,
           impactFrame: {
-            kind: 'beam',
+            kind: 'empGrid',
             frames: 3,
             color: PALETTE.signal,
           },
@@ -2300,7 +2504,7 @@ export const ULTIMATES = {
           stunDuration: 2.8,
           shakePx: 15,
           impactFrame: {
-            kind: 'beam',
+            kind: 'empGrid',
             frames: 4,
             color: PALETTE.bone,
           },
@@ -2323,15 +2527,30 @@ ULTIMATES.cathedralOfIron = ULTIMATES.tectonicKiln;
 ULTIMATES.whiteoutRupture = ULTIMATES.blightHurricane;
 ULTIMATES.zeroPointReversal = ULTIMATES.junkyardRain;
 
+const TIER2_FLOURISHES = {
+  sena: { boneDebrisCount: 12, persistentAfterimages: true, slashWidthBonus: 1 },
+  rook: { recoilKickPx: 6, doubleCasingEject: true, corridorSparkDensity: 1.5 },
+  ines: { verdigrisArcCount: 8, magnetizedCraterSheen: true, debrisSpinSpeed: 1.4 },
+  kaelen: { convectionHeatHaze: true, secondaryEmberRing: true, slagTailLength: 1.4 },
+  vespera: { secondDroneOrbitRing: true, cyanGridScanlines: true, arcForkCount: 2 },
+};
+
+const TIER4_FLOURISHES = {
+  sena: { crossScreenHorizonCleave: true, splitCorpseSpeedMult: 1.4, boneDebrisCount: 16 },
+  rook: { machConeCount: 3, downrangeSonicBoom: true, recoilKickPx: 8 },
+  ines: { gantryDoubleStamp: true, magneticImplosionHoldMs: 250, verdigrisArcCount: 12 },
+  kaelen: { whiteHotCoreColumn: true, fivePointMagmaStar: true, convectionHeatHaze: true },
+  vespera: { orbitalLockOnReticle: true, empGlitchScanlines: 8, secondDroneOrbitRing: true },
+};
+
 /**
  * Scales an ultimate definition's timeline steps, damage, radius, and camera/VFX intensity
- * for Tier 2 (Lv 15 Enhanced) and Tier 4 (Lv 45 Mastery).
+ * for Tier 2 (Lv 15 Enhanced) and Tier 4 (Lv 45 Mastery), enforcing Section 4.5 Hard Caps
+ * and Section 10.5 Class-Specific Tier Flourishes.
  */
 function applyUltimateTierScaling(baseUlt, tier, forkChoice = null) {
   if (!baseUlt) return baseUlt;
 
-  // Tier 1 (Lv 1-14) and Tier 3 (Lv 30-44) use baseline definitions for their respective forms,
-  // while Tier 2 (Lv 15-29) enhances the Lv 1 Base Ult and Tier 4 (Lv 45+) masters the Lv 30 Transformed Ult.
   const isEnhancedTier = tier === 2;
   const isMasteryTier = tier === 4;
 
@@ -2361,6 +2580,13 @@ function applyUltimateTierScaling(baseUlt, tier, forkChoice = null) {
   const suffix =
     isEnhancedTier ? ' [ENHANCED]' : isMasteryTier ? ' [MASTERY]' : '';
 
+  const classId = baseUlt.classId || 'sena';
+  const classFlourish = isMasteryTier
+    ? { ...(TIER2_FLOURISHES[classId] || {}), ...(TIER4_FLOURISHES[classId] || {}) }
+    : isEnhancedTier
+    ? { ...(TIER2_FLOURISHES[classId] || {}) }
+    : {};
+
   const scaledSteps = (baseUlt.steps || []).map((step) => {
     const p = { ...(step.params || {}) };
     if (typeof p.damageMult === 'number') {
@@ -2385,35 +2611,47 @@ function applyUltimateTierScaling(baseUlt, tier, forkChoice = null) {
       p.aoeRadius = Math.round(p.aoeRadius * radiusScale);
     }
     if (typeof p.shakePx === 'number') {
-      p.shakePx = Math.round(p.shakePx * shakeScale);
+      p.shakePx = Math.min(HARD_CAPS.maxShakePx, Math.round(p.shakePx * shakeScale));
+    }
+    if (typeof p.zoom === 'number') {
+      p.zoom = Math.min(HARD_CAPS.maxCameraZoom, +(p.zoom * (isMasteryTier ? 1.04 : isEnhancedTier ? 1.02 : 1.0)).toFixed(2));
     }
     if (typeof p.duration === 'number') {
       p.duration = +(p.duration * durationScale).toFixed(1);
     }
-    if (typeof p.stunDuration === 'number' && (isEnhancedTier || isMasteryTier)) {
-      p.stunDuration = +(p.stunDuration + 0.5).toFixed(1);
+    if (typeof p.stunDuration === 'number') {
+      const bonus = isEnhancedTier || isMasteryTier ? 0.5 : 0;
+      p.stunDuration = Math.min(HARD_CAPS.maxStunSeconds, +(p.stunDuration + bonus).toFixed(1));
+    }
+    if (typeof p.corrodeStacks === 'number') {
+      p.corrodeStacks = Math.min(HARD_CAPS.maxCorrodeStacksPerCast, p.corrodeStacks);
     }
     if (typeof p.wreckPieceCount === 'number' && (isEnhancedTier || isMasteryTier)) {
-      p.wreckPieceCount = Math.round(p.wreckPieceCount * 1.4);
+      const cap = Math.round(p.wreckPieceCount * HARD_CAPS.maxPrimaryCountBonus);
+      p.wreckPieceCount = Math.min(cap, Math.round(p.wreckPieceCount * 1.4));
     }
     if (typeof p.rayCount === 'number' && (isEnhancedTier || isMasteryTier)) {
-      p.rayCount += 4;
+      const cap = Math.round(p.rayCount * HARD_CAPS.maxPrimaryCountBonus);
+      p.rayCount = Math.min(cap, p.rayCount + 4);
     }
     if (typeof p.meteorCount === 'number' && (isEnhancedTier || isMasteryTier)) {
-      p.meteorCount = Math.round(p.meteorCount * 1.5);
+      const cap = Math.round(p.meteorCount * HARD_CAPS.maxPrimaryCountBonus);
+      p.meteorCount = Math.min(cap, Math.round(p.meteorCount * 1.5));
     }
     if (typeof p.vertexCount === 'number' && (isEnhancedTier || isMasteryTier)) {
-      p.vertexCount += 2;
+      const cap = Math.round(p.vertexCount * HARD_CAPS.maxPrimaryCountBonus);
+      p.vertexCount = Math.min(cap, p.vertexCount + 2);
     }
     if (isEnhancedTier || isMasteryTier) {
       if (p.applyBleed === false) p.applyBleed = true;
       if (p.corrosiveRain === false) p.corrosiveRain = true;
       if (p.tectonicFissures === false && isMasteryTier) p.tectonicFissures = true;
       if (p.thunderheadStorm === false && isMasteryTier) p.thunderheadStorm = true;
+      p.classFlourish = classFlourish;
       if (p.impactFrame && typeof p.impactFrame.frames === 'number') {
         p.impactFrame = {
           ...p.impactFrame,
-          frames: p.impactFrame.frames + 1,
+          frames: Math.min(HARD_CAPS.maxImpactFrames, p.impactFrame.frames + 1),
         };
       }
     }
@@ -2428,8 +2666,11 @@ function applyUltimateTierScaling(baseUlt, tier, forkChoice = null) {
 
   return {
     ...baseUlt,
+    pauseChargeWhileActive: true,
     tier,
     tierLabel,
+    classFlourish,
+    vfxProfile: CLASS_VFX_PROFILES[classId] || CLASS_VFX_PROFILES.sena,
     name: `${baseUlt.name}${suffix}`,
     titleCard: `${baseUlt.titleCard}${suffix}`,
     totalDamageMult: +(baseUlt.totalDamageMult * dmgScale).toFixed(2),

@@ -24,6 +24,12 @@ import { fusionManager } from './FusionManager.js';
 import { tacticalSystem } from './TacticalAI.js';
 import { obstacleManager } from './Obstacles.js';
 import { worldLedger } from './WorldLedger.js';
+import {
+  getFloorMobDisplayName,
+  getOverlevelXpMultiplier,
+  getAbyssalEnrageBuff,
+} from '../data/darkFantasyConfig.js';
+import { inferEnemyHitDamageType } from '../utils/hudHelpers.js';
 
 let NEXT_ENEMY_UID = 1;
 
@@ -95,31 +101,68 @@ export class Enemy {
     return this.statuses;
   }
 
-  initFromConfig(cfg, x, y, scaleMult = 1.0) {
+  initFromConfig(cfg, x, y, scaleMult = 1.0, playerLevel = 1) {
     spriteRegistry.init();
     this.uid = NEXT_ENEMY_UID++;
     this.active = true;
     this.dead = false;
     this.id = cfg.id;
-    this.name = cfg.name;
-    this.subtitle = cfg.subtitle || '';
     this.tier = cfg.tier || (cfg.arenaCenter ? 'boss' : 'common');
+    this.floor = Math.max(1, worldLedger.currentFloor || 1);
+    const floorCfg = worldLedger.getFloorConfig(this.floor);
+    const [minLv, maxLv] = floorCfg.expectedLevelBand || [1, 10];
+
+    if (this.tier === 'boss') {
+      this.level = maxLv;
+      const chainEntry = worldLedger.getActiveBossChainEntry(cfg.id, this.floor);
+      this.name = chainEntry.name || cfg.name;
+      this.subtitle = `${chainEntry.stageLabel} · ${chainEntry.title || cfg.subtitle || ''}`;
+      this.bossStageIndex = chainEntry.stageIndex;
+      this.bossStageLabel = chainEntry.stageLabel;
+      const bossHpMult = (floorCfg.hpMult || 1) * (chainEntry.hpMult || 1);
+      const bossDmgMult = (floorCfg.dmgMult || 1) * (chainEntry.dmgMult || 1);
+      this.baseMaxHp = Math.round(cfg.hp * bossHpMult);
+      this.baseDamage = Math.max(1, Math.round(cfg.damage * bossDmgMult));
+      this.baseDef = Math.round((cfg.def !== undefined ? cfg.def : 18) * (1 + (this.floor - 1) * 0.45));
+      this.xp = Math.round((cfg.xp || 95) * (floorCfg.xpMult || 1) * (0.75 + chainEntry.stageIndex * 0.25));
+      const gBase = cfg.gold !== undefined ? cfg.gold : cfg.goldMin || 90;
+      this.goldMin = Math.round(gBase * (floorCfg.goldMult || 1));
+      this.goldMax = Math.round((cfg.goldMax || gBase) * (floorCfg.goldMult || 1));
+    } else {
+      this.level =
+        this.tier === 'elite' || this.tier === 'fusionBoss'
+          ? Math.min(maxLv, Math.round((minLv + maxLv) / 2) + 2)
+          : Math.min(maxLv, minLv + (this.uid % Math.max(1, maxLv - minLv)));
+      this.name = getFloorMobDisplayName(cfg.name || cfg.id, this.floor);
+      this.subtitle = cfg.subtitle || `Floor ${this.floor} · Lv.${this.level}`;
+      const fHpMult = (floorCfg.hpMult || 1) * scaleMult;
+      const fDmgMult = (floorCfg.dmgMult || 1) * scaleMult;
+      this.baseMaxHp = Math.round(cfg.hp * fHpMult);
+      this.baseDamage = Math.max(1, Math.round(cfg.damage * fDmgMult));
+      this.baseDef = Math.round(
+        (cfg.def !== undefined ? cfg.def : this.tier === 'elite' ? 8 : 2) *
+          (1 + (this.floor - 1) * 0.4)
+      );
+      this.xp = Math.max(1, Math.round((cfg.xp || 5) * (floorCfg.xpMult || 1)));
+      this.goldMin = Math.round((cfg.gold !== undefined ? cfg.gold : cfg.goldMin || 3) * (floorCfg.goldMult || 1));
+      this.goldMax = Math.round((cfg.gold !== undefined ? cfg.gold : cfg.goldMax || 6) * (floorCfg.goldMult || 1));
+    }
+
     this.x = Math.round(x);
     this.y = Math.round(y);
     this.vx = 0;
     this.vy = 0;
     this.radius = cfg.radius || 12;
-
-    const mult = this.tier === 'boss' ? 1.0 : scaleMult;
-    this.maxHp = Math.round(cfg.hp * mult);
+    this.baseSpeed = cfg.speed || 80;
+    this.maxHp = this.baseMaxHp;
     this.hp = this.maxHp;
-    this.damage = Math.max(1, Math.round(cfg.damage * mult));
-    this.def = cfg.def !== undefined ? cfg.def : this.tier === 'boss' ? 18 : this.tier === 'elite' ? 8 : 2;
-    this.speed = cfg.speed || 80;
-    this.xp = cfg.xp || 8;
-    this.goldMin = cfg.gold !== undefined ? cfg.gold : cfg.goldMin || 3;
-    this.goldMax = cfg.gold !== undefined ? cfg.gold : cfg.goldMax || 6;
+    this.damage = this.baseDamage;
+    this.def = this.baseDef;
+    this.speed = this.baseSpeed;
     this.flying = !!cfg.flying;
+    this.isAbyssEnraged = false;
+    this.enrageTag = null;
+    this.syncAbyssalEnrage(playerLevel);
 
     this.statuses = new StatusSystem(this.tier);
 
@@ -149,13 +192,20 @@ export class Enemy {
     this.kbVx = 0;
     this.kbVy = 0;
 
-    // Expansion state: Fusion, Ritual, Morale, Grudges, & Special Common Behaviors
     this.scaleMult = scaleMult;
+    this.isKingBoss = Boolean(cfg.isKingBoss);
+    this.baseSpeciesId = cfg.sourceSpeciesId || cfg.id;
+    this.baseMobName = cfg.name || cfg.id;
     this.fusionLocked = false;
     this.fusionChannelId = null;
     this.fusionBacklashTimer = 0;
     this.convergeX = 0;
     this.convergeY = 0;
+    this.gatherSkillTimer = 1.6 + Math.random() * 2.2;
+    this.gatherRallyTimer = 0;
+    this.gatherTargetX = null;
+    this.gatherTargetY = null;
+    this.gapBehaviorMode = this.uid % 2 === 0 ? 'CHASE_ATTACK' : 'FUSION_GATHER';
     this.isRitualOrigin = false;
     this.isRitualMarcher = false;
     this.ritualTargetX = undefined;
@@ -181,6 +231,24 @@ export class Enemy {
     }
   }
 
+  /**
+   * 10-Level Gap "Abyssal Enrage" Buff:
+   * If player.level - this.level >= 10, this mob/boss gets a massive HP, ATK, DEF, and +25% Speed buff!
+   */
+  syncAbyssalEnrage(playerLevel = 1) {
+    const buff = getAbyssalEnrageBuff(playerLevel, this.level || 1);
+    if (buff.active && !this.isAbyssEnraged) {
+      const hpRatio = this.maxHp > 0 ? this.hp / this.maxHp : 1;
+      this.isAbyssEnraged = true;
+      this.enrageTag = buff.tag;
+      this.maxHp = Math.round(this.baseMaxHp * buff.hpMult);
+      this.hp = Math.max(1, Math.round(this.maxHp * hpRatio));
+      this.damage = Math.round(this.baseDamage * buff.atkMult);
+      this.def = Math.round(this.baseDef * buff.defMult);
+      this.speed = Math.round(this.baseSpeed * buff.speedMult);
+    }
+  }
+
   applyStun(duration, particles = null) {
     this.statuses.apply('stun', { duration, sourceName: 'Stun' }, this, particles);
     if (this.tier !== 'boss' && this.telegraphActive && this.statuses.cannotAct()) {
@@ -189,8 +257,48 @@ export class Enemy {
     }
   }
 
-  takeDamage(amount, hitAngle, knockback, isCrit, player, spawner, particles, camera) {
+  applyBurn(duration = 3.0, sourceAtk = 12, particles = null) {
+    return this.statuses.apply('burn', { duration, sourceAtk, sourceName: 'Burn' }, this, particles);
+  }
+
+  applySlow(duration = 2.0, value = 0.35, particles = null) {
+    return this.statuses.apply('slow', { duration, value, sourceName: 'Slow' }, this, particles);
+  }
+
+  inflictBurn(target, duration = 3.0, sourceAtk = null, particles = null) {
+    if (!target || !target.statuses) return false;
+    return target.statuses.apply(
+      'burn',
+      { duration, sourceAtk: sourceAtk !== null ? sourceAtk : this.damage, sourceName: this.name },
+      target,
+      particles
+    );
+  }
+
+  inflictStun(target, duration = 1.0, particles = null) {
+    if (!target || !target.statuses) return false;
+    return target.statuses.apply('stun', { duration, sourceName: this.name }, target, particles);
+  }
+
+  inflictSlow(target, duration = 2.0, value = 0.35, particles = null) {
+    if (!target || !target.statuses) return false;
+    return target.statuses.apply('slow', { duration, value, sourceName: this.name }, target, particles);
+  }
+
+  takeDamage(amount, hitAngle, knockback, isCrit, player, spawner, particles, camera, statusProc = null, damageType = null) {
     if (!this.active || this.hp <= 0) return;
+
+    // Apply optional status effect proc from attacker
+    if (statusProc) {
+      if (typeof statusProc === 'string') {
+        if (statusProc === 'burn') this.applyBurn(3.0, player ? player.atk * 0.3 : 12, particles);
+        else if (statusProc === 'stun') this.applyStun(1.0, particles);
+        else if (statusProc === 'slow') this.applySlow(2.5, 0.40, particles);
+        else this.statuses.apply(statusProc, { duration: 3.0, sourceName: 'Proc' }, this, particles);
+      } else if (typeof statusProc === 'object' && statusProc.id) {
+        this.statuses.apply(statusProc.id, statusProc, this, particles);
+      }
+    }
 
     // Plate Marshal (Slab Town Elite): Frontal scrap shield reduces frontal damage by 55% unless stunned
     if (this.id === 'plateMarshal' && !this.statuses.cannotAct()) {
@@ -277,17 +385,21 @@ export class Enemy {
     }
 
     if (particles) {
+      const resolvedDmgType = inferEnemyHitDamageType(player, statusProc, damageType);
       particles.spawnBurst(
         this.x,
         this.y,
         isCrit ? 6 : 3,
-        isCrit ? PALETTE.brass : PALETTE.bone,
+        isCrit ? PALETTE.brass : resolvedDmgType === 'magical' ? '#C084FC' : PALETTE.bone,
         25,
         80,
         2,
         0.22
       );
-      particles.spawnDamageNumber(this.x, this.y - this.radius, amount, isCrit);
+      particles.spawnDamageNumber(this.x, this.y - this.radius, amount, isCrit, null, null, {
+        damageType: resolvedDmgType,
+        targetType: 'enemy',
+      });
     }
 
     if (this.hp <= 0) {
@@ -340,13 +452,14 @@ export class Enemy {
     const baseGold =
       this.goldMin + Math.random() * Math.max(0, this.goldMax - this.goldMin);
     const variance = 0.8 + Math.random() * 0.4;
-    // D44: Optional boss rematches pay reduced non-exploitative rewards (35%)
     const rematchMult = this.isRematch ? 0.35 : 1.0;
+    const overlevelXpMult = getOverlevelXpMultiplier(player ? player.level : 1, this.level || 1);
     const finalGold = Math.max(1, Math.round(baseGold * variance * rematchMult));
-    const finalXp = Math.max(1, Math.round(this.xp * rematchMult));
+    const finalXp = Math.max(1, Math.round(this.xp * rematchMult * overlevelXpMult));
 
     if (player) {
       player.gainXpAndGold(finalXp, finalGold, particles);
+      worldLedger.recordMobKillForQuests(this, this.floor || worldLedger.currentFloor);
       if (player.ultimates) {
         if (typeof player.ultimates.addKillCharge === 'function') {
           player.ultimates.addKillCharge(player, this.tier);
@@ -354,7 +467,6 @@ export class Enemy {
           player.ultimates.onEnemyKilled(player, this.tier);
         }
       }
-      // Ines Scrap Orbit: +1 scrap piece when an enemy dies within 200px
       if (player.classId === 'ines' && player.classBehavior) {
         player.classBehavior.onEnemyKilledNearby(this.x, this.y, particles);
       }
@@ -432,9 +544,12 @@ export class Enemy {
   }
 
   _applyCommonContactStatus(player, particles) {
+    if (!player || !player.statuses) return;
     // Enemy-applied durations stay fixed and do not scale with level; DoT scales with enemy damage stat.
     if (this.id === 'tinRat') {
-      if (Math.random() < 0.15) {
+      if (Math.random() < 0.20) {
+        this.inflictSlow(player, 2.0, 0.30, particles);
+      } else if (Math.random() < 0.20) {
         player.statuses.apply(
           'bleed',
           { duration: 4.0, sourceAtk: this.damage, sourceName: 'Tin Rat' },
@@ -444,6 +559,8 @@ export class Enemy {
       }
     } else if (this.id === 'dustDog') {
       if (Math.random() < 0.25) {
+        this.inflictSlow(player, 2.0, 0.35, particles);
+      } else if (Math.random() < 0.25) {
         player.statuses.apply(
           'bleed',
           { duration: 4.0, sourceAtk: this.damage, sourceName: 'Dust Dog' },
@@ -458,11 +575,32 @@ export class Enemy {
         player,
         particles
       );
+      this.inflictSlow(player, 2.0, 0.25, particles);
+    } else if (this.id === 'sumpBat') {
+      this.inflictSlow(player, 2.0, 0.30, particles);
+    } else if (this.id === 'cleaverHauler') {
+      this.inflictStun(player, 0.6, particles);
+    } else if (this.id === 'bigAxle') {
+      this.inflictBurn(player, 3.0, this.damage, particles);
+      this.inflictStun(player, 0.8, particles);
+    } else if (this.id === 'theForeman') {
+      this.inflictStun(player, 0.8, particles);
+      this.inflictSlow(player, 2.0, 0.30, particles);
+    } else if (this.id === 'motherSump') {
+      this.inflictSlow(player, 3.0, 0.40, particles);
+    } else if (this.id === 'theLongDry') {
+      this.inflictSlow(player, 2.0, 0.30, particles);
+    } else if (this.name?.toLowerCase().includes('boiler') || this.name?.toLowerCase().includes('torch') || this.name?.toLowerCase().includes('hell')) {
+      this.inflictBurn(player, 3.0, this.damage * 0.75, particles);
     }
   }
 
   update(dt, player, spawner, projectiles, particles, camera, world) {
     if (!this.active || this.hp <= 0) return;
+
+    if (player && player.level) {
+      this.syncAbyssalEnrage(player.level);
+    }
 
     this.animClock += dt;
     if (this.hitFlashFrames > 0) this.hitFlashFrames--;
@@ -611,6 +749,121 @@ export class Enemy {
         tacticalSystem.emitBroadcast(this, 260, 4.5, 'intercept');
         if (particles) {
           particles.spawnShockwave(this.x, this.y, 42, PALETTE.signal, 0.2);
+        }
+      }
+    }
+
+    // 10-Level Gap Behavior: Low-level common mobs can either CHASE & ATTACK you OR use a FUSION GATHER SKILL
+    // to call/pull same-species mobs together to trigger a 10× Fusion!
+    // Also Mid-Level Fused Bosses can use a King Rally to pull other Mid-Bosses together for a 5× King Fusion!
+    if (this.gatherRallyTimer > 0) {
+      this.gatherRallyTimer = Math.max(0, this.gatherRallyTimer - dt);
+    }
+
+    if (
+      !this.isRitualMarcher &&
+      !playerInSafeZone &&
+      spawner &&
+      ((this.tier === 'common' && this.isAbyssEnraged) ||
+        (this.tier === 'fusionBoss' && !this.isKingBoss))
+    ) {
+      this.morale = 100; // Never panic/flee during 10-level gap or as Fusion Boss
+      this.gatherSkillTimer -= dt;
+      if (this.gatherSkillTimer <= 0) {
+        this.gatherSkillTimer = 3.0 + Math.random() * 1.8;
+
+        if (this.tier === 'common') {
+          // Find same-species common mobs within 650px
+          const nearbyAll = spawner.queryRadius
+            ? spawner.queryRadius(this.x, this.y, 650)
+            : [];
+          const sameSpecies = [];
+          for (let i = 0; i < nearbyAll.length; i++) {
+            const o = nearbyAll[i];
+            if (
+              o &&
+              o.active &&
+              o.hp > 0 &&
+              o.tier === 'common' &&
+              o.id === this.id &&
+              !o.fusionLocked &&
+              !o.isRitualMarcher
+            ) {
+              sameSpecies.push(o);
+            }
+          }
+
+          // Toggle or choose between CHASE_ATTACK and FUSION_GATHER skill
+          const shouldGather =
+            sameSpecies.length >= 3 &&
+            (this.gapBehaviorMode === 'FUSION_GATHER' || sameSpecies.length >= 5 || Math.random() < 0.65);
+
+          if (shouldGather) {
+            this.gapBehaviorMode = 'FUSION_GATHER';
+            let rx = 0;
+            let ry = 0;
+            for (let i = 0; i < sameSpecies.length; i++) {
+              rx += sameSpecies[i].x;
+              ry += sameSpecies[i].y;
+            }
+            rx /= sameSpecies.length;
+            ry /= sameSpecies.length;
+
+            // Cast Gathering Skill: rally all same-species mobs in range toward the convergence point!
+            for (let i = 0; i < sameSpecies.length; i++) {
+              const ally = sameSpecies[i];
+              ally.gatherRallyTimer = 3.6;
+              ally.gatherTargetX = rx;
+              ally.gatherTargetY = ry;
+            }
+            if (particles && Math.random() < 0.35) {
+              particles.spawnShockwave(this.x, this.y, 72, '#FFC83D', 0.24);
+            }
+          } else {
+            // Aggressively chase & lunge-attack the player!
+            this.gapBehaviorMode = 'CHASE_ATTACK';
+            this.gatherRallyTimer = 0;
+            if (distToPlayer < 190 && !this.statuses.cannotMove()) {
+              this.actionActiveTimer = 0.20;
+              this.actionVx = dirX * (this.speed * 2.15);
+              this.actionVy = dirY * (this.speed * 2.15);
+            }
+          }
+        } else if (this.tier === 'fusionBoss' && !this.isKingBoss) {
+          // Mid-Level Fused Boss checks for other Mid-Bosses to rally for a 5× King Fusion!
+          const allActive = spawner.getAllActiveEnemies ? spawner.getAllActiveEnemies() : spawner.pool;
+          const midBosses = [];
+          for (let i = 0; i < allActive.length; i++) {
+            const o = allActive[i];
+            if (
+              o &&
+              o.active &&
+              o.hp > 0 &&
+              o.tier === 'fusionBoss' &&
+              !o.isKingBoss &&
+              !o.fusionLocked
+            ) {
+              midBosses.push(o);
+            }
+          }
+          if (midBosses.length >= 2) {
+            let rx = 0;
+            let ry = 0;
+            for (let i = 0; i < midBosses.length; i++) {
+              rx += midBosses[i].x;
+              ry += midBosses[i].y;
+            }
+            rx /= midBosses.length;
+            ry /= midBosses.length;
+            for (let i = 0; i < midBosses.length; i++) {
+              midBosses[i].gatherRallyTimer = 3.8;
+              midBosses[i].gatherTargetX = rx;
+              midBosses[i].gatherTargetY = ry;
+            }
+            if (particles && midBosses.length >= 4 && Math.random() < 0.4) {
+              particles.spawnShockwave(this.x, this.y, 95, '#C042FF', 0.28);
+            }
+          }
         }
       }
     }
@@ -834,14 +1087,21 @@ export class Enemy {
 
       let sepX = 0;
       let sepY = 0;
-      // Reduce separation when converging for 10-unit same-species fusion (outside Foreman ritual AOE)
-      const isConverging =
-        this.tier === 'common' &&
-        !this.isRitualMarcher &&
-        (Math.abs(this.convergeX || 0) > 0.01 || Math.abs(this.convergeY || 0) > 0.01) &&
+      const isGatheringSkillActive =
+        this.gatherRallyTimer > 0 &&
+        this.gatherTargetX !== null &&
+        this.gatherTargetY !== null &&
         !bossMechanics.isInsideForemanNoFusionField(this.x, this.y);
 
-      const sepStrength = isConverging ? 18 : 65;
+      // Reduce separation when converging for 10-unit common fusion or 5-unit Mid-Boss King fusion
+      const isConverging =
+        isGatheringSkillActive ||
+        ((this.tier === 'common' || (this.tier === 'fusionBoss' && !this.isKingBoss)) &&
+          !this.isRitualMarcher &&
+          (Math.abs(this.convergeX || 0) > 0.01 || Math.abs(this.convergeY || 0) > 0.01) &&
+          !bossMechanics.isInsideForemanNoFusionField(this.x, this.y));
+
+      const sepStrength = isGatheringSkillActive ? 6 : isConverging ? 16 : 65;
       const neighbors = (spawner && typeof spawner.queryRadius === 'function')
         ? spawner.queryRadius(this.x, this.y, this.radius * 2.1)
         : [];
@@ -851,20 +1111,33 @@ export class Enemy {
         const ndx = this.x - other.x;
         const ndy = this.y - other.y;
         const nDist = Math.hypot(ndx, ndy) || 0.1;
-        const minSep = this.radius + other.radius + (isConverging ? 0 : 3);
-        if (nDist < minSep) {
+        const minSep = this.radius + other.radius + (isConverging ? -2 : 3);
+        if (nDist < minSep && minSep > 0) {
           const push = ((minSep - nDist) / minSep) * sepStrength;
           sepX += (ndx / nDist) * push;
           sepY += (ndy / nDist) * push;
         }
       }
 
-      const convVX = isConverging ? (this.convergeX || 0) * 32 : 0;
-      const convVY = isConverging ? (this.convergeY || 0) * 32 : 0;
+      let finalDirX = steered.dirX;
+      let finalDirY = steered.dirY;
+      if (isGatheringSkillActive) {
+        const gdx = this.gatherTargetX - this.x;
+        const gdy = this.gatherTargetY - this.y;
+        const gDist = Math.hypot(gdx, gdy) || 1;
+        if (gDist > 16) {
+          finalDirX = gdx / gDist;
+          finalDirY = gdy / gDist;
+          speedMult *= 1.35; // Burst speed while using Gathering Skill to fuse!
+        }
+      }
+
+      const convVX = isConverging ? (this.convergeX || 0) * 44 : 0;
+      const convVY = isConverging ? (this.convergeY || 0) * 44 : 0;
 
       const moveSpeed = this.speed * speedMult;
-      this.x += (steered.dirX * moveSpeed + sepX + convVX) * dt;
-      this.y += (steered.dirY * moveSpeed + sepY + convVY) * dt;
+      this.x += (finalDirX * moveSpeed + sepX + convVX) * dt;
+      this.y += (finalDirY * moveSpeed + sepY + convVY) * dt;
     }
 
     if (!playerInSafeZone && distToPlayer <= this.radius + player.radius + 2 && this.contactCooldown <= 0) {
@@ -875,11 +1148,28 @@ export class Enemy {
       }
     }
 
+    // Check if attacking a defending Wandering Merchant during the 30s Sudden Defense Quest
+    if (this.tier !== 'boss' && this.contactCooldown <= 0 && worldLedger.wanderingMerchants) {
+      for (const m of worldLedger.wanderingMerchants) {
+        if (m.state === 'defending' && m.hp > 0) {
+          const mdx = m.x - this.x;
+          const mdy = m.y - this.y;
+          const mDist = Math.hypot(mdx, mdy);
+          if (mDist <= this.radius + 18) {
+            this.contactCooldown = 1.05;
+            m.hp = Math.max(0, m.hp - this.damage);
+            if (particles) {
+              particles.spawnDamageNumber(m.x, m.y - 22, this.damage, false, null, '#FF5A26');
+            }
+          }
+        }
+      }
+    }
+
     this._keepOutOfKettleAndBounds();
   }
 
   _keepOutOfKettleAndBounds() {
-    // Resolve solid & boss-generated obstacle collision with explicit flying & burrowing exceptions
     const isBurrowed = !!(this.bm && this.bm.subsurfaceTimer > 0) || !!this.isBurrowed;
     const resolved = obstacleManager.resolveEntityCollision(this.x, this.y, this.radius, {
       isFlying: !!this.flying,
@@ -889,15 +1179,21 @@ export class Enemy {
     this.y = resolved.y;
     this.lastCollidedObstacle = resolved.hitObstacle;
 
-    const cx = WORLD_CONFIG.kettleCenter.x;
-    const cy = WORLD_CONFIG.kettleCenter.y;
-    const dx = this.x - cx;
-    const dy = this.y - cy;
-    const dist = Math.hypot(dx, dy) || 1;
-    const minKettleDist = WORLD_CONFIG.kettleRadius + this.radius + 10;
-    if (dist < minKettleDist) {
-      this.x = cx + (dx / dist) * minKettleDist;
-      this.y = cy + (dy / dist) * minKettleDist;
+    // Repel enemies from any active Wandering Merchant Mob-Repellent Sanctuary Ward!
+    if (worldLedger.wanderingMerchants) {
+      for (let i = 0; i < worldLedger.wanderingMerchants.length; i++) {
+        const m = worldLedger.wanderingMerchants[i];
+        if (m.repellentActive && m.state === 'protected') {
+          const dx = this.x - m.x;
+          const dy = this.y - m.y;
+          const dist = Math.hypot(dx, dy) || 1;
+          const minWardDist = m.repellentRadius + this.radius + 8;
+          if (dist < minWardDist) {
+            this.x = m.x + (dx / dist) * minWardDist;
+            this.y = m.y + (dy / dist) * minWardDist;
+          }
+        }
+      }
     }
 
     if (this.tier === 'boss' && this.arenaCenter) {
@@ -1294,8 +1590,9 @@ export class Enemy {
       // Hide sprite while The Long Dry is burrowed underground (tremor rings drawn by BossMechanics)
       const isBurrowed = !!(this.bm && this.bm.subsurfaceTimer > 0);
       if (spriteCanvas && !isBurrowed) {
-        const w = spriteCanvas.width;
-        const h = spriteCanvas.height;
+        const scaleDraw = this.isKingBoss ? 1.45 : 1.0;
+        const w = Math.round(spriteCanvas.width * scaleDraw);
+        const h = Math.round(spriteCanvas.height * scaleDraw);
         const stunTiltX = isStaggered
           ? Math.floor(this.animClock * 24) % 2 === 0
             ? -2
@@ -1304,10 +1601,22 @@ export class Enemy {
           ? 2
           : 0;
         const squashDropY = this.squashTimer > 0 || this.feignedDeathTimer > 0 ? 3 : 0;
+
+        if (this.isKingBoss) {
+          drawBresenhamCircle(ctx, sx, sy + flyHeightOffset, this.radius + 4, '#FFC83D', 0.9);
+          drawBresenhamCircle(ctx, sx, sy + flyHeightOffset, this.radius + 1, '#C042FF', 0.85);
+        }
+
         ctx.drawImage(
           spriteCanvas,
+          0,
+          0,
+          spriteCanvas.width,
+          spriteCanvas.height,
           Math.round(sx - w / 2 + stunTiltX),
-          Math.round(sy - h / 2 + flyHeightOffset + squashDropY)
+          Math.round(sy - h / 2 + flyHeightOffset + squashDropY),
+          w,
+          h
         );
       }
     }
@@ -1330,16 +1639,18 @@ export class Enemy {
         this.tier === 'fusionBoss' ||
         activeStatuses.length > 0)
     ) {
-      const barW = this.tier === 'fusionBoss' ? 36 : this.tier === 'elite' ? 24 : 16;
-      const barH = this.tier === 'fusionBoss' ? 3 : 2;
+      const barW = this.isKingBoss ? 52 : this.tier === 'fusionBoss' ? 36 : this.tier === 'elite' ? 24 : 16;
+      const barH = this.isKingBoss ? 4 : this.tier === 'fusionBoss' ? 3 : 2;
       const bx = sx - (barW >> 1);
-      const by = sy - this.radius - 7 + flyHeightOffset;
+      const by = sy - this.radius - (this.isKingBoss ? 11 : 7) + flyHeightOffset;
       ctx.fillStyle = PALETTE.soot;
       ctx.fillRect(bx - 1, by - 1, barW + 2, barH + 2);
-      ctx.fillStyle = this.tier === 'fusionBoss' ? PALETTE.brass : PALETTE.blood;
+      ctx.fillStyle = this.isKingBoss ? '#FFC83D' : this.tier === 'fusionBoss' ? PALETTE.brass : PALETTE.blood;
       ctx.fillRect(bx, by, Math.max(1, Math.round((this.hp / this.maxHp) * barW)), barH);
 
-      if (this.tier === 'fusionBoss') {
+      if (this.isKingBoss) {
+        drawPixelText(ctx, `★ ${this.name.toUpperCase()} ★`, sx, by - 8, '#FFC83D', 'center');
+      } else if (this.tier === 'fusionBoss') {
         drawPixelText(ctx, this.name.toUpperCase(), sx, by - 7, PALETTE.brass, 'center');
       }
 
@@ -1359,8 +1670,10 @@ export class Enemy {
       }
     }
 
-    // Readable AI Intelligence / Morale / Grudge / Ritual March indicator (Sections 4, 11.1)
-    if (this.isRitualMarcher) {
+    // Subtle crimson ring for 10-Level Gap Enrage (no cluttering text popup!)
+    if (this.isAbyssEnraged && !this.isKingBoss) {
+      drawBresenhamCircle(ctx, sx, sy + flyHeightOffset, this.radius + 2, '#E03C31', 0.65);
+    } else if (this.isRitualMarcher) {
       ctx.fillStyle = PALETTE.signal;
       ctx.fillRect(sx - 2, sy - this.radius - 11, 4, 2);
     } else if (this.aiRoleState === 'RETREAT') {

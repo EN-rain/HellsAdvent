@@ -12,10 +12,17 @@ import {
   getDefaultPresets,
 } from '../data/classChangeData.js';
 import { CLASS_TREES, getSpecTree } from '../data/talentTreeData.js';
+import {
+  DARK_FANTASY_FLOORS,
+  BOSS_BLOODLINES,
+  FLOOR_BOSS_CHAINS,
+  STORY_CAMPAIGN,
+} from '../data/darkFantasyConfig.js';
 
 export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
   const [, setTick] = useState(0);
-  const [activeTab, setActiveTab] = useState('loadout'); // 'loadout' | 'tree' | 'traits'
+  const [activeTab, setActiveTab] = useState(isHarlowMode ? 'spire' : 'loadout'); // 'loadout' | 'tree' | 'traits' | 'spire'
+  const [selectedFloorPreview, setSelectedFloorPreview] = useState(() => Math.max(1, worldLedger.currentFloor || 1));
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all'); // 'all' | 'base' | 'new' | 'ult'
   const [selectedSlotForBinding, setSelectedSlotForBinding] = useState(null); // 0..4 (null if none)
@@ -279,10 +286,20 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
         </div>
 
         {/* MODERN TABS NAVIGATION */}
-        <div className="flex border-b border-[#202D3C] bg-[#0E141D]">
+        <div className="flex flex-wrap border-b border-[#202D3C] bg-[#0E141D]">
+          <button
+            onClick={() => setActiveTab('spire')}
+            className={`flex-1 py-2.5 px-2 text-xs font-black tracking-wider border-r border-[#202D3C] cursor-pointer transition-all flex items-center justify-center gap-2 ${
+              activeTab === 'spire'
+                ? 'bg-[#201433] text-[#c084fc] border-b-2 border-b-[#c084fc] shadow-inner'
+                : 'text-[#8292A1] hover:text-[#E3E8E5] hover:bg-[#121A24]'
+            }`}
+          >
+            <span>🏰</span> SPIRE FLOORS, BLOODLINES &amp; STORY
+          </button>
           <button
             onClick={() => setActiveTab('loadout')}
-            className={`flex-1 py-2.5 text-xs font-black tracking-wider border-r border-[#202D3C] cursor-pointer transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 px-2 text-xs font-black tracking-wider border-r border-[#202D3C] cursor-pointer transition-all flex items-center justify-center gap-2 ${
               activeTab === 'loadout'
                 ? 'bg-[#152535] text-[#00F0FF] border-b-2 border-b-[#00F0FF] shadow-inner'
                 : 'text-[#8292A1] hover:text-[#E3E8E5] hover:bg-[#121A24]'
@@ -292,7 +309,7 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
           </button>
           <button
             onClick={() => setActiveTab('tree')}
-            className={`flex-1 py-2.5 text-xs font-black tracking-wider border-r border-[#202D3C] cursor-pointer transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 px-2 text-xs font-black tracking-wider border-r border-[#202D3C] cursor-pointer transition-all flex items-center justify-center gap-2 ${
               activeTab === 'tree'
                 ? 'bg-[#152535] text-[#00F0FF] border-b-2 border-b-[#00F0FF] shadow-inner'
                 : 'text-[#8292A1] hover:text-[#E3E8E5] hover:bg-[#121A24]'
@@ -302,7 +319,7 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
           </button>
           <button
             onClick={() => setActiveTab('traits')}
-            className={`flex-1 py-2.5 text-xs font-black tracking-wider cursor-pointer transition-all flex items-center justify-center gap-2 ${
+            className={`flex-1 py-2.5 px-2 text-xs font-black tracking-wider cursor-pointer transition-all flex items-center justify-center gap-2 ${
               activeTab === 'traits'
                 ? 'bg-[#152535] text-[#00F0FF] border-b-2 border-b-[#00F0FF] shadow-inner'
                 : 'text-[#8292A1] hover:text-[#E3E8E5] hover:bg-[#121A24]'
@@ -675,7 +692,7 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
                               </span>
                             </div>
 
-                            <div className="flex items-center gap-1.5 mt-1">
+                            <div className="flex items-center flex-wrap gap-1.5 mt-1">
                               <span
                                 className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${
                                   isUlt
@@ -686,6 +703,18 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
                                 }`}
                               >
                                 {isUlt ? 'Awakening Ultimate' : sk.source === 'Original' ? 'Base Combat Art' : `${sk.source} Art`}
+                              </span>
+                              <span
+                                className={`text-[9px] font-black uppercase px-1.5 py-0.2 rounded ${
+                                  isUlt
+                                    ? 'bg-[#1D1508] text-[#F0B232] border border-[#F0B232]/50'
+                                    : 'bg-[#0B1E19] text-[#4FD6A0] border border-[#4FD6A0]/40'
+                                }`}
+                                title="Auto-scales for free at Lv 1 / 15 / 30 / 45"
+                              >
+                                {isUlt
+                                  ? `TIER ${p.level >= 45 ? 4 : p.level >= 30 ? 3 : p.level >= 15 ? 2 : 1}/4`
+                                  : `RANK ${p.skillRanks?.[sk.id] || (p.level >= 45 ? 4 : p.level >= 30 ? 3 : p.level >= 15 ? 2 : 1)}/4`}
                               </span>
                             </div>
                           </div>
@@ -1627,6 +1656,253 @@ export function SkillPanel({ engine, onClose, isHarlowMode = false }) {
                     </div>
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: ABYSSAL SPIRE FLOORS, 60-BOSS BLOODLINE FAMILY TREE, & 5-ACT STORY CAMPAIGN */}
+          {activeTab === 'spire' && (
+            <div className="space-y-5">
+              {/* 1. ABYSSAL SPIRE FLOOR GATEWAY & DUSKHOLLOW TOWN TRAVEL */}
+              <div className="p-4 bg-[#110D1A] border-2 border-[#c084fc]/60 rounded-xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#2D2142] pb-2">
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-[#c084fc]">
+                      🏰 ABYSSAL SPIRE WAYGATE &amp; REALM ASCENSION
+                    </h3>
+                    <p className="text-xs text-[#9BA7AF]">
+                      Travel between <strong className="text-[#34d399]">Duskhollow Town (Safe Haven)</strong> and the 5 Dark Fantasy Spire Realms. Defeat all 4 Stage-3 Overlords on a floor to unseal the next realm!
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => engine.travelToFloor(0)}
+                    className={`px-4 py-2 text-xs font-black rounded border cursor-pointer ${
+                      worldLedger.currentFloor === 0
+                        ? 'bg-[#162822] border-[#34d399] text-[#34d399]'
+                        : 'bg-[#34d399] border-[#34d399] text-[#0B0D10] hover:brightness-110'
+                    }`}
+                  >
+                    {worldLedger.currentFloor === 0 ? '✓ IN DUSKHOLLOW TOWN' : 'RETURN TO DUSKHOLLOW TOWN'}
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                  {[1, 2, 3, 4, 5].map((fNum) => {
+                    const fCfg = DARK_FANTASY_FLOORS[fNum];
+                    const isUnlocked = fNum <= (worldLedger.highestUnlockedFloor || 1);
+                    const isCurrent = worldLedger.currentFloor === fNum;
+                    const chains = worldLedger.floorSectorChains?.[fNum] || {};
+                    const clearedCount = Object.values(chains).filter((c) => c.cleared).length;
+
+                    return (
+                      <div
+                        key={fNum}
+                        onClick={() => setSelectedFloorPreview(fNum)}
+                        className={`p-3 rounded-lg border-2 flex flex-col justify-between gap-2 cursor-pointer transition-all ${
+                          selectedFloorPreview === fNum
+                            ? 'bg-[#1E152E] border-[#c084fc]'
+                            : isUnlocked
+                            ? 'bg-[#12161F] border-[#34404B] hover:border-[#c084fc]/60'
+                            : 'bg-[#0B0E14] border-[#1E2630] opacity-65'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] font-black uppercase">
+                            <span className="text-[#c084fc]">FLOOR {fNum}</span>
+                            <span className="text-[#FFC83D]">
+                              LV {fCfg.levelBand[0]}–{fCfg.levelBand[1]}
+                            </span>
+                          </div>
+                          <div className="text-xs font-black text-[#E3E8E5] mt-1">
+                            {fCfg.name}
+                          </div>
+                          <div className="text-[10px] text-[#9BA7AF] mt-0.5 leading-snug">
+                            {fCfg.subtitle}
+                          </div>
+                          <div className="text-[10px] font-bold text-[#34d399] mt-1.5">
+                            Overlords Slain: {clearedCount} / 4
+                          </div>
+                        </div>
+
+                        <button
+                          disabled={!isUnlocked}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            engine.travelToFloor(fNum);
+                          }}
+                          className={`w-full py-1.5 text-[11px] font-black rounded border cursor-pointer ${
+                            isCurrent
+                              ? 'bg-[#251538] border-[#c084fc] text-[#c084fc]'
+                              : isUnlocked
+                              ? 'bg-[#c084fc] border-[#c084fc] text-[#0B0D10] hover:brightness-110'
+                              : 'bg-[#161A20] border-[#2A333D] text-[#52616A] cursor-not-allowed'
+                          }`}
+                        >
+                          {isCurrent ? 'ACTIVE FLOOR' : isUnlocked ? `ENTER FLOOR ${fNum}` : '🔒 SEALED'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. BOSS BLOODLINE FAMILY TREE (4 BLOODLINES × 3 STAGES ON SELECTED FLOOR) */}
+              <div className="p-4 bg-[#0F1722] border border-[#253240] rounded-xl space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#202E3D] pb-2">
+                  <div>
+                    <h3 className="text-xs font-black uppercase tracking-wider text-[#FFC83D]">
+                      🩸 EVOLVED BOSS BLOODLINE FAMILY TREE — FLOOR {selectedFloorPreview}: {DARK_FANTASY_FLOORS[selectedFloorPreview]?.name.toUpperCase()}
+                    </h3>
+                    <p className="text-[11px] text-[#8C9CA9]">
+                      Each territory is ruled by a 3-stage sequential Bloodline chain: <strong className="text-[#E3E8E5]">Stage 1 Warden → Stage 2 Executioner → Stage 3 Overlord</strong>.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((fn) => (
+                      <button
+                        key={fn}
+                        onClick={() => setSelectedFloorPreview(fn)}
+                        className={`px-2.5 py-1 text-[10px] font-black rounded border cursor-pointer ${
+                          selectedFloorPreview === fn
+                            ? 'bg-[#c084fc] text-[#0B0D10] border-[#c084fc]'
+                            : 'bg-[#141C26] text-[#9BA7AF] border-[#2B3846]'
+                        }`}
+                      >
+                        FL {fn}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {(Array.isArray(BOSS_BLOODLINES) ? BOSS_BLOODLINES.slice(0, 4) : Object.values(BOSS_BLOODLINES)).map((bl) => {
+                    const sectorChainCfg = FLOOR_BOSS_CHAINS[selectedFloorPreview]?.[bl.sectorId] || [];
+                    const progress = worldLedger.floorSectorChains?.[selectedFloorPreview]?.[bl.sectorId] || {
+                      stage: 1,
+                      cleared: false,
+                    };
+
+                    return (
+                      <div
+                        key={bl.id}
+                        className="p-3 bg-[#0B1017] border border-[#283542] rounded-lg space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="text-xs font-black" style={{ color: bl.accent }}>
+                              {bl.familyName.toUpperCase()}
+                            </div>
+                            <div className="text-[10px] text-[#8C9CA9]">{bl.lore}</div>
+                          </div>
+                          <span className="px-2 py-0.5 text-[10px] font-black rounded bg-[#141D26] border border-[#344658] text-[#D9D2C3]">
+                            {progress.cleared ? '✓ TERRITORY CLEANSED' : `ACTIVE: STAGE ${progress.stage}/3`}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 pt-1">
+                          {sectorChainCfg.map((stageBoss) => {
+                            const killedKey = `f${selectedFloorPreview}_${bl.sectorId}_s${stageBoss.stage}`;
+                            const isSlain = Boolean(worldLedger.bloodlineKills?.[killedKey]);
+                            const isCurrentStage = !progress.cleared && progress.stage === stageBoss.stage;
+
+                            return (
+                              <div
+                                key={stageBoss.stage}
+                                className={`p-2 rounded border text-[10px] flex flex-col justify-between ${
+                                  isSlain
+                                    ? 'bg-[#10241E] border-[#34d399]/60 text-[#E3E8E5]'
+                                    : isCurrentStage
+                                    ? 'bg-[#24142E] border-[#c084fc] text-[#E3E8E5]'
+                                    : 'bg-[#0E141C] border-[#222D38] text-[#6C7D8C]'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex items-center justify-between font-black text-[9px] uppercase">
+                                    <span style={{ color: isSlain ? '#34d399' : isCurrentStage ? '#c084fc' : '#8C9CA9' }}>
+                                      S{stageBoss.stage}: {stageBoss.stageLabel}
+                                    </span>
+                                    <span>LV.{stageBoss.level}</span>
+                                  </div>
+                                  <div className="font-bold text-[11px] mt-0.5 text-[#D9D2C3]">
+                                    {stageBoss.name}
+                                  </div>
+                                  <div className="text-[9px] opacity-80 leading-tight mt-0.5">
+                                    {stageBoss.subtitle}
+                                  </div>
+                                </div>
+                                <div className="mt-1.5 pt-1 border-t border-white/10 flex items-center justify-between">
+                                  <span className="text-[9px] font-bold">
+                                    {isSlain ? '✓ SLAIN' : isCurrentStage ? '⚔ HUNT TARGET' : 'LOCKED'}
+                                  </span>
+                                  {isSlain && selectedFloorPreview === worldLedger.currentFloor && (
+                                    <button
+                                      onClick={() => engine.triggerBossRematch(bl.baseBossId)}
+                                      className="px-1.5 py-0.5 bg-[#FFC83D] text-[#0B0D10] font-black text-[8px] rounded cursor-pointer"
+                                    >
+                                      REMATCH
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. 5-ACT DARK FANTASY STORY CAMPAIGN CHRONICLE */}
+              <div className="p-4 bg-[#0F1722] border border-[#253240] rounded-xl space-y-3">
+                <div className="border-b border-[#202E3D] pb-2">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-[#00F0FF]">
+                    📜 5-ACT DARK FANTASY STORY CAMPAIGN CHRONICLE
+                  </h3>
+                  <p className="text-[11px] text-[#8C9CA9]">
+                    Complete main story objectives across Duskhollow Town and Floors 1–5 to earn Gold, XP, and Bonus Skill Points.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-2.5">
+                  {STORY_CAMPAIGN.map((act) => {
+                    const isCurrentAct = (worldLedger.storyState?.currentAct || 1) === act.act;
+                    const isCompletedAct =
+                      (worldLedger.storyState?.completedActs || []).includes(act.act) ||
+                      (worldLedger.storyState?.currentAct || 1) > act.act;
+                    return (
+                      <div
+                        key={act.act}
+                        className={`p-3 rounded-lg border text-xs flex flex-col justify-between gap-2 ${
+                          isCompletedAct
+                            ? 'bg-[#10241E] border-[#34d399]/60'
+                            : isCurrentAct
+                            ? 'bg-[#1B1429] border-[#c084fc]'
+                            : 'bg-[#0B1017] border-[#222D38] opacity-70'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between text-[10px] font-black">
+                            <span className="text-[#c084fc]">ACT {act.act}</span>
+                            <span className="text-[#FFC83D]">
+                              {isCompletedAct ? '✓ COMPLETE' : isCurrentAct ? 'ACTIVE' : `FLOOR ${act.floor}`}
+                            </span>
+                          </div>
+                          <div className="font-bold text-[#E3E8E5] mt-1">{act.title}</div>
+                          <div className="text-[10px] text-[#9BA7AF] mt-0.5">
+                            Patron: <strong className="text-[#D9D2C3]">{act.questGiver}</strong>
+                          </div>
+                          <p className="text-[10px] text-[#8C9CA9] mt-1.5 leading-snug">
+                            {act.synopsis}
+                          </p>
+                        </div>
+                        <div className="pt-2 border-t border-white/10 text-[10px] font-bold text-[#FFC83D]">
+                          Reward: {act.rewardGold}G · {act.rewardXp}XP · +{act.rewardSkillPoints} SP
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           )}

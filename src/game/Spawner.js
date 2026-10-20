@@ -22,8 +22,8 @@ export class Spawner {
   constructor(world = null) {
     this.world = world;
     bossMechanics.setEnemyClass(Enemy);
-    // Pre-allocated enemy pool (up to 64 for normal-origin enemies per D35)
-    this.pool = Array.from({ length: 64 }, () => new Enemy());
+    // Pre-allocated enemy pool (120 base slots, dynamically expandable for unlimited fusions)
+    this.pool = Array.from({ length: 120 }, () => new Enemy());
     this.enemies = this.pool;
     this.spawnTimer = 0.6;
 
@@ -73,9 +73,38 @@ export class Spawner {
     }
   }
 
+  syncWithWorldLedger() {
+    this.clear();
+    const fl = worldLedger.currentFloor ?? 0;
+    if (fl === 0) {
+      this.defeatedBosses = {
+        theForeman: true,
+        bigAxle: true,
+        motherSump: true,
+        theLongDry: true,
+      };
+      return;
+    }
+    const chainMap = worldLedger.floorSectorChains?.[fl] || {};
+    this.defeatedBosses = {
+      theForeman: (chainMap.slabTown?.stage ?? 0) >= 3,
+      bigAxle: (chainMap.route9?.stage ?? 0) >= 3,
+      motherSump: (chainMap.lyeMarsh?.stage ?? 0) >= 3,
+      theLongDry: (chainMap.copperFlats?.stage ?? 0) >= 3,
+    };
+    for (const k of Object.keys(this.bossRespawnTimers)) {
+      this.bossRespawnTimers[k] = 0;
+    }
+  }
+
   _getFreeEnemy() {
     for (let i = 0; i < this.pool.length; i++) {
       if (!this.pool[i].active) return this.pool[i];
+    }
+    if (this.pool.length < 240) {
+      const extra = new Enemy();
+      this.pool.push(extra);
+      return extra;
     }
     return null;
   }
@@ -84,7 +113,7 @@ export class Spawner {
     let count = 0;
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
-      if (e.active && e.tier !== 'boss' && !e.isRitualOrigin) count++;
+      if (e.active && e.tier !== 'boss' && e.tier !== 'fusionBoss' && !e.isRitualOrigin) count++;
     }
     return count;
   }
@@ -193,8 +222,14 @@ export class Spawner {
   }
 
   _trySpawnWave(player, world) {
+    const fl = Math.max(1, worldLedger.currentFloor || 1);
+    const floorCfg = worldLedger.getFloorConfig(fl);
+    const [minLv] = floorCfg.expectedLevelBand || [1, 10];
+    const hasLevelGap10 = ((player?.level || 1) - minLv) >= 10;
+    const maxCommonsCap = hasLevelGap10 ? Math.max(58, SPAWNER_CONFIG.maxActive + 20) : SPAWNER_CONFIG.maxActive;
+
     const activeCount = this.getActiveCount();
-    if (activeCount >= SPAWNER_CONFIG.maxActive) return;
+    if (activeCount >= maxCommonsCap) return;
     const activeWorld = world || this.world;
 
     // Pick a random point 520-700px from the player, never inside Kettle
@@ -220,34 +255,34 @@ export class Spawner {
       const roll = Math.random();
 
       if (roll < SPAWNER_CONFIG.commonWeight) {
-        // Common pack of 2-4
-        const packSize =
+        // Common pack (larger packs when 10+ level gap so mobs can gather and fuse!)
+        const basePack =
           SPAWNER_CONFIG.packSizeMin +
           Math.floor(Math.random() * (SPAWNER_CONFIG.packSizeMax - SPAWNER_CONFIG.packSizeMin + 1));
+        const packSize = hasLevelGap10 ? basePack + 2 : basePack;
         const commonIds = area.commons || ['tinRat', 'dustDog'];
         const chosenId = commonIds[Math.floor(Math.random() * commonIds.length)];
         const cfg = ENEMIES_CONFIG.commons[chosenId];
 
         for (let p = 0; p < packSize; p++) {
-          if (this.getActiveCount() >= SPAWNER_CONFIG.maxActive) break;
+          if (this.getActiveCount() >= maxCommonsCap) break;
           const enemy = this._getFreeEnemy();
           if (!enemy) break;
           const ox = sx + (Math.random() - 0.5) * 56;
           const oy = sy + (Math.random() - 0.5) * 56;
           if (!this._isInsideKettle(ox, oy, activeWorld)) {
             const safe = obstacleManager.findSafePosition(ox, oy, cfg.radius || 12);
-            enemy.initFromConfig(cfg, safe.x, safe.y, scaleMult);
+            enemy.initFromConfig(cfg, safe.x, safe.y, scaleMult, player.level);
           }
         }
       } else {
-        // Elite (14%+)
         const eliteIds = area.elites || ['cleaverHauler'];
         const chosenId = eliteIds[Math.floor(Math.random() * eliteIds.length)];
         const cfg = ENEMIES_CONFIG.elites[chosenId];
         const enemy = this._getFreeEnemy();
         if (enemy && cfg) {
           const safe = obstacleManager.findSafePosition(sx, sy, cfg.radius || 20);
-          enemy.initFromConfig(cfg, safe.x, safe.y, scaleMult);
+          enemy.initFromConfig(cfg, safe.x, safe.y, scaleMult, player.level);
         }
       }
       return;
@@ -263,14 +298,21 @@ export class Spawner {
     }
 
     for (const [bossId, cfg] of Object.entries(ENEMIES_CONFIG.bosses)) {
-      // D15: Confirmed-cleared bosses stay dead permanently; automatic respawn timer is disabled for them.
-      if (this.defeatedBosses[bossId] || worldLedger.confirmedBossKills[bossId]) {
+      // Only permanently cleared when all 3 stages (Warden -> Executioner -> Overlord) are slain on this floor
+      if (worldLedger.confirmedBossKills[bossId]) {
         this.defeatedBosses[bossId] = true;
         this.bossRespawnTimers[bossId] = 0;
         const activeInst = this.activeBossInstances[bossId];
         if (!activeInst || !activeInst.active) {
           continue;
         }
+      } else {
+        this.defeatedBosses[bossId] = false;
+      }
+
+      if (this.bossRespawnTimers[bossId] > 0) {
+        this.bossRespawnTimers[bossId] = Math.max(0, this.bossRespawnTimers[bossId] - dt);
+        if (this.bossRespawnTimers[bossId] > 0) continue;
       }
 
       let instance = this.activeBossInstances[bossId];
@@ -279,7 +321,7 @@ export class Spawner {
         player.y - cfg.arenaCenter.y
       );
 
-      // Spawn unbeaten boss when player approaches within 650px of its fixed arena
+      // Spawn current stage of the 3-boss Bloodline chain when player is within 650px of its arena
       if (
         (!instance || !instance.active) &&
         !this.defeatedBosses[bossId] &&
@@ -287,21 +329,20 @@ export class Spawner {
       ) {
         const slot = this._getFreeEnemy();
         if (slot) {
-          slot.initFromConfig(cfg, cfg.arenaCenter.x, cfg.arenaCenter.y, 1.0);
+          slot.initFromConfig(cfg, cfg.arenaCenter.x, cfg.arenaCenter.y, 1.0, player.level);
           slot.isRematch = false;
           this.activeBossInstances[bossId] = slot;
           instance = slot;
         }
       }
 
-      // Trigger Boss Name Card when player steps inside arena radius + 90px
       if (instance && instance.active && distToArena <= cfg.arenaRadius + 90) {
         if (!instance._hasShownCard) {
           instance._hasShownCard = true;
           sound.playBossAlert();
           this.bossNameCard = {
             name: instance.name,
-            subtitle: instance.isRematch ? `${cfg.subtitle} · REMATCH` : cfg.subtitle,
+            subtitle: instance.isRematch ? `${instance.subtitle} · REMATCH` : instance.subtitle,
             timer: 3.2,
           };
         }
@@ -309,10 +350,6 @@ export class Spawner {
     }
   }
 
-  /**
-   * D15 / D44: Optional Rematch Mode lets players re-fight a confirmed-cleared boss
-   * without undoing the clear or territory state, paying reduced non-farmable rewards.
-   */
   startBossRematch(bossId, player, particles) {
     const cfg = ENEMIES_CONFIG.bosses[bossId];
     if (!cfg) return false;
@@ -323,7 +360,7 @@ export class Spawner {
     if (!slot) return false;
 
     bossMechanics.abortActiveEncounter(bossId);
-    slot.initFromConfig(cfg, cfg.arenaCenter.x, cfg.arenaCenter.y, 1.0);
+    slot.initFromConfig(cfg, cfg.arenaCenter.x, cfg.arenaCenter.y, 1.0, player ? player.level : 1);
     slot.isRematch = true;
     slot._hasShownCard = false;
     this.activeBossInstances[bossId] = slot;
@@ -332,7 +369,7 @@ export class Spawner {
       particles.spawnFloatingText(
         player.x,
         player.y - 32,
-        `REMATCH SPAWNED: ${cfg.name.toUpperCase()}`,
+        `REMATCH SPAWNED: ${slot.name.toUpperCase()}`,
         PALETTE.brass
       );
     }
@@ -341,16 +378,23 @@ export class Spawner {
   }
 
   onBossDefeated(bossId, player, particles, details = {}) {
-    const wasAlreadyCleared = !!this.defeatedBosses[bossId] || !!worldLedger.confirmedBossKills[bossId];
-    this.defeatedBosses[bossId] = true;
-    // D15: Disable automatic respawn timer for confirmed clears
-    this.bossRespawnTimers[bossId] = 0;
+    const wasAlreadyCleared = !!worldLedger.confirmedBossKills[bossId];
     this.activeBossInstances[bossId] = null;
 
     obstacleManager.clearByOwner(bossId);
-    worldLedger.recordConfirmedBossVictory(bossId, details, particles, player);
+    const res = worldLedger.recordConfirmedBossVictory(bossId, details, particles, player);
 
-    // D44: First-clear guaranteed Salvaged drop is one-time only (not repeated on optional rematches)
+    // If Stage 0 (Warden) or Stage 1 (Executioner) fell, queue the next Bloodline stage in 2.2s!
+    if (res && res.stageAdvanced) {
+      this.defeatedBosses[bossId] = false;
+      this.bossRespawnTimers[bossId] = 2.2;
+      sound.playLevelUp();
+      return;
+    }
+
+    this.defeatedBosses[bossId] = true;
+    this.bossRespawnTimers[bossId] = 0;
+
     if (!wasAlreadyCleared && !details.isRematch) {
       const salvagePool = ['surplusRespirator', 'riotJacket', 'courierLeggings'];
       const cfg = ENEMIES_CONFIG.bosses[bossId];
@@ -370,7 +414,7 @@ export class Spawner {
           player.y - 34,
           0,
           true,
-          `SALVAGED DROP: ${dropItem.name.toUpperCase()}`,
+          `BLOODLINE RELIC: ${dropItem.name.toUpperCase()}`,
           PALETTE.signal
         );
       }
@@ -386,7 +430,7 @@ export class Spawner {
   }
 
   getBossRespawnRemaining(bossId) {
-    return 0;
+    return this.bossRespawnTimers[bossId] || 0;
   }
 
   getActiveBossNearPlayer(player) {
@@ -401,16 +445,27 @@ export class Spawner {
   }
 
   getNearestUnbeatenBossObjective(player) {
-    // D49: Recommend bosses in Suggested Order (Big Axle -> Long Dry -> Mother Sump -> The Foreman),
-    // unless the player is already inside another unbeaten boss's sector (< 900px from its arena).
+    if ((worldLedger.currentFloor ?? 0) === 0) {
+      return {
+        boss: {
+          id: 'abyssal_spire',
+          name: 'The Abyssal Spire',
+          arenaCenter: { x: 3000, y: 2560 },
+        },
+        dist: Math.round(Math.hypot(3000 - player.x, 2560 - player.y)),
+        isTownObjective: true,
+      };
+    }
+
     const bosses = Object.values(ENEMIES_CONFIG.bosses);
     for (let i = 0; i < bosses.length; i++) {
       const b = bosses[i];
-      if (this.defeatedBosses[b.id]) continue;
+      if (worldLedger.confirmedBossKills[b.id]) continue;
       const d = Math.hypot(b.arenaCenter.x - player.x, b.arenaCenter.y - player.y);
       if (d <= 950) {
+        const chainEntry = worldLedger.getActiveBossChainEntry(b.id, worldLedger.currentFloor);
         return {
-          boss: b,
+          boss: { ...b, name: chainEntry.name },
           dist: Math.round(d),
           suggestedRank: SUGGESTED_BOSS_ORDER.indexOf(b.id) + 1,
         };
@@ -419,12 +474,13 @@ export class Spawner {
 
     for (let i = 0; i < SUGGESTED_BOSS_ORDER.length; i++) {
       const bossId = SUGGESTED_BOSS_ORDER[i];
-      if (!this.defeatedBosses[bossId]) {
+      if (!worldLedger.confirmedBossKills[bossId]) {
         const b = ENEMIES_CONFIG.bosses[bossId];
         if (b) {
+          const chainEntry = worldLedger.getActiveBossChainEntry(bossId, worldLedger.currentFloor);
           const d = Math.hypot(b.arenaCenter.x - player.x, b.arenaCenter.y - player.y);
           return {
-            boss: b,
+            boss: { ...b, name: chainEntry.name },
             dist: Math.round(d),
             suggestedRank: i + 1,
             isSuggestedNext: true,
@@ -433,7 +489,6 @@ export class Spawner {
       }
     }
 
-    // All 4 primary bosses confirmed defeated -> Floor 1 Cleared!
     const fore = ENEMIES_CONFIG.bosses.theForeman;
     return {
       boss: fore,
@@ -462,6 +517,129 @@ export class Spawner {
     }
   }
 
+  /**
+   * Updates Corner Wandering Merchants on Floors 1–5:
+   * - Starts the 30s Sudden Defense Quest when the player approaches within 220px
+   * - Spawns ambush waves during the 30s timer
+   * - Triggers Smoke-Bomb Flee if Merchant HP reaches 0
+   * - Activates the 260px Mob-Repellent Sanctuary Ward upon surviving 30s!
+   */
+  _updateWanderingMerchantQuests(dt, player, particles, camera) {
+    const merchants = worldLedger.wanderingMerchants || [];
+    for (let i = 0; i < merchants.length; i++) {
+      const m = merchants[i];
+      if (m.state === 'fled' || m.state === 'protected') continue;
+
+      const dist = Math.hypot(player.x - m.x, player.y - m.y);
+      if (m.state === 'awaiting' && dist <= 220) {
+        m.state = 'defending';
+        m.defenseTimer = 30.0;
+        m.waveSpawnCooldown = 0.5;
+        worldLedger.quests.suddenQuest = {
+          active: true,
+          merchantId: m.id,
+          title: 'SUDDEN QUEST: PROTECT MORWEN THE SHROUDED (30S)',
+          timer: 30.0,
+          maxTimer: 30.0,
+          hp: m.hp,
+          maxHp: m.maxHp,
+          completed: false,
+          failed: false,
+        };
+        sound.playBossAlert();
+        if (particles) {
+          particles.spawnFloatingText(
+            m.x,
+            m.y - 44,
+            'SUDDEN QUEST: DEFEND MERCHANT FOR 30S!',
+            '#FFC83D'
+          );
+        }
+      }
+
+      if (m.state === 'defending') {
+        if (m.hp <= 0) {
+          // Merchant flees in a smoke bomb and cannot be used on this floor run!
+          m.state = 'fled';
+          m.repellentActive = false;
+          worldLedger.quests.suddenQuest = {
+            active: false,
+            failed: true,
+            title: 'MORWEN FLED IN A SMOKE BOMB!',
+          };
+          if (particles) {
+            particles.spawnShockwave(m.x, m.y, 75, PALETTE.bone, 0.35);
+            particles.spawnFloatingText(
+              m.x,
+              m.y - 36,
+              'SMOKE BOMB! MERCHANT FLED THE FLOOR!',
+              '#FF5A26'
+            );
+          }
+          continue;
+        }
+
+        m.defenseTimer = Math.max(0, m.defenseTimer - dt);
+        m.waveSpawnCooldown -= dt;
+        if (m.waveSpawnCooldown <= 0 && this.getActiveCount() < SPAWNER_CONFIG.maxActive) {
+          m.waveSpawnCooldown = 6.0;
+          const commonKeys = Object.keys(ENEMIES_CONFIG.commons);
+          for (let w = 0; w < 3; w++) {
+            const slot = this._getFreeEnemy();
+            if (!slot) break;
+            const ang = (w / 3) * Math.PI * 2 + Math.random() * 0.6;
+            const sx = Math.max(80, Math.min(WORLD_CONFIG.size - 80, m.x + Math.cos(ang) * 210));
+            const sy = Math.max(80, Math.min(WORLD_CONFIG.size - 80, m.y + Math.sin(ang) * 210));
+            const pickId = commonKeys[(i + w) % commonKeys.length];
+            slot.initFromConfig(ENEMIES_CONFIG.commons[pickId], sx, sy, 1.0, player.level);
+          }
+        }
+
+        if (worldLedger.quests.suddenQuest && worldLedger.quests.suddenQuest.merchantId === m.id) {
+          worldLedger.quests.suddenQuest.timer = m.defenseTimer;
+          worldLedger.quests.suddenQuest.hp = m.hp;
+        }
+
+        if (m.defenseTimer <= 0) {
+          // 30s Defense Complete -> Activate Mob-Repellent Sanctuary Ward!
+          m.state = 'protected';
+          m.repellentActive = true;
+          worldLedger.quests.suddenQuest = {
+            active: false,
+            completed: true,
+            title: 'MOB-REPELLENT WARD ACTIVE! PRESS [E] AT MERCHANT',
+          };
+          // Vaporize any hostile non-boss mobs inside the new Sanctuary Ward
+          for (let j = 0; j < this.pool.length; j++) {
+            const e = this.pool[j];
+            if (e.active && e.tier !== 'boss') {
+              const edx = e.x - m.x;
+              const edy = e.y - m.y;
+              if (edx * edx + edy * edy <= (m.repellentRadius + 40) * (m.repellentRadius + 40)) {
+                e.active = false;
+              }
+            }
+          }
+          if (player) {
+            const bonusGold = 120 * Math.max(1, worldLedger.currentFloor || 1);
+            const bonusXp = 45 * Math.max(1, worldLedger.currentFloor || 1);
+            player.gainXpAndGold(bonusXp, bonusGold, particles);
+          }
+          sound.playLevelUp();
+          if (particles) {
+            particles.spawnShockwave(m.x, m.y, m.repellentRadius, '#00F0FF', 0.45);
+            particles.spawnFloatingText(
+              m.x,
+              m.y - 48,
+              'MOB-REPELLENT SANCTUARY ACTIVATED!',
+              '#00F0FF'
+            );
+          }
+        }
+      }
+    }
+  }
+
   toJSON() {
     return {
       defeatedBosses: { ...this.defeatedBosses },
@@ -480,6 +658,14 @@ export class Spawner {
   }
 
   update(dt, player, projectiles, particles, camera, worldOrTimeStopped, maybeTimeStopped = false) {
+    // FLOOR 0 (DUSKHOLLOW TOWN) IS A SAFE HAVEN — zero enemies or bosses spawn here!
+    if ((worldLedger.currentFloor ?? 0) === 0) {
+      for (let i = 0; i < this.pool.length; i++) {
+        if (this.pool[i].active) this.pool[i].active = false;
+      }
+      return;
+    }
+
     let world = null;
     let timeStopped = false;
 
@@ -498,14 +684,13 @@ export class Spawner {
       timeStopped = player.isTimeStopped();
     }
 
-    // "Time stop: during a freeze step, all game time stops (entities, projectiles, status timers, spawns)."
     if (timeStopped) {
       return;
     }
 
     this._updateBosses(dt, player);
+    this._updateWanderingMerchantQuests(dt, player, particles, camera);
 
-    // Every 1.2s, if fewer than 40 active, spawn outside Kettle
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnTimer = SPAWNER_CONFIG.interval;
@@ -514,7 +699,6 @@ export class Spawner {
       }
     }
 
-    // Despawn non-boss enemies beyond 1200px, rebuild spatial hash grid, and update all active
     for (let i = 0; i < this.pool.length; i++) {
       const e = this.pool[i];
       if (!e.active) continue;

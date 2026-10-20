@@ -17,7 +17,7 @@ import {
 import { spriteRegistry } from './Sprites.js';
 
 export class ParticlePool {
-  constructor(maxParticles = 500, maxNumbers = 80, maxSlashes = 32) {
+  constructor(maxParticles = 500, maxNumbers = 140, maxSlashes = 32) {
     // Square particles, dust puffs (3 sizes), lifted rocks with ground shades, cross-cut flashes
     this.particles = Array.from({ length: maxParticles }, () => ({
       active: false,
@@ -81,15 +81,25 @@ export class ParticlePool {
       maxLife: 0.15,
     }));
 
-    // Floating integer damage numbers (crits in brass)
+    // Floating integer damage numbers differentiating physical, magical, and critical hits
     this.numbers = Array.from({ length: maxNumbers }, () => ({
       active: false,
       x: 0,
       y: 0,
-      vy: -38,
+      vx: 0,
+      vy: -40,
+      gravity: 125,
+      wavePhase: 0,
+      waveAmp: 0,
       text: '',
+      badgeText: '',
+      badgeColor: '',
       color: PALETTE.bone,
+      outlineColor: PALETTE.soot,
+      damageType: 'physical', // 'physical' | 'magical' | 'status'
+      targetType: 'enemy', // 'enemy' | 'player'
       isCrit: false,
+      isStatus: false,
       life: 0,
       maxLife: 0.7,
     }));
@@ -484,28 +494,126 @@ export class ParticlePool {
     }
   }
 
-  spawnDamageNumber(x, y, amount, isCrit = false, customText = null, customColor = null) {
+  spawnDamageNumber(x, y, amount, isCrit = false, customText = null, customColor = null, options = null) {
+    // Find a free slot or recycle the oldest expiring slot so rapid combos never drop feedback
+    let targetSlot = null;
+    let lowestLife = Infinity;
     for (let i = 0; i < this.numbers.length; i++) {
-      const n = this.numbers[i];
-      if (!n.active) {
-        n.active = true;
-        n.x = Math.round(x + (Math.random() * 12 - 6));
-        n.y = Math.round(y - 10);
-        n.vy = isCrit ? -44 : -32;
-        n.text =
-          customText !== null
-            ? customText
-            : isCrit
-              ? `${Math.round(amount)}!`
-              : `${Math.round(amount)}`;
-        n.color = customColor || (isCrit ? PALETTE.brass : PALETTE.bone);
-        n.isCrit = isCrit;
-        n.life = isCrit ? 0.85 : 0.65;
-        n.maxLife = n.life;
-        return n;
+      const candidate = this.numbers[i];
+      if (!candidate.active) {
+        targetSlot = candidate;
+        break;
+      }
+      if (candidate.life < lowestLife) {
+        lowestLife = candidate.life;
+        targetSlot = candidate;
       }
     }
-    return null;
+    if (!targetSlot) return null;
+
+    const n = targetSlot;
+    n.active = true;
+
+    const opts = typeof options === 'string' ? { damageType: options } : options || {};
+    const damageType = opts.damageType || 'physical'; // 'physical' | 'magical'
+    const targetType = opts.targetType || (customText && String(customText).startsWith('-') ? 'player' : 'enemy');
+    const isStatusText = customText !== null && (amount === 0 || isNaN(amount));
+    const roundedAmt = Math.max(0, Math.round(Number(amount) || 0));
+
+    n.x = Math.round(x + (Math.random() * 10 - 5));
+    n.y = Math.round(y - 6);
+    n.isCrit = Boolean(isCrit);
+    n.isStatus = isStatusText;
+    n.damageType = damageType;
+    n.targetType = targetType;
+    n.wavePhase = Math.random() * Math.PI * 2;
+    n.waveAmp = !isStatusText && damageType === 'magical' ? 18 : 0;
+
+    // Physics trajectory differentiated by Physical vs Magical vs Critical
+    if (isCrit) {
+      n.vx = (Math.random() - 0.5) * 46;
+      n.vy = -76 - Math.random() * 18;
+      n.gravity = 135;
+      n.life = 0.98;
+    } else if (!isStatusText && damageType === 'magical') {
+      // Buoyant arcane float
+      n.vx = (Math.random() - 0.5) * 20;
+      n.vy = -46 - Math.random() * 10;
+      n.gravity = 72;
+      n.life = 0.82;
+    } else {
+      // Snappy physical arc
+      n.vx = (Math.random() - 0.5) * 28;
+      n.vy = -54 - Math.random() * 12;
+      n.gravity = 130;
+      n.life = 0.74;
+    }
+    n.maxLife = n.life;
+
+    // Text, Badge, and Color Differentiation
+    n.badgeText = '';
+    n.badgeColor = '';
+
+    if (isStatusText) {
+      n.text = String(customText);
+      n.color = customColor || PALETTE.bone;
+      n.outlineColor = isCrit ? '#7A1C12' : PALETTE.soot;
+    } else if (targetType === 'player') {
+      // Player taking damage: differentiate Physical vs Magical vs Critical enemy hit
+      const glyph = damageType === 'magical' ? '✧' : '⚔';
+      n.text = isCrit ? `${glyph} -${roundedAmt}!` : `${glyph} -${roundedAmt}`;
+      if (isCrit) {
+        n.badgeText = damageType === 'magical' ? '✦ MAGIC CRIT!' : '💥 CRIT HIT!';
+        n.badgeColor = '#FFD700';
+        n.color = damageType === 'magical' ? '#FF66CC' : '#FF3B3B';
+        n.outlineColor = '#4A0808';
+        this.spawnHitSparks(n.x, n.y, 4, '#FF3B3B', '#FFD700');
+      } else if (damageType === 'magical') {
+        n.color = customColor || '#FF58B0'; // Arcane Magenta-Rose for incoming magic damage
+        n.outlineColor = '#32093B';
+      } else {
+        n.color = customColor || PALETTE.blood; // Crimson for incoming physical damage
+        n.outlineColor = '#2E0707';
+      }
+    } else {
+      // Player attacking an enemy: differentiate Physical vs Magical vs Critical hit
+      const glyph = damageType === 'magical' ? '✧' : '⚔';
+      if (customText !== null) {
+        n.text = String(customText);
+      } else if (isCrit) {
+        n.text = `${glyph} ${roundedAmt}!`;
+      } else {
+        n.text = `${glyph} ${roundedAmt}`;
+      }
+
+      if (customColor) {
+        n.color = customColor;
+        n.outlineColor = isCrit ? '#7A1C12' : PALETTE.soot;
+      } else if (isCrit) {
+        if (damageType === 'magical') {
+          n.badgeText = '✦ MAGIC CRIT! ✦';
+          n.badgeColor = '#7CE8FF';
+          n.color = '#FF80FF'; // Radiant Prismatic Magenta-Gold
+          n.outlineColor = '#4A0E6E'; // Deep Arcane Violet rim
+          this.spawnHitSparks(n.x, n.y, 5, '#00F0FF', '#D946EF');
+        } else {
+          n.badgeText = '★ CRIT! ★';
+          n.badgeColor = '#FFF3B0';
+          n.color = '#FFD700'; // Sovereign Bright Gold
+          n.outlineColor = '#7A1C12'; // Crimson shadow rim
+          this.spawnHitSparks(n.x, n.y, 5, '#FFD700', '#FF8C00');
+        }
+      } else if (damageType === 'magical') {
+        n.color = '#D982FF'; // Luminous Arcane Violet
+        n.outlineColor = '#2B0E47'; // Deep Void Indigo outline
+        this.spawnHitSparks(n.x, n.y, 2, '#C084FC', '#00F0FF');
+      } else {
+        n.color = '#F5F6F8'; // Crisp Physical Tungsten-Bone White
+        n.outlineColor = PALETTE.soot;
+      }
+    }
+
+    return n;
   }
 
   spawnFloatingText(x, y, text, color = PALETTE.bone) {
@@ -736,7 +844,7 @@ export class ParticlePool {
       }
     }
 
-    // Update floating damage numbers
+    // Update floating damage numbers (parabolic pop arc + arcane wave drift)
     for (let i = 0; i < this.numbers.length; i++) {
       const n = this.numbers[i];
       if (!n.active) continue;
@@ -745,8 +853,12 @@ export class ParticlePool {
         n.active = false;
         continue;
       }
+      const waveVx =
+        n.waveAmp > 0 ? Math.cos((n.maxLife - n.life) * 14 + n.wavePhase) * n.waveAmp : 0;
+      n.x += (n.vx + waveVx) * dt;
       n.y += n.vy * dt;
-      n.vy *= 0.9;
+      n.vy += (n.gravity || 125) * dt;
+      n.vx *= 0.93;
     }
   }
 
@@ -1096,29 +1208,86 @@ export class ParticlePool {
       }
     }
 
-    // 4. Crisp integer pixel damage numbers (no sub-pixel, no alpha)
+    // 4. Crisp integer pixel damage numbers with animated pop-up scaling and color coding
     ctx.save();
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.imageSmoothingEnabled = false;
+
     for (let i = 0; i < this.numbers.length; i++) {
       const n = this.numbers[i];
       if (!n.active) continue;
-      if (n.life < 0.16 && Math.floor(n.life * 24) % 2 === 0) continue;
+      // Retro dither flicker in last 0.14s
+      if (n.life < 0.14 && Math.floor(n.life * 30) % 2 === 0) continue;
 
       const sx = Math.round(n.x - camX);
       const sy = Math.round(n.y - camY);
-      if (sx < -30 || sx > camera.width + 30 || sy < -20 || sy > camera.height + 20) continue;
+      if (sx < -40 || sx > camera.width + 40 || sy < -30 || sy > camera.height + 30) continue;
+
+      // Snappy squash-and-stretch pop scale animation
+      const age = n.maxLife - n.life;
+      let scale = 1.0;
+      if (age < 0.12) {
+        const t = age / 0.12;
+        const peak = n.isCrit ? 1.65 : 1.35;
+        scale = peak - (peak - 1.0) * Math.sin(t * Math.PI * 0.5);
+      } else if (age < 0.22) {
+        const t = (age - 0.12) / 0.10;
+        scale = 1.0 + Math.sin(t * Math.PI) * (n.isCrit ? 0.15 : 0.08);
+      }
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      if (scale !== 1.0) {
+        ctx.scale(scale, scale);
+      }
 
       ctx.font = n.isCrit
-        ? 'bold 10px ui-monospace, SFMono-Regular, Menlo, monospace'
+        ? 'bold 11px ui-monospace, SFMono-Regular, Menlo, monospace'
+        : n.isStatus
+        ? 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace'
+        : n.damageType === 'magical'
+        ? 'bold 9px ui-monospace, SFMono-Regular, Menlo, monospace'
         : 'bold 8px ui-monospace, SFMono-Regular, Menlo, monospace';
-      // 1px Soot outline
+
+      // Pixel-art outline:
+      // Critical & Magical hits get a 2-layer colored aura rim + soot core outline
+      if (n.isCrit || (!n.isStatus && n.damageType === 'magical')) {
+        ctx.fillStyle = n.outlineColor || '#7A1C12';
+        for (let dx = -2; dx <= 2; dx++) {
+          for (let dy = -2; dy <= 2; dy++) {
+            if (Math.abs(dx) + Math.abs(dy) === 2) {
+              ctx.fillText(n.text, dx, dy);
+            }
+          }
+        }
+      }
+
+      // 1px Soot Outline + 1px drop shadow
       ctx.fillStyle = PALETTE.soot;
-      ctx.fillText(n.text, sx + 1, sy);
-      ctx.fillText(n.text, sx - 1, sy);
-      ctx.fillText(n.text, sx, sy + 1);
-      ctx.fillText(n.text, sx, sy - 1);
+      ctx.fillText(n.text, 1, 0);
+      ctx.fillText(n.text, -1, 0);
+      ctx.fillText(n.text, 0, 1);
+      ctx.fillText(n.text, 0, -1);
+      ctx.fillText(n.text, 1, 1);
+
+      // Main Text Fill
       ctx.fillStyle = n.color;
-      ctx.fillText(n.text, sx, sy);
+      ctx.fillText(n.text, 0, 0);
+
+      // Render Crit / Damage-Type Sub-Badge above the number when present
+      if (n.badgeText) {
+        ctx.font = 'bold 6px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillText(n.badgeText, 1, -9);
+        ctx.fillText(n.badgeText, -1, -9);
+        ctx.fillText(n.badgeText, 0, -8);
+        ctx.fillText(n.badgeText, 0, -10);
+        ctx.fillStyle = n.badgeColor || '#FFD700';
+        ctx.fillText(n.badgeText, 0, -9);
+      }
+
+      ctx.restore();
     }
     ctx.restore();
   }

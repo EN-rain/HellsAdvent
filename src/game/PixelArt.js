@@ -32,6 +32,10 @@ export const MATERIAL_RAMPS = {
   volt: ['#11241E', '#4F7A22', '#8FC435', '#C9F24B'],
   lye: ['#142927', '#5E6E28', '#98A644', '#C9D26B'],
   olive: ['#0B0D10', '#253024', '#404F3B', '#687A5E'],
+  chibiSkin: ['#5E3A43', '#D9A7A0', '#FAD4C8', '#FFE6DD'],
+  chibiBlush: ['#5E3A43', '#D98B94', '#F4B6BE', '#FAD4C8'],
+  chibiOutline: ['#2A1B24', '#462B36', '#5E3A43', '#7A4E59'],
+  chibiEye: ['#2A1B24', '#9E4784', '#D972B5', '#FFFFFF'],
 };
 
 // 4x4 Bayer matrix for zero-alpha dithered afterimages & fake glow rings

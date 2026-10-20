@@ -44,13 +44,19 @@ import {
   getClassTraitRank,
 } from '../data/classChangeData.js';
 import { CLASS_TREES, getSpecTree } from '../data/talentTreeData.js';
+import { worldLedger } from './WorldLedger.js';
+import { WANDERING_MERCHANT_STOCK, DUSKHOLLOW_TOWN } from '../data/darkFantasyConfig.js';
+import {
+  inferSkillDamageType,
+  inferIncomingPlayerDamageType,
+} from '../utils/hudHelpers.js';
 
 export class Player {
   constructor(classId = 'sena') {
     spriteRegistry.init();
 
-    this.x = WORLD_CONFIG.kettleCenter.x;
-    this.y = WORLD_CONFIG.kettleCenter.y + 42;
+    this.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+    this.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
     this.vx = 0;
     this.vy = 0;
     this.radius = 12;
@@ -86,6 +92,11 @@ export class Player {
       hotStew: 0,
       stimStick: 0,
     };
+
+    // Dark Fantasy Tavern Meal Buff & Wandering Merchant Relics/Elixirs
+    this.tavernMeal = null; // { id, name, hpBonusPct, atkBonusPct, defBonus, xpBonusPct, timer }
+    this.cursedRelics = []; // array of relic item IDs from Wandering Merchant
+    this.elixirBuff = null; // { id, name, xpMult, goldMult, timer }
 
     // Status Effect System
     this.statuses = new StatusSystem('player');
@@ -401,7 +412,8 @@ export class Player {
 
   setLevel(targetLevel, particles = null) {
     const prevLevel = this.level;
-    const newLevel = Math.max(1, Math.min(PLAYER_CONFIG.levelCap || 50, Math.round(targetLevel)));
+    const cap = Number.isFinite(PLAYER_CONFIG.levelCap) ? PLAYER_CONFIG.levelCap : 9999;
+    const newLevel = Math.max(1, Math.min(cap, Math.round(targetLevel)));
     const diff = newLevel - this.level;
     this.level = newLevel;
     if (diff > 0) {
@@ -502,13 +514,19 @@ export class Player {
   }
 
   isInSafeZone(world = null) {
+    if (worldLedger && worldLedger.currentFloor === 0) {
+      return true;
+    }
+    if (worldLedger && typeof worldLedger.isInsideMobRepellentWard === 'function') {
+      if (worldLedger.isInsideMobRepellentWard(this.x, this.y)) {
+        return true;
+      }
+    }
     if (world && typeof world.getAreaAt === 'function') {
       const area = world.getAreaAt(this.x, this.y);
       return !!(area && area.safe);
     }
-    const dx = this.x - WORLD_CONFIG.kettleCenter.x;
-    const dy = this.y - WORLD_CONFIG.kettleCenter.y;
-    return dx * dx + dy * dy <= WORLD_CONFIG.kettleRadius * WORLD_CONFIG.kettleRadius;
+    return false;
   }
 
   warnSafeZone(particles = null, message = 'SAFE ZONE — WEAPONS SHEATHED') {
@@ -954,7 +972,8 @@ export class Player {
     this.stage = data.stage || 1;
     this.branch = data.branch || null;
     this.level = data.level || 1;
-    this.xp = data.xp || 0;
+    this.xpToNext = PLAYER_CONFIG.xpForNextLevel(this.level);
+    this.xp = Math.max(0, Math.min(data.xp || 0, Math.max(0, this.xpToNext - 1)));
     this.gold = data.gold ?? 120;
     this.skillPoints = data.skillPoints ?? 1;
     this.skills = data.skills ? { ...data.skills } : {};
@@ -1078,6 +1097,26 @@ export class Player {
       }
     }
 
+    // Raven's Rest Tavern Meal & Wandering Merchant Cursed Relic modifiers
+    if (this.tavernMeal && this.tavernMeal.timer > 0) {
+      if (this.tavernMeal.hpBonusPct) maxHp = Math.round(maxHp * (1 + this.tavernMeal.hpBonusPct));
+      if (this.tavernMeal.atkBonusPct) atk = Math.round(atk * (1 + this.tavernMeal.atkBonusPct));
+      if (this.tavernMeal.defBonus) def += this.tavernMeal.defBonus;
+      if (this.tavernMeal.critBonus) critChance += this.tavernMeal.critBonus;
+    }
+    if (Array.isArray(this.cursedRelics) && this.cursedRelics.length > 0) {
+      for (const relicId of this.cursedRelics) {
+        const relic = WANDERING_MERCHANT_STOCK?.find((it) => it.id === relicId);
+        if (relic && relic.stats) {
+          if (relic.stats.hp) maxHp += relic.stats.hp;
+          if (relic.stats.atk) atk += relic.stats.atk;
+          if (relic.stats.def) def += relic.stats.def;
+          if (relic.stats.speed) speed += relic.stats.speed;
+          if (relic.stats.critChance) critChance += relic.stats.critChance;
+        }
+      }
+    }
+
     // Status Effect modifiers
     maxHp = Math.round(maxHp * this.statuses.getMaxHpMultiplier());
     this.baseAtkForPipeline = atk;
@@ -1104,15 +1143,21 @@ export class Player {
     this.maxStamina = maxStamina;
     this.dodgeCooldownMax = Math.max(0.45, PLAYER_CONFIG.dodge.cooldown - dodgeCdRed);
 
-    // Update skill max cooldowns
+    // Update skill ranks (auto-evolving at Lv 1 / 15 / 30 / 45 for 0 Talent Points) & max cooldowns (with 50% Rank 1 floor)
+    const autoSkillRank = this.level >= 45 ? 4 : this.level >= 30 ? 3 : this.level >= 15 ? 2 : 1;
     const skillList = Array.isArray(cfg.skills)
       ? cfg.skills
       : (cfg.skillOrder || Object.keys(cfg.skills || {})).map((id) => cfg.skills[id]).filter(Boolean);
     for (let i = 0; i < skillList.length; i++) {
       const sk = skillList[i];
-      if (sk && sk.getStats) {
-        const st = sk.getStats(this.skills[sk.id] || 1, this.ownedNodes);
-        this.maxCooldowns[`skill${i + 1}`] = st.cooldown;
+      if (!sk) continue;
+      const curRank = Math.max(this.skills[sk.id] || 1, autoSkillRank);
+      this.skills[sk.id] = curRank;
+      if (sk.getStats) {
+        const r1 = sk.getStats(1, []);
+        const cdFloor = +((r1?.cooldown || sk.cooldown || 6.0) * 0.5).toFixed(2);
+        const st = sk.getStats(curRank, this.ownedNodes);
+        this.maxCooldowns[`skill${i + 1}`] = Math.max(cdFloor, st.cooldown);
       }
     }
     this.maxCooldowns.dodge = this.dodgeCooldownMax;
@@ -1161,19 +1206,26 @@ export class Player {
   }
 
   gainXpAndGold(xpAmount, goldAmount, particles) {
-    const bountyMult = this.statuses.getXpAndGoldMultiplier();
-    const finalXp = Math.round(xpAmount * bountyMult);
-    const finalGold = Math.round(goldAmount * bountyMult);
+    let xpMult = this.statuses.getXpAndGoldMultiplier();
+    let goldMult = xpMult;
+    if (this.tavernMeal && this.tavernMeal.timer > 0 && this.tavernMeal.xpBonusPct) {
+      xpMult *= 1 + this.tavernMeal.xpBonusPct;
+    }
+    if (this.elixirBuff && this.elixirBuff.timer > 0) {
+      if (this.elixirBuff.xpMult) xpMult *= this.elixirBuff.xpMult;
+      if (this.elixirBuff.goldMult) goldMult *= this.elixirBuff.goldMult;
+    }
+    const finalXp = Math.round(xpAmount * xpMult);
+    const finalGold = Math.round(goldAmount * goldMult);
 
     this.gold += Math.max(0, finalGold);
-    if (this.level >= PLAYER_CONFIG.levelCap) return;
 
     this.xp += Math.max(0, finalXp);
-    while (this.level < PLAYER_CONFIG.levelCap && this.xp >= this.xpToNext) {
+    while (this.xp >= this.xpToNext) {
       const prevLevel = this.level;
       this.xp -= this.xpToNext;
       this.level += 1;
-      this.skillPoints += 1; // +1 point per level from level 2 to 30 (29 points total)
+      this.skillPoints += 1;
       this.xpToNext = PLAYER_CONFIG.xpForNextLevel(this.level);
       this.recalculateStats(false);
 
@@ -1605,7 +1657,11 @@ export class Player {
     if (this.cooldowns[cdKey] > 0.05) return false;
 
     this.stamina -= staminaCost;
-    const maxCd = skillDef?.cooldown || 6.0;
+    const baseCd = skillDef?.cooldown || 6.0;
+    const cdFloor = +(baseCd * 0.5).toFixed(2);
+    const autoRank = this.level >= 45 ? 4 : this.level >= 30 ? 3 : this.level >= 15 ? 2 : 1;
+    const rankCdRed = (autoRank - 1) * 0.4;
+    const maxCd = Math.max(cdFloor, +(baseCd - rankCdRed).toFixed(2));
     this.cooldowns[cdKey] = maxCd;
     this.maxCooldowns[cdKey] = maxCd;
 
@@ -1640,6 +1696,8 @@ export class Player {
 
     const atkDmg = Math.round(this.atk * forkMult);
     const skillName = (skillDef?.name || '').toLowerCase();
+    const skillDmgType = inferSkillDamageType(skillDef?.name || skillId, this.classId);
+    this.lastAttackDamageType = skillDmgType;
 
     // Dash / Movement skills
     if (
@@ -1667,7 +1725,9 @@ export class Player {
         const enemies = spawner.queryRadius(this.x, this.y, 75);
         for (const e of enemies) {
           if (e && e.active && e.hp > 0) {
-            e.takeDamage(Math.round(atkDmg * 2.0), angle, 90, false, this, spawner, particles, camera);
+            const isCrit = Math.random() < (this.critChance || 0.12);
+            const hitAmt = Math.round(atkDmg * 2.0 * (isCrit ? this.critMult || 1.6 : 1.0));
+            e.takeDamage(hitAmt, angle, 90, isCrit, this, spawner, particles, camera, null, skillDmgType);
           }
         }
         if (spawner.activeBoss && spawner.activeBoss.active) {
@@ -1700,6 +1760,7 @@ export class Player {
       if (particles) {
         particles.spawnTelegraphCircle(impactX, impactY, 75, 0.35, PALETTE.brass);
         setTimeout(() => {
+          if (this.dead) return;
           if (particles) {
             particles.spawnShockwave(impactX, impactY, 90, PALETTE.rust, 0.35);
             particles.spawnSmokePuff(impactX, impactY, 12);
@@ -1708,7 +1769,9 @@ export class Player {
             const enemies = spawner.queryRadius(impactX, impactY, 90);
             for (const e of enemies) {
               if (e && e.active && e.hp > 0) {
-                e.takeDamage(Math.round(atkDmg * 2.2), angle, 110, false, this, spawner, particles, camera);
+                const isCrit = Math.random() < (this.critChance || 0.12);
+                const hitAmt = Math.round(atkDmg * 2.2 * (isCrit ? this.critMult || 1.6 : 1.0));
+                e.takeDamage(hitAmt, angle, 110, isCrit, this, spawner, particles, camera, null, skillDmgType);
               }
             }
             if (spawner.activeBoss && spawner.activeBoss.active) {
@@ -1733,7 +1796,9 @@ export class Player {
       const enemies = spawner.queryRadius(this.x + Math.cos(angle) * 50, this.y + Math.sin(angle) * 50, 95);
       for (const e of enemies) {
         if (e && e.active && e.hp > 0) {
-          e.takeDamage(Math.round(atkDmg * 1.8), angle, 95, false, this, spawner, particles, camera);
+          const isCrit = Math.random() < (this.critChance || 0.12);
+          const hitAmt = Math.round(atkDmg * 1.8 * (isCrit ? this.critMult || 1.6 : 1.0));
+          e.takeDamage(hitAmt, angle, 95, isCrit, this, spawner, particles, camera, null, skillDmgType);
         }
       }
       if (spawner.activeBoss && spawner.activeBoss.active) {
@@ -1841,7 +1906,39 @@ export class Player {
     return this.tryUltimate(worldMouseX, worldMouseY, spawner, particles, camera);
   }
 
-  takeDamage(rawDamage, sourceX, sourceY, particles, camera, sourceEntity = null, spawner = null) {
+  applyBurn(duration = 3.0, sourceAtk = 12, sourceName = 'Burn', particles = null) {
+    return this.statuses.apply('burn', { duration, sourceAtk, sourceName }, this, particles);
+  }
+
+  applyStun(duration = 1.0, sourceName = 'Stun', particles = null) {
+    return this.statuses.apply('stun', { duration, sourceName }, this, particles);
+  }
+
+  applySlow(duration = 2.0, value = 0.35, sourceName = 'Slow', particles = null) {
+    return this.statuses.apply('slow', { duration, value, sourceName }, this, particles);
+  }
+
+  inflictBurn(target, duration = 3.0, sourceAtk = null, particles = null) {
+    if (!target || !target.statuses) return false;
+    return target.statuses.apply(
+      'burn',
+      { duration, sourceAtk: sourceAtk !== null ? sourceAtk : this.atk * 0.3, sourceName: this.getTitle() },
+      target,
+      particles
+    );
+  }
+
+  inflictStun(target, duration = 1.0, particles = null) {
+    if (!target || !target.statuses) return false;
+    return target.statuses.apply('stun', { duration, sourceName: this.getTitle() }, target, particles);
+  }
+
+  inflictSlow(target, duration = 2.0, value = 0.35, particles = null) {
+    if (!target || !target.statuses) return false;
+    return target.statuses.apply('slow', { duration, value, sourceName: this.getTitle() }, target, particles);
+  }
+
+  takeDamage(rawDamage, sourceX, sourceY, particles, camera, sourceEntity = null, spawner = null, statusToApply = null) {
     if (
       this.godmode ||
       this.inSafeZone ||
@@ -1853,6 +1950,16 @@ export class Player {
       this.statuses.isInvulnerable()
     ) {
       return false;
+    }
+
+    if (statusToApply) {
+      if (typeof statusToApply === 'string') {
+        if (statusToApply === 'burn') this.applyBurn(3.0, 12, 'Burn', particles);
+        else if (statusToApply === 'stun') this.applyStun(1.0, 'Stun', particles);
+        else if (statusToApply === 'slow') this.applySlow(2.0, 0.35, 'Slow', particles);
+      } else if (typeof statusToApply === 'object' && statusToApply.id) {
+        this.statuses.apply(statusToApply.id, statusToApply, this, particles);
+      }
     }
 
     // Check Rail Parry window
@@ -1981,14 +2088,31 @@ export class Player {
     camera?.shake?.(4, 0.14);
 
     if (particles) {
-      particles.spawnBurst(this.x, this.y, 5, PALETTE.blood, 30, 85, 2, 0.24);
+      const incomingDmgType = inferIncomingPlayerDamageType(sourceEntity, statusToApply);
+      const isHeavyCritHit =
+        Boolean(sourceEntity && (sourceEntity.isKingBoss || sourceEntity.tier === 'boss')) &&
+        finalDmg >= this.maxHp * 0.18;
+      particles.spawnBurst(
+        this.x,
+        this.y,
+        5,
+        incomingDmgType === 'magical' ? '#FF58B0' : PALETTE.blood,
+        30,
+        85,
+        2,
+        0.24
+      );
       particles.spawnDamageNumber(
         this.x,
         this.y - 18,
         finalDmg,
-        false,
-        `-${finalDmg}`,
-        PALETTE.blood
+        isHeavyCritHit,
+        null,
+        null,
+        {
+          damageType: incomingDmgType,
+          targetType: 'player',
+        }
       );
     }
 
@@ -2003,8 +2127,8 @@ export class Player {
 
   respawnAtKettle() {
     this.animState = 'idle';
-    this.x = WORLD_CONFIG.kettleCenter.x;
-    this.y = WORLD_CONFIG.kettleCenter.y + 42;
+    this.x = DUSKHOLLOW_TOWN?.spawnPoint?.x ?? 3000;
+    this.y = DUSKHOLLOW_TOWN?.spawnPoint?.y ?? 3040;
     this.vx = 0;
     this.vy = 0;
     this.dead = false;
@@ -2056,16 +2180,43 @@ export class Player {
       }
     });
 
+    // Tick Tavern Meal & Elixir Buff timers
+    if (this.tavernMeal && this.tavernMeal.timer > 0) {
+      this.tavernMeal.timer = Math.max(0, this.tavernMeal.timer - dt);
+      if (this.tavernMeal.timer <= 0) {
+        this.tavernMeal = null;
+        this.recalculateStats(false);
+      }
+    }
+    if (this.elixirBuff && this.elixirBuff.timer > 0) {
+      this.elixirBuff.timer = Math.max(0, this.elixirBuff.timer - dt);
+      if (this.elixirBuff.timer <= 0) {
+        this.elixirBuff = null;
+      }
+    }
+
     // 2. Check World Status Sources:
-    // - Campfire at Kettle (within 80px): Warmed (+2% max HP/s and clears debuffs)
+    // - Sanctuary Bonfire in Duskhollow Town (Floor 0) or Wandering Merchant Mob-Repellent Ward (Floors 1-5)
+    const isFloor0 = !worldLedger || worldLedger.currentFloor === 0;
     const distToCampfire = Math.hypot(
       this.x - WORLD_CONFIG.campfirePosition.x,
       this.y - WORLD_CONFIG.campfirePosition.y
     );
-    if (distToCampfire <= 80) {
-      this.statuses.apply('warmed', { duration: 0.5, sourceName: 'Campfire' }, this, null);
+    const inRepellentWard =
+      !isFloor0 &&
+      worldLedger &&
+      typeof worldLedger.isInsideMobRepellentWard === 'function' &&
+      worldLedger.isInsideMobRepellentWard(this.x, this.y);
+
+    if ((isFloor0 && distToCampfire <= 110) || inRepellentWard) {
+      this.statuses.apply(
+        'warmed',
+        { duration: 0.5, sourceName: isFloor0 ? 'Sanctuary Pyre' : 'Repellent Ward' },
+        this,
+        null
+      );
       this.statuses.cleanseAllDebuffs();
-      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.02 * dt);
+      this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.025 * dt);
     } else {
       this.statuses.remove('warmed');
     }
@@ -2075,11 +2226,11 @@ export class Player {
       this.hp = Math.min(this.maxHp, this.hp + 1.0 * dt);
     }
 
-    // - Area environmental hazards (outside Kettle)
+    // - Area environmental hazards (outside safe zones)
     const area = world && typeof world.getAreaAt === 'function'
       ? world.getAreaAt(this.x, this.y)
       : (world && typeof world.getZoneAt === 'function' ? world.getZoneAt(this.x, this.y) : null);
-    this.inSafeZone = !!(area && area.safe) || this.isInSafeZone(world);
+    this.inSafeZone = this.isInSafeZone(world);
     if (this.safeZoneWarnTimer > 0) {
       this.safeZoneWarnTimer = Math.max(0, this.safeZoneWarnTimer - dt);
     }

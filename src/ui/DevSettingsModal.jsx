@@ -706,6 +706,144 @@ export function DevSettingsModal({ engine, onClose }) {
                   </button>
                 </div>
               </div>
+
+              {/* Status Effect & Damage Number Testing Suite */}
+              <div className="p-3.5 bg-[#171420] border border-[#00F0FF]/40 rounded space-y-3">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[#352542]">
+                  <div>
+                    <h4 className="text-xs font-black text-[#00F0FF] uppercase flex items-center gap-1.5">
+                      <span>⚡</span> Status Effects &amp; Damage Number Animations
+                    </h4>
+                    <p className="text-[10px] text-[#A69AA8]">
+                      Test player &amp; enemy status afflictions (burns, stuns, slows) and popup animations.
+                    </p>
+                  </div>
+                  <span className="text-[9px] px-2 py-0.5 rounded bg-[#101D27] text-[#00F0FF] border border-[#00F0FF]/40 font-bold">
+                    SYSTEM ACTIVE
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {/* Player Status Injections */}
+                  <div className="p-2.5 bg-[#0F0D17] border border-[#2B2338] rounded space-y-2">
+                    <span className="text-[10px] font-bold text-[#E3E8E5] uppercase">
+                      Inflict Status on Player:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => {
+                          p.applyBurn(4.0, 15, 'Dev Burn', engine.particles);
+                          engine.notifyUi();
+                          showToast('Inflicted BURN on Player (4.0s)! Watch flame screen vignette.');
+                          forceRefresh();
+                        }}
+                        className="px-2.5 py-1 bg-[#2B1408] border border-[#FF6A00] text-[#FF9E4A] hover:bg-[#FF6A00] hover:text-black text-xs font-black rounded cursor-pointer transition-colors"
+                      >
+                        🔥 Burn (4s)
+                      </button>
+                      <button
+                        onClick={() => {
+                          p.applyStun(1.5, 'Dev Stun', engine.particles);
+                          engine.notifyUi();
+                          showToast('Inflicted STUN on Player (1.5s)! Notice electric lock & banner.');
+                          forceRefresh();
+                        }}
+                        className="px-2.5 py-1 bg-[#101D27] border border-[#00F0FF] text-[#00F0FF] hover:bg-[#00F0FF] hover:text-black text-xs font-black rounded cursor-pointer transition-colors"
+                      >
+                        ⚡ Stun (1.5s)
+                      </button>
+                      <button
+                        onClick={() => {
+                          p.applySlow(3.0, 0.45, 'Dev Slow', engine.particles);
+                          engine.notifyUi();
+                          showToast('Inflicted SLOW on Player (3.0s, -45% Speed)!');
+                          forceRefresh();
+                        }}
+                        className="px-2.5 py-1 bg-[#091720] border border-[#7CE8FF] text-[#7CE8FF] hover:bg-[#7CE8FF] hover:text-black text-xs font-black rounded cursor-pointer transition-colors"
+                      >
+                        ❄ Slow (3s)
+                      </button>
+                      <button
+                        onClick={() => {
+                          p.statuses.cleanseAllDebuffs();
+                          engine.notifyUi();
+                          showToast('Cleansed all player debuffs!');
+                          forceRefresh();
+                        }}
+                        className="px-2 py-1 bg-[#1B1A24] border border-[#4FD6A0] text-[#4FD6A0] text-xs font-bold rounded cursor-pointer hover:bg-[#4FD6A0] hover:text-black transition-colors"
+                      >
+                        ✨ Cleanse
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Enemy Status & Damage Number Injections */}
+                  <div className="p-2.5 bg-[#0F0D17] border border-[#2B2338] rounded space-y-2">
+                    <span className="text-[10px] font-bold text-[#E3E8E5] uppercase">
+                      Inflict on Nearby Enemies:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        onClick={() => {
+                          let count = 0;
+                          for (const e of engine.spawner.enemies) {
+                            if (e.active && e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) < 300) {
+                              e.applyBurn(4.0, p.atk * 0.4, engine.particles);
+                              count++;
+                            }
+                          }
+                          showToast(`Applied BURN to ${count} nearby enemies!`);
+                        }}
+                        className="px-2.5 py-1 bg-[#2B1408] border border-[#FF6A00] text-[#FF9E4A] hover:bg-[#FF6A00] hover:text-black text-xs font-black rounded cursor-pointer transition-colors"
+                      >
+                        🔥 Burn Mobs
+                      </button>
+                      <button
+                        onClick={() => {
+                          let count = 0;
+                          for (const e of engine.spawner.enemies) {
+                            if (e.active && e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) < 300) {
+                              e.applyStun(1.5, engine.particles);
+                              count++;
+                            }
+                          }
+                          showToast(`Applied STUN to ${count} nearby enemies!`);
+                        }}
+                        className="px-2.5 py-1 bg-[#101D27] border border-[#00F0FF] text-[#00F0FF] hover:bg-[#00F0FF] hover:text-black text-xs font-black rounded cursor-pointer transition-colors"
+                      >
+                        ⚡ Stun Mobs
+                      </button>
+                      <button
+                        onClick={() => {
+                          let count = 0;
+                          for (const e of engine.spawner.enemies) {
+                            if (e.active && e.hp > 0 && Math.hypot(e.x - p.x, e.y - p.y) < 300) {
+                              e.applySlow(3.5, 0.50, engine.particles);
+                              count++;
+                            }
+                          }
+                          showToast(`Applied SLOW to ${count} nearby enemies!`);
+                        }}
+                        className="px-2.5 py-1 bg-[#091720] border border-[#7CE8FF] text-[#7CE8FF] hover:bg-[#7CE8FF] hover:text-black text-xs font-black rounded cursor-pointer transition-colors"
+                      >
+                        ❄ Slow Mobs
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Spawn sample damage numbers to preview animations
+                          engine.particles.spawnDamageNumber(p.x - 30, p.y - 40, 24, false);
+                          engine.particles.spawnDamageNumber(p.x, p.y - 50, 185, true);
+                          engine.particles.spawnDamageNumber(p.x + 30, p.y - 40, 42, false, '🔥 42', '#FF6B2B');
+                          showToast('Spawned damage number animation test (Normal, Crit, Burn DoT)!');
+                        }}
+                        className="px-2.5 py-1 bg-[#251D0E] border border-[#FFD700] text-[#FFD700] hover:bg-[#FFD700] hover:text-black text-xs font-black rounded cursor-pointer transition-colors"
+                      >
+                        ✦ Test Numbers
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

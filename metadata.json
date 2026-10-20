@@ -1,6 +1,6 @@
 {
   "name": "GRAVEL SKY",
-  "description": "A 60fps pixel-art anime action JRPG set in a ruined industrial wasteland. Play as Sena Ibuki, wield the Railcut, upgrade skills, trade scrap gear at Kettle camp, and hunt multi-phase bosses.",
+  "description": "Hells Advent: Abyssal Descent — A 60fps Dark Fantasy Chibi Pixel-Art Action RPG. Explore Duskhollow Town, ascend the 5-Floor Abyssal Spire across a 5-Act Story Campaign, and sever 60 Boss Bloodlines.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

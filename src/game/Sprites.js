@@ -13,20 +13,193 @@ import {
 } from './PixelArt.js';
 
 /**
- * SENA IBUKI (48x48 canvas, body ~30px tall from y=11 to y=41, 4-head proportions ~7.5px head)
- * Asymmetric details:
- * - Left sleeve torn off at elbow, forearm wrapped in grey bandage ('bone' ramp)
- * - Right forearm wears a brass cuff made from a pipe clamp ('brass' ramp)
- * - Black work coat ('coat' ramp), hem frayed, one square rust-colored patch sewn on back left shoulder
- * - Rust-red hair cut short and uneven, one longer strand at left held by a bent paper clip ('steel')
- * - Cracked pair of welding goggles pushed up on forehead
- * - 2x2 pixel eyes with 1 bone highlight pixel (flash signal cyan only during Seven Cuts)
- * - Weapon: The Railcut (22px length of rail, flat flange hilt wrapped in dirty cloth, only 1px edge glows signal cyan with 4-frame flicker)
+ * UNIFIED 2-HEAD CHIBI PIXEL-ART BASE TEMPLATE (Modeled on /public/assets/aistudio/image_c95e226e.png)
+ * Anatomy (48x48 grid, centered at cx=24, total height ~30px from topY=10 to topY+30=40):
+ * - Head: 16x14px rounded chibi cranium (topY .. topY+13)
+ * - Ears: 3x5px prominent side ears (topY+6 .. topY+10)
+ * - Eyes: 3x4px vertical anime iris with dark plum upper lash + 1x2px white highlight + 2x1px cheek blush
+ * - Torso: 10x10px compact chibi body (topY+14 .. topY+23)
+ * - Arms: 3x7px slightly splayed stubby chibi arms (topY+14 .. topY+20)
+ * - Legs: 4x6px stubby chibi legs with center separation (topY+24 .. topY+29)
+ */
+export function getChibiPoseOffsets(anim, frameIdx, dir) {
+  let bobY = 0;
+  let torsoLeanX = 0;
+  let leftFootX = 0;
+  let rightFootX = 0;
+  let leftFootY = 0;
+  let rightFootY = 0;
+
+  if (anim === 'idle') {
+    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
+  } else if (anim === 'run') {
+    bobY = frameIdx % 3 === 1 ? -1 : frameIdx % 3 === 2 ? 1 : 0;
+    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 1;
+    const strideX = [-3, -1, 1, 3, 1, -1][frameIdx % 6];
+    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
+    leftFootX = strideX;
+    rightFootX = -strideX;
+    leftFootY = strideY;
+    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
+  } else if (anim === 'hurt') {
+    torsoLeanX = -2;
+    bobY = 1;
+  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    if (frameIdx === 0) torsoLeanX = -1;
+    else if (frameIdx === 1 || frameIdx === 2) {
+      torsoLeanX = anim === 'attack3' ? 3 : 2;
+    } else torsoLeanX = 1;
+  }
+
+  return { bobY, torsoLeanX, leftFootX, rightFootX, leftFootY, rightFootY };
+}
+
+export function drawChibiLowerAndTorsoBase(g, cx, topY, pose, opts = {}) {
+  const {
+    coatMat = 'coat',
+    legsMat = 'steel',
+    trimMat = 'brass',
+    capeMat = null,
+    anim = 'idle',
+    frameIdx = 0,
+    dir = 'right',
+    isAttacking = false,
+  } = opts;
+
+  const { leftFootX, rightFootX, leftFootY, rightFootY } = pose;
+
+  // Optional Dark Fantasy Back Cape / Cloak
+  if (capeMat) {
+    const capeSway = anim === 'run' ? -2 - (frameIdx % 2) : frameIdx % 2 === 0 ? 0 : -1;
+    const capeX = dir === 'down' ? cx - 6 : cx - 7 + capeSway;
+    g.shadedRect(capeX, topY + 13, 12, 14, capeMat);
+    // Tattered gothic hem
+    for (let hx = 0; hx < 12; hx += 3) {
+      g.rect(capeX + hx, topY + 26, 2, 2, capeMat, 1);
+    }
+  }
+
+  // Stubby Chibi Back Arm (left arm)
+  const lArmX = dir === 'up' ? cx - 8 : cx - 7;
+  const lArmY = topY + 14 + (anim === 'run' ? Math.round(rightFootY * 0.5) : 0);
+  g.shadedRect(lArmX, lArmY, 3, 5, coatMat);
+  g.rect(lArmX - 1, lArmY + 4, 3, 3, 'chibiSkin', 2); // Chibi hand
+
+  // Stubby Chibi Legs (4x6px each, crisp center split at cx)
+  const legY = topY + 23;
+  // Left leg
+  g.shadedRect(cx - 4 + leftFootX, legY + leftFootY, 4, 4, 'chibiSkin');
+  g.shadedRect(cx - 4 + leftFootX, legY + 2 + leftFootY, 4, 5, legsMat);
+  // Right leg
+  g.shadedRect(cx + 1 + rightFootX, legY + rightFootY, 4, 4, 'chibiSkin');
+  g.shadedRect(cx + 1 + rightFootX, legY + 2 + rightFootY, 4, 5, legsMat);
+
+  // Compact Chibi Torso (10x10px, topY+13 .. topY+23)
+  const torsoY = topY + 13;
+  g.shadedRect(cx - 5, torsoY, 11, 10, coatMat);
+  // Gothic belt & trim buckle
+  g.rect(cx - 5, torsoY + 7, 11, 2, 'coat', 0);
+  g.rect(cx - 1, torsoY + 7, 3, 2, trimMat, 3);
+
+  // Stubby Chibi Front Arm (when not overridden by active weapon swing)
+  if (!isAttacking) {
+    const rArmX = cx + 5;
+    const rArmY = topY + 14 + (anim === 'run' ? Math.round(leftFootY * 0.5) : 0);
+    g.shadedRect(rArmX, rArmY, 3, 5, coatMat);
+    g.rect(rArmX + 1, rArmY + 4, 3, 3, 'chibiSkin', 2);
+  }
+}
+
+/**
+ * Renders the 16x14px Chibi Head, 3x5px Side Ears, Cheek Blush, and 3x4px Anime Eyes
+ * directly matching /public/assets/aistudio/image_c95e226e.png
+ */
+export function drawChibiHeadBase(g, cx, topY, dir, anim, frameIdx, opts = {}) {
+  const {
+    irisMat = 'chibiIrisPink',
+    hairMat = 'hair',
+    hairStyle = 'knight',
+    isUltimateEyes = false,
+  } = opts;
+
+  const headX = (anim === 'hurt' ? cx - 1 : cx) - 8; // 16px wide: cx-8 .. cx+7
+  const headY = topY; // 14px tall: topY .. topY+13
+
+  // Back hair layer behind ears/neck
+  if (hairStyle === 'necromancer' || hairStyle === 'soulbinder') {
+    g.shadedRect(headX - 1, headY + 6, 18, 10, hairMat);
+  } else {
+    g.shadedRect(headX, headY + 5, 16, 8, hairMat);
+  }
+
+  // Prominent 3x5px Chibi Side Ears (y: headY+6 .. headY+10)
+  // Left Ear
+  g.rect(headX - 2, headY + 6, 3, 5, 'chibiSkin', 2);
+  g.set(headX - 1, headY + 8, 'chibiBlush', 1); // Inner ear shadow
+  // Right Ear
+  g.rect(headX + 15, headY + 6, 3, 5, 'chibiSkin', 2);
+  g.set(headX + 16, headY + 8, 'chibiBlush', 1);
+
+  // Rounded 16x14px Chibi Cranium (warm cream-peach skin with rounded corners)
+  g.shadedRect(headX + 2, headY, 12, 14, 'chibiSkin');
+  g.shadedRect(headX + 1, headY + 1, 14, 12, 'chibiSkin');
+  g.shadedRect(headX, headY + 2, 16, 9, 'chibiSkin');
+  // Smooth bright forehead & cheek fill (matching image_c95e226e.png)
+  g.rect(headX + 2, headY + 2, 12, 10, 'chibiSkin', 2);
+  g.rect(headX + 3, headY + 2, 10, 4, 'chibiSkin', 3);
+  // Warm chin shadow
+  g.line(headX + 4, headY + 13, headX + 11, headY + 13, 'chibiSkin', 1, 1);
+
+  // Facial Features (when not facing Away/Up)
+  if (dir !== 'up') {
+    const shiftX = dir === 'down' ? 0 : 1;
+    const leftEyeX = headX + 3 + shiftX;
+    const rightEyeX = headX + 10 + shiftX;
+    const eyeY = headY + 6;
+    const eyeBlink = anim === 'idle' && frameIdx === 3;
+
+    // Soft 2x1px Cheek Blush right below outer eye corners
+    g.rect(leftEyeX - 1, eyeY + 4, 2, 1, 'chibiBlush', 2);
+    g.rect(rightEyeX + 2, eyeY + 4, 2, 1, 'chibiBlush', 2);
+
+    if (eyeBlink || anim === 'hurt') {
+      // Closed lash line
+      g.rect(leftEyeX, eyeY + 2, 3, 1, 'chibiOutline', 1);
+      g.rect(rightEyeX, eyeY + 2, 3, 1, 'chibiOutline', 1);
+    } else {
+      const activeIris = isUltimateEyes ? 'signal' : irisMat;
+      // Left 3x4 Anime Eye
+      g.rect(leftEyeX - 1, eyeY, 4, 1, 'chibiOutline', 0); // Thick upper lash
+      g.rect(leftEyeX, eyeY + 1, 3, 3, activeIris, 2); // Vertical iris
+      g.rect(leftEyeX + 1, eyeY + 1, 2, 2, activeIris, 1); // Deep upper iris tone
+      g.rect(leftEyeX, eyeY + 1, 1, 2, 'chibiIrisPink', 3); // 1x2px vertical white highlight!
+      g.set(leftEyeX + 1, eyeY + 3, activeIris, 3); // Lower iris glow
+
+      // Right 3x4 Anime Eye
+      g.rect(rightEyeX, eyeY, 4, 1, 'chibiOutline', 0); // Thick upper lash
+      g.rect(rightEyeX, eyeY + 1, 3, 3, activeIris, 2); // Vertical iris
+      g.rect(rightEyeX + 1, eyeY + 1, 2, 2, activeIris, 1);
+      g.rect(rightEyeX, eyeY + 1, 1, 2, 'chibiIrisPink', 3); // 1x2px vertical white highlight!
+      g.set(rightEyeX + 1, eyeY + 3, activeIris, 3);
+    }
+
+    // Subtle eyebrow arches above eyes
+    g.line(leftEyeX, eyeY - 2, leftEyeX + 2, eyeY - 2, 'chibiOutline', 2, 1);
+    g.line(rightEyeX, eyeY - 2, rightEyeX + 2, eyeY - 2, 'chibiOutline', 2, 1);
+  } else {
+    // Full back of hair when facing UP
+    g.shadedRect(headX, headY + 1, 16, 12, hairMat);
+  }
+
+  return { headX, headY };
+}
+
+/**
+ * 1. SENA IBUKI — ABYSSAL BLADE KNIGHT (2-Head Chibi Base + Obsidian Armor + Duskrend Greatsword)
  */
 export function buildSenaFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
   const g = new PixelGrid(48, 48);
 
-  // Determine coat/legs material from equipped gear
   const coatMat =
     equipped.body === 'plateCoat'
       ? 'rust'
@@ -40,191 +213,91 @@ export function buildSenaFrameGrid(anim, frameIdx, dir = 'right', equipped = {},
       ? 'bog'
       : 'steel';
 
-  // Dodge Roll: 6f tucked ball roll
   if (anim === 'dodge') {
     const cx = 24;
-    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
-    g.circle(cx, cy, 8, coatMat, 1);
-    // Frayed coat & rust shoulder patch rotating through the tuck
+    const cy = 26 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 9, coatMat, 1);
     const ang = (frameIdx / 6) * Math.PI * 2;
     const hx = cx + Math.round(Math.cos(ang) * 5);
     const hy = cy + Math.round(Math.sin(ang) * 5);
-    g.rect(hx - 3, hy - 3, 6, 6, 'hair', 2);
-    g.rect(cx - 2, cy - 2, 4, 4, 'scarf', 2);
-    // Tucked Railcut on back
-    g.line(cx - 8, cy + 5, cx + 8, cy - 5, 'steel', 2, 2);
-    g.set(cx + 8, cy - 5, 'signal', 3);
+    g.rect(hx - 4, hy - 4, 7, 7, 'hair', 2);
+    g.line(cx - 9, cy + 5, cx + 9, cy - 5, 'steel', 2, 2);
+    g.set(cx + 9, cy - 5, 'signal', 3);
     return g;
   }
 
-  // Death: 5f (0: stagger, 1: drops to knees, 2: sword plants in ground, 3: falls forward, 4: settled)
   if (anim === 'death') {
-    if (frameIdx >= 3) {
-      // Planted Railcut vertical in ground at x=33, y=16..38
-      g.rect(32, 16, 4, 3, 'brass', 2); // Flange hilt
-      g.rect(33, 19, 2, 3, 'bone', 1); // Dirty cloth wrap
-      g.rect(33, 22, 3, 17, 'steel', 2); // 22px rail shaft
-      g.line(35, 22, 35, 38, 'signal', 3, 1); // 1px cyan edge
-      // Fallen body on ground (y=34..41)
-      g.shadedRect(12, 34, 16, 6, coatMat);
-      g.rect(14, 35, 3, 3, 'rust', 2); // Back left shoulder rust patch
-      g.shadedRect(26, 35, 6, 5, 'hair');
-      g.rect(10, 36, 4, 3, 'bone', 2); // Bandaged left forearm outstretched
-      return g;
-    }
-    const kneelDrop = frameIdx * 4;
-    const cy = 12 + kneelDrop;
-    // Planted Railcut appearing on frame 2
-    if (frameIdx >= 2) {
-      g.rect(31, 18, 4, 2, 'brass', 2);
-      g.rect(32, 20, 3, 19, 'steel', 2);
-      g.line(34, 20, 34, 38, 'signal', 3, 1);
-    }
-    g.shadedRect(20, cy + 16, 7, 7, legsMat);
-    g.shadedRect(19, cy + 7, 9, 10, coatMat);
-    g.rect(20, cy + 8, 3, 3, 'rust', 2);
-    g.shadedRect(20, cy, 8, 7, 'skin');
-    g.shadedRect(19, cy - 1, 9, 4, 'hair');
+    // Planted Duskrend Greatsword + fallen chibi knight
+    g.rect(32, 15, 4, 3, 'brass', 2);
+    g.rect(33, 18, 3, 20, 'steel', 2);
+    g.line(35, 18, 35, 37, 'signal', 3, 1);
+    g.shadedRect(10, 32, 14, 8, coatMat);
+    g.shadedRect(20, 28, 12, 11, 'chibiSkin');
+    g.shadedRect(19, 27, 13, 6, 'hair');
     return g;
   }
 
-  // Standard 30px tall 4-head proportions (y=11..41)
-  let bobY = 0;
-  let torsoLeanX = 0;
-  let leftFootY = 0;
-  let rightFootY = 0;
-  let leftFootX = 0;
-  let rightFootX = 0;
-
-  if (anim === 'idle') {
-    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
-  } else if (anim === 'run') {
-    bobY = frameIdx % 3 === 1 ? -1 : frameIdx % 3 === 2 ? 1 : 0;
-    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 2;
-    const strideX = [-4, -2, 1, 4, 2, -1][frameIdx % 6];
-    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
-    leftFootX = strideX;
-    rightFootX = -strideX;
-    leftFootY = strideY;
-    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
-  } else if (anim === 'hurt') {
-    torsoLeanX = -2;
-    bobY = 1;
-  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
-    // 4f: 0=anticipation, 1=hold, 2=smear+lunge, 3=recovery
-    if (frameIdx === 0) torsoLeanX = -2;
-    else if (frameIdx === 1 || frameIdx === 2) {
-      torsoLeanX = anim === 'attack3' ? 4 : 2; // Hit 3 has 2px extra forward lunge
-    } else torsoLeanX = 1;
-  }
-
-  const cx = 23 + torsoLeanX;
-  const topY = 11 + bobY; // Head is 7px tall (11..18), Torso/Coat is 14px (18..32), Legs/Boots 9px (32..41) => 30px tall
-
-  // LAYER 1: BACK ARM & WEAPON WHEN CARRIED
+  const pose = getChibiPoseOffsets(anim, frameIdx, dir);
+  const cx = 23 + pose.torsoLeanX;
+  const topY = 9 + pose.bobY;
   const isAttacking = anim === 'attack1' || anim === 'attack2' || anim === 'attack3';
+
+  // Carried Duskrend Greatsword on back when not swinging
   if (!isAttacking) {
-    // Carried 22px Railcut diagonally across back
-    const rx0 = cx - 9;
-    const ry0 = topY + 20;
-    const rx1 = cx + 9;
-    const ry1 = topY + 4;
-    // Flange hilt wrapped in dirty cloth
-    g.rect(rx0 - 2, ry0 - 1, 4, 3, 'steel', 1);
-    g.rect(rx0, ry0 - 2, 3, 3, 'bone', 1);
-    // 22px Rail shaft
+    const rx0 = cx - 10;
+    const ry0 = topY + 25;
+    const rx1 = cx + 11;
+    const ry1 = topY + 5;
+    g.rect(rx0 - 2, ry0 - 1, 4, 3, 'brass', 2); // Winged abyssal crossguard
     g.line(rx0 + 1, ry0 - 1, rx1, ry1, 'steel', 2, 3);
-    // 1px Signal-cyan ground edge with slow 4-frame flicker
     const edgeStep = frameIdx % 4 === 2 ? 2 : 3;
-    g.line(rx0 + 2, ry0, rx1 + 1, ry1 + 1, 'signal', edgeStep, 1);
+    g.line(rx0 + 2, ry0, rx1 + 1, ry1 + 1, 'signal', edgeStep, 1); // Soulfire cyan rune edge
   }
 
-  // Left arm (back arm when facing right): sleeve torn off at elbow, forearm wrapped in grey bandage
-  const lArmX = dir === 'up' ? cx - 6 : cx - 4;
-  const lArmY = topY + 9;
-  g.rect(lArmX, lArmY, 3, 4, 'skin', 2); // bare elbow where sleeve is torn
-  g.rect(lArmX - 1, lArmY + 4, 3, 5, 'bone', 2); // grey bandage forearm wrap
-  g.set(lArmX, lArmY + 6, 'bone', 1); // bandage seam
+  // Chibi Body, Splayed Limbs, Obsidian Breastplate & Frayed Abyssal Cape
+  drawChibiLowerAndTorsoBase(g, cx, topY, pose, {
+    coatMat,
+    legsMat,
+    trimMat: 'brass',
+    capeMat: 'blood',
+    anim,
+    frameIdx,
+    dir,
+    isAttacking,
+  });
 
-  // LAYER 2: LEGS & BOOTS (y = topY+21 .. topY+30)
-  const legBaseY = topY + 21;
-  // Back/Left leg
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 3, 6, 'coat');
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + 5 + leftFootY, 4, 4, legsMat);
-  // Front/Right leg
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 3, 6, 'coat');
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + 5 + rightFootY, 4, 4, legsMat);
+  // Obsidian Knight Chest Pauldrons & Runed Collar
+  g.shadedRect(cx - 6, topY + 13, 4, 4, 'steel');
+  g.shadedRect(cx + 3, topY + 13, 4, 4, 'steel');
+  g.rect(cx - 2, topY + 15, 5, 4, 'steel', 2);
+  g.set(cx, topY + 16, 'signal', 3); // Glowing soul-rune on breastplate
 
-  // LAYER 3: TORSO & BLACK WORK COAT WITH FRAYED HEM & RUST PATCH
-  const coatY = topY + 8;
-  g.shadedRect(cx - 5, coatY, 10, 13, coatMat);
-  // Coat tail lag when running
-  const tailLag = anim === 'run' ? -2 - (frameIdx % 2) : 0;
-  // Frayed coat hem teeth at bottom
-  for (let fx = -5; fx <= 4; fx += 2) {
-    g.rect(cx + fx + (fx < 0 ? tailLag : 0), coatY + 12, 2, 2, coatMat, 1);
-  }
-  // One square rust-colored patch sewn on the back left shoulder
-  if (dir !== 'down') {
-    g.rect(cx - 4, coatY + 2, 3, 3, 'rust', 2);
-  } else {
-    g.rect(cx + 1, coatY + 2, 3, 3, 'rust', 2);
-  }
+  // Chibi Head + 3x4 Anime Eyes (Violet-Pink / Signal Cyan)
+  const { headX, headY } = drawChibiHeadBase(g, cx, topY, dir, anim, frameIdx, {
+    irisMat: 'chibiIrisPink',
+    hairMat: 'hair',
+    hairStyle: 'knight',
+    isUltimateEyes,
+  });
 
-  // Scarf neck collar wrap (bone color)
-  g.shadedRect(cx - 4, topY + 7, 9, 3, 'scarf');
-
-  // LAYER 4: HEAD, UNEVEN RUST HAIR, PAPER CLIP, & WELDING GOGGLES ON FOREHEAD (7.5px head)
-  const headX = anim === 'hurt' ? cx - 2 : cx - 4;
-  const headY = topY;
-  g.shadedRect(headX, headY + 1, 8, 6, 'skin');
-
+  // Sena's Crimson-Auburn Chibi Hair Bangs & Obsidian Circlet
   if (dir !== 'up') {
-    // 2x2 eyes with 1 bone highlight pixel (or signal cyan during Seven Cuts)
-    const eyeBlink = anim === 'idle' && frameIdx === 3;
-    const eyeX = dir === 'down' ? headX + 2 : headX + 4;
-    const eyeY = headY + 3;
-    if (eyeBlink) {
-      g.rect(eyeX, eyeY + 1, 2, 1, 'coat', 0);
-      if (dir === 'down') g.rect(eyeX + 4, eyeY + 1, 2, 1, 'coat', 0);
-    } else {
-      const eyeMat = isUltimateEyes ? 'signal' : 'coat';
-      const eyeStep = isUltimateEyes ? 3 : 0;
-      g.rect(eyeX, eyeY, 2, 2, eyeMat, eyeStep);
-      g.set(eyeX, eyeY, isUltimateEyes ? 'signal' : 'bone', 3); // 1px bone highlight
-      if (dir === 'down') {
-        g.rect(eyeX + 4, eyeY, 2, 2, eyeMat, eyeStep);
-        g.set(eyeX + 4, eyeY, isUltimateEyes ? 'signal' : 'bone', 3);
-      }
-    }
+    g.shadedRect(headX + 1, headY - 1, 14, 4, 'hair');
+    // Side hair locks framing chibi cheeks
+    g.shadedRect(headX, headY + 2, 3, 8, 'hair');
+    g.shadedRect(headX + 13, headY + 2, 3, 7, 'hair');
+    // Center parted bangs
+    g.rect(headX + 5, headY + 2, 2, 3, 'hair', 2);
+    g.rect(headX + 9, headY + 2, 2, 3, 'hair', 2);
+    // Dark Fantasy Winged Obsidian Circlet on brow
+    g.rect(headX + 3, headY + 1, 10, 2, 'steel', 2);
+    g.rect(headX + 7, headY, 2, 3, 'brass', 3);
+    g.set(headX + 7, headY + 1, 'signal', 3);
   }
 
-  // Short uneven rust-red hair
-  g.shadedRect(headX - 1, headY - 1, 9, 3, 'hair');
-  g.rect(headX - 1, headY + 1, 2, 4, 'hair', 1);
-  // Longer strand at the left held by a bent paper clip
-  g.rect(headX - 2, headY + 2, 2, 6, 'hair', 2);
-  g.rect(headX - 2, headY + 4, 2, 1, 'steel', 3); // Bent paper clip
-
-  // Cracked pair of welding goggles pushed up on the forehead
-  g.rect(headX, headY, 8, 2, 'steel', 1);
-  g.rect(headX + 1, headY, 2, 2, 'brass', 2); // Left lens rim
-  g.rect(headX + 5, headY, 2, 2, 'brass', 2); // Right lens rim
-  g.set(headX + 2, headY + 1, 'bone', 3); // Diagonal crack across lens
-
-  // LAYER 5: FRONT RIGHT ARM (with Brass pipe-clamp cuff) & ACTIVE RAILCUT ATTACKS
-  const rArmX = cx + 2;
-  const rArmY = topY + 9;
-
-  if (!isAttacking) {
-    g.rect(rArmX, rArmY, 3, 5, coatMat, 2);
-    // Brass cuff made from a pipe clamp on right forearm
-    g.rect(rArmX, rArmY + 5, 3, 3, 'brass', 3);
-    g.set(rArmX + 2, rArmY + 6, 'steel', 1); // clamp bolt
-    g.rect(rArmX, rArmY + 8, 2, 2, 'skin', 2);
-  } else {
-    // 3-Hit Combo Animations (4 frames each: 0=anticipation, 1=hold, 2=smear, 3=recovery)
-    this_drawAttackBlade(g, anim, frameIdx, cx, topY, coatMat);
+  // Active Duskrend Combo Swings
+  if (isAttacking) {
+    this_drawAttackBlade(g, anim, frameIdx, cx, topY + 4, coatMat);
   }
 
   return g;
@@ -235,19 +308,15 @@ function this_drawAttackBlade(g, anim, frameIdx, cx, topY, coatMat) {
   const edgeStep = frameIdx % 2 === 0 ? 3 : 2;
 
   if (anim === 'attack1') {
-    // Hit 1: Horizontal cut
     if (frameIdx === 0) {
-      // Anticipation: blade drawn back behind shoulder
       g.rect(cx - 2, rArmY, 4, 3, 'brass', 3);
       g.line(cx - 3, rArmY, cx - 18, rArmY - 6, 'steel', 2, 3);
       g.line(cx - 3, rArmY - 1, cx - 18, rArmY - 7, 'signal', edgeStep, 1);
     } else if (frameIdx === 1) {
-      // Hold frame: mid-swing horizontal extension
       g.rect(cx + 3, rArmY, 4, 3, 'brass', 3);
       g.rect(cx + 6, rArmY - 1, 20, 4, 'steel', 2);
       g.line(cx + 6, rArmY + 3, cx + 25, rArmY + 3, 'signal', 3, 1);
     } else if (frameIdx === 2) {
-      // Smear frame: wide solid bone/steel sweep wedge + 1px cyan outer edge
       for (let r = 8; r <= 23; r++) {
         for (let dy = -6; dy <= 5; dy++) {
           const mat = dy >= 4 ? 'signal' : dy >= 1 ? 'bone' : 'steel';
@@ -257,13 +326,11 @@ function this_drawAttackBlade(g, anim, frameIdx, cx, topY, coatMat) {
       g.rect(cx + 4, rArmY + 2, 21, 3, 'steel', 2);
       g.line(cx + 4, rArmY + 5, cx + 24, rArmY + 5, 'signal', 3, 1);
     } else {
-      // Recovery frame: blade low forward
       g.rect(cx + 2, rArmY + 2, 3, 3, 'brass', 2);
       g.line(cx + 4, rArmY + 3, cx + 19, rArmY + 10, 'steel', 2, 3);
       g.line(cx + 4, rArmY + 5, cx + 19, rArmY + 12, 'signal', edgeStep, 1);
     }
   } else if (anim === 'attack2') {
-    // Hit 2: Backhand upward cut
     if (frameIdx === 0) {
       g.rect(cx + 1, rArmY + 3, 3, 3, 'brass', 2);
       g.line(cx + 3, rArmY + 4, cx + 15, rArmY + 13, 'steel', 2, 3);
@@ -273,7 +340,6 @@ function this_drawAttackBlade(g, anim, frameIdx, cx, topY, coatMat) {
       g.line(cx + 6, rArmY - 1, cx + 24, rArmY - 6, 'steel', 2, 3);
       g.line(cx + 6, rArmY - 3, cx + 24, rArmY - 8, 'signal', 3, 1);
     } else if (frameIdx === 2) {
-      // Backhand smear arc
       for (let r = 8; r <= 23; r++) {
         for (let dy = -9; dy <= 2; dy++) {
           const mat = dy <= -8 ? 'signal' : dy <= -5 ? 'bone' : 'steel';
@@ -288,19 +354,15 @@ function this_drawAttackBlade(g, anim, frameIdx, cx, topY, coatMat) {
       g.line(cx + 3, rArmY - 4, cx + 15, rArmY - 13, 'signal', edgeStep, 1);
     }
   } else {
-    // Hit 3: Overhead chop with 2-pixel forward lunge
     if (frameIdx === 0) {
-      // Raised high overhead
       g.rect(cx, topY - 2, 3, 4, 'brass', 3);
       g.rect(cx - 1, topY - 11, 3, 10, 'steel', 2);
       g.line(cx + 2, topY - 11, cx + 2, topY - 2, 'signal', 3, 1);
     } else if (frameIdx === 1) {
-      // Hold at apex
       g.rect(cx + 1, topY - 3, 3, 4, 'brass', 3);
       g.rect(cx, topY - 11, 4, 9, 'steel', 3);
       g.line(cx + 4, topY - 11, cx + 4, topY - 3, 'signal', 3, 1);
     } else if (frameIdx === 2) {
-      // Heavy downward chop smear from overhead to ground
       for (let py = topY - 8; py <= topY + 22; py++) {
         const reach = Math.round(18 + Math.sin(((py - (topY - 8)) / 30) * Math.PI) * 6);
         for (let px = cx + 6; px <= cx + reach; px++) {
@@ -311,7 +373,6 @@ function this_drawAttackBlade(g, anim, frameIdx, cx, topY, coatMat) {
       g.rect(cx + 4, rArmY + 5, 20, 4, 'steel', 2);
       g.line(cx + 4, rArmY + 9, cx + 23, rArmY + 9, 'signal', 3, 1);
     } else {
-      // Recovery: blade embedded low
       g.rect(cx + 3, rArmY + 4, 3, 3, 'brass', 2);
       g.rect(cx + 5, rArmY + 6, 19, 4, 'steel', 2);
       g.line(cx + 5, rArmY + 10, cx + 23, rArmY + 10, 'signal', edgeStep, 1);
@@ -324,117 +385,46 @@ export function applyPromotionOverlayToGrid(g, classId, stage = 1, branch = null
   if (anim === 'death' || anim === 'dodge') return g;
 
   const cx = 23;
-  const topY = 11 + (anim === 'idle' && (frameIdx === 1 || frameIdx === 2) ? 1 : 0);
+  const topY = 9 + (anim === 'idle' && (frameIdx === 1 || frameIdx === 2) ? 1 : 0);
 
   if (classId === 'sena') {
     if (branch === 'cutter') {
-      // Journeyman (Cutter): longer re-ground rail edge + red cloth bound on hilt
-      g.rect(cx - 10, topY + 19, 4, 3, 'blood', 2); // Red cloth bound on hilt
-      g.line(cx + 8, topY + 5, cx + 13, topY + 1, 'signal', 3, 2); // Extended re-ground edge
+      g.rect(cx - 10, topY + 21, 4, 3, 'blood', 3);
+      g.line(cx + 8, topY + 7, cx + 14, topY + 2, 'signal', 3, 2);
       if (stage >= 3) {
-        // Master (Flenser): leather butcher's apron + second short blade on hip
-        g.shadedRect(cx - 4, topY + 11, 8, 11, 'rust'); // Butcher's apron
-        g.line(cx - 7, topY + 18, cx + 2, topY + 22, 'steel', 3, 2); // Second short hip blade
-        g.set(cx - 7, topY + 18, 'brass', 3);
+        g.shadedRect(cx - 4, topY + 14, 8, 9, 'blood');
       }
     } else if (branch === 'anvil') {
-      // Journeyman (Anvil): welded plate pauldron on left shoulder + road-sign buckler on left forearm
-      g.shadedRect(cx - 7, topY + 7, 5, 5, 'steel'); // Left shoulder plate pauldron
-      g.shadedRect(cx - 8, topY + 13, 5, 6, 'brass'); // Road-sign buckler on left forearm
-      g.set(cx - 6, topY + 15, 'coat', 0);
+      g.shadedRect(cx - 8, topY + 13, 5, 5, 'brass');
       if (stage >= 3) {
-        // Master (Girder): full riveted boiler chest plate
-        g.shadedRect(cx - 5, topY + 9, 10, 10, 'steel');
-        g.set(cx - 3, topY + 11, 'brass', 3);
-        g.set(cx + 3, topY + 11, 'brass', 3);
-        g.set(cx - 3, topY + 16, 'brass', 3);
-        g.set(cx + 3, topY + 16, 'brass', 3);
+        g.shadedRect(cx - 5, topY + 14, 10, 8, 'steel');
+        g.set(cx, topY + 16, 'brass', 3);
       }
     }
   } else if (classId === 'rook') {
     if (branch === 'longhand') {
-      // Journeyman (Longhand): longer barrel + bottle-lens scope
-      g.rect(cx + 12, topY + 11, 7, 2, 'steel', 3); // Extended barrel
-      g.rect(cx + 6, topY + 9, 4, 2, 'signal', 3); // Bottle-lens scope
-      if (stage >= 3) {
-        // Master (Surveyor): surveyor's tripod strapped to back + bigger brass monocle
-        g.line(cx - 7, topY + 5, cx - 10, topY + 23, 'brass', 2, 2);
-        g.line(cx - 5, topY + 5, cx - 8, topY + 24, 'steel', 2, 1);
-        g.rect(cx + 1, topY + 2, 4, 4, 'brass', 3); // Bigger monocle
-      }
+      g.rect(cx + 12, topY + 16, 6, 2, 'brass', 3);
     } else if (branch === 'wirehand') {
-      // Journeyman (Wirehand): spools of wire on belt + trap satchel
-      g.circle(cx - 4, topY + 19, 2, 'brass', 3); // Wire spool
-      g.shadedRect(cx - 7, topY + 16, 4, 5, 'bone'); // Trap satchel
-      if (stage >= 3) {
-        // Master (Minelayer): bandolier of cans with fuses across chest
-        g.rect(cx - 3, topY + 10, 3, 3, 'rust', 3);
-        g.rect(cx, topY + 13, 3, 3, 'rust', 3);
-        g.set(cx - 2, topY + 9, 'brass', 3);
-        g.set(cx + 1, topY + 12, 'brass', 3);
-      }
+      g.circle(cx - 5, topY + 21, 2, 'brass', 3);
     }
   } else if (classId === 'ines') {
     if (branch === 'binder') {
-      // Journeyman (Binder): heavier alternator coil + second horseshoe magnet on back
-      g.shadedRect(cx - 9, topY + 6, 5, 12, 'brass');
-      g.rect(cx - 10, topY + 4, 4, 3, 'verdigris', 3); // Second magnet tip
-      if (stage >= 3) {
-        // Master (Crane): hoist hook on a short chain from the shoulder
-        g.line(cx + 4, topY + 7, cx + 8, topY + 15, 'steel', 3, 1);
-        g.rect(cx + 7, topY + 15, 3, 4, 'brass', 3);
-      }
+      g.rect(cx - 10, topY + 8, 4, 3, 'verdigris', 3);
     } else if (branch === 'slinger') {
-      // Journeyman (Slinger): bag of loose scrap on hip + leather sling band on forearm
-      g.shadedRect(cx - 6, topY + 17, 5, 5, 'rust');
-      g.rect(cx + 2, topY + 12, 4, 2, 'rust', 3);
-      if (stage >= 3) {
-        // Master (Wrecker): chunk of heavy chain wrapped around shoulders
-        g.line(cx - 6, topY + 8, cx + 5, topY + 11, 'steel', 3, 2);
-        g.line(cx - 5, topY + 12, cx + 4, topY + 9, 'steel', 2, 2);
-      }
+      g.line(cx - 6, topY + 14, cx + 5, topY + 18, 'bone', 3, 2);
     }
   } else if (classId === 'kaelen') {
     if (branch === 'furnace') {
-      // Journeyman (Furnace): dual boiler smokestacks on back + ember slag vents
-      g.shadedRect(cx - 10, topY + 1, 3, 7, 'steel');
-      g.rect(cx - 10, topY, 3, 2, 'ember', 3);
-      if (stage >= 3) {
-        // Master (Cinderlord): molten slag pauldron & glowing furnace grate chest
-        g.shadedRect(cx - 7, topY + 7, 5, 5, 'ember');
-        g.rect(cx - 2, topY + 11, 5, 4, 'ember', 3);
-      }
+      g.rect(cx - 10, topY + 4, 3, 3, 'ember', 3);
     } else if (branch === 'alchemist') {
-      // Journeyman (Alchemist): pressurized green lye tank strapped beside boiler
-      g.shadedRect(cx - 10, topY + 6, 4, 9, 'bog');
-      g.rect(cx - 9, topY + 8, 2, 5, 'lye', 3);
-      if (stage >= 3) {
-        // Master (Blight-Venter): brass hazmat hood & white phosphor nozzle ring
-        g.shadedRect(cx - 5, topY - 1, 10, 4, 'brass');
-        g.rect(cx + 12, topY + 10, 4, 4, 'lye', 3);
-      }
+      g.rect(cx - 10, topY + 10, 3, 6, 'lye', 3);
     }
   } else if (classId === 'vespera') {
     if (branch === 'swarm') {
-      // Journeyman (Swarm): twin shoulder micro-drone launch pods
-      g.shadedRect(cx - 8, topY + 5, 4, 5, 'brass');
-      g.set(cx - 7, topY + 6, 'volt', 3);
-      if (stage >= 3) {
-        // Master (Hive-Queen): halo of glowing volt command antennas behind head
-        g.line(cx - 6, topY + 3, cx - 10, topY - 3, 'volt', 3, 1);
-        g.line(cx + 4, topY + 3, cx + 8, topY - 3, 'volt', 3, 1);
-        g.rect(cx - 11, topY - 4, 2, 2, 'volt', 3);
-        g.rect(cx + 7, topY - 4, 2, 2, 'volt', 3);
-      }
+      g.set(cx - 9, topY + 6, 'volt', 3);
+      g.set(cx + 9, topY + 6, 'volt', 3);
     } else if (branch === 'dynamo') {
-      // Journeyman (Dynamo): high-voltage copper capacitor spines on back
-      g.shadedRect(cx - 10, topY + 4, 5, 12, 'brass');
-      g.line(cx - 10, topY + 6, cx - 6, topY + 14, 'volt', 3, 1);
-      if (stage >= 3) {
-        // Master (Archon): glowing volt arc-crown and levitating coil rings
-        g.rect(cx - 3, topY - 3, 6, 2, 'volt', 3);
-        g.set(cx, topY - 4, 'bone', 3);
-      }
+      g.rect(cx - 3, topY - 3, 6, 2, 'volt', 3);
     }
   }
 
@@ -442,12 +432,7 @@ export function applyPromotionOverlayToGrid(g, classId, stage = 1, branch = null
 }
 
 /**
- * ROOK MATSUDA — RANGED (48x48 canvas, lanky courier ~31px tall)
- * - Tilted flat cap with a cracked bike reflector sewn on the brim
- * - Salvaged rangefinder monocle strapped over the left eye with a brass rim
- * - Olive-drab road coat tied at the waist, canvas bandolier of rail bolts across the chest
- * - Mismatched fingerless gloves (one canvas, one leather)
- * - Weapon: The Springgun (rebuilt nail-gun crossbow with a car leaf spring as the bow)
+ * 2. ROOK MATSUDA — INQUISITOR MARKSMAN (2-Head Chibi Base + Witch-Hunter Cowl + Hexbane Arbalest)
  */
 export function buildRookFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
   const g = new PixelGrid(48, 48);
@@ -466,119 +451,81 @@ export function buildRookFrameGrid(anim, frameIdx, dir = 'right', equipped = {},
 
   if (anim === 'dodge') {
     const cx = 24;
-    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
-    g.circle(cx, cy, 8, coatMat, 2);
+    const cy = 26 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 9, coatMat, 2);
     g.rect(cx - 4, cy - 5, 7, 3, 'brass', 3);
-    g.line(cx - 7, cy + 4, cx + 7, cy - 4, 'steel', 3, 2);
     return g;
   }
 
   if (anim === 'death') {
-    g.shadedRect(12, 34, 18, 6, coatMat);
-    g.shadedRect(27, 35, 6, 5, 'olive');
-    g.rect(31, 35, 2, 2, 'brass', 3);
-    g.line(14, 32, 26, 30, 'steel', 2, 2);
+    g.shadedRect(10, 32, 16, 7, coatMat);
+    g.shadedRect(21, 28, 12, 10, 'chibiSkin');
+    g.shadedRect(20, 26, 13, 5, 'olive');
     return g;
   }
 
-  let bobY = 0;
-  let torsoLeanX = 0;
-  let leftFootX = 0;
-  let rightFootX = 0;
-  let leftFootY = 0;
-  let rightFootY = 0;
+  const pose = getChibiPoseOffsets(anim, frameIdx, dir);
+  const cx = 23 + pose.torsoLeanX;
+  const topY = 9 + pose.bobY;
 
-  if (anim === 'idle') {
-    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
-  } else if (anim === 'run') {
-    bobY = frameIdx % 3 === 1 ? -1 : 0;
-    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 2;
-    const strideX = [-4, -2, 1, 4, 2, -1][frameIdx % 6];
-    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
-    leftFootX = strideX;
-    rightFootX = -strideX;
-    leftFootY = strideY;
-    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
-  } else if (anim === 'hurt') {
-    torsoLeanX = -2;
-    bobY = 1;
-  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
-    // Recoil kick on shot frame
-    torsoLeanX = frameIdx === 1 ? -2 : 0;
-  }
+  drawChibiLowerAndTorsoBase(g, cx, topY, pose, {
+    coatMat,
+    legsMat,
+    trimMat: 'brass',
+    capeMat: 'olive',
+    anim,
+    frameIdx,
+    dir,
+    isAttacking: true,
+  });
 
-  const cx = 23 + torsoLeanX;
-  const topY = 10 + bobY;
+  // Silver-Stake Bandolier across Inquisitor Coat
+  g.line(cx - 4, topY + 14, cx + 4, topY + 21, 'bone', 2, 2);
+  g.set(cx - 2, topY + 16, 'brass', 3);
+  g.set(cx + 1, topY + 18, 'brass', 3);
 
-  // Legs & Tall Laced Boots
-  const legBaseY = topY + 21;
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 3, 6, 'bone');
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + 5 + leftFootY, 4, 5, legsMat);
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 3, 6, 'bone');
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + 5 + rightFootY, 4, 5, legsMat);
+  // Chibi Head + Amber-Gold Anime Eyes
+  const { headX, headY } = drawChibiHeadBase(g, cx, topY, dir, anim, frameIdx, {
+    irisMat: 'chibiIrisGold',
+    hairMat: 'bone',
+    hairStyle: 'inquisitor',
+    isUltimateEyes,
+  });
 
-  // Olive-drab road coat tied at waist
-  const coatY = topY + 8;
-  g.shadedRect(cx - 5, coatY, 10, 14, coatMat);
-  g.rect(cx - 5, coatY + 8, 10, 2, 'rust', 2); // Waist tie belt
-
-  // Canvas bandolier of rail bolts across chest
-  g.line(cx - 4, coatY + 1, cx + 4, coatY + 10, 'bone', 2, 2);
-  g.set(cx - 2, coatY + 3, 'brass', 3);
-  g.set(cx, coatY + 5, 'brass', 3);
-  g.set(cx + 2, coatY + 7, 'brass', 3);
-
-  // Head & Tilted Flat Cap with cracked bike reflector on brim
-  const headX = cx - 4;
-  const headY = topY;
-  g.shadedRect(headX, headY + 2, 8, 6, 'skin');
-
+  // Ash-Silver Hair Bangs, Brass Eye Monocle & Witch-Hunter Cowl Brim
   if (dir !== 'up') {
-    // Salvaged rangefinder monocle strapped over left eye with brass rim
-    const monoX = dir === 'down' ? headX + 1 : headX + 3;
-    g.rect(monoX, headY + 3, 3, 3, 'brass', 3);
-    g.set(monoX + 1, headY + 4, isUltimateEyes ? 'brass' : 'signal', 3);
-    if (dir === 'down') {
-      g.rect(headX + 5, headY + 4, 2, 2, 'coat', 0);
-    }
+    g.shadedRect(headX + 1, headY + 1, 14, 3, 'bone');
+    g.rect(headX, headY + 3, 2, 6, 'bone', 2);
+    // Inquisitor Brass Targeting Monocle over left eye
+    const monoX = dir === 'down' ? headX + 2 : headX + 3;
+    g.rect(monoX, headY + 5, 5, 1, 'brass', 3);
+    g.set(monoX - 1, headY + 7, 'brass', 3);
   }
+  // Pointed Witch-Hunter Hat / Cowl
+  g.shadedRect(headX - 2, headY, 20, 3, 'olive');
+  g.shadedRect(headX + 2, headY - 3, 12, 3, 'coat');
+  g.rect(headX + 3, headY - 1, 10, 1, 'brass', 3); // Gold inquisitor hatband buckle
 
-  // Tilted flat cap + bike reflector on brim
-  g.shadedRect(headX - 1, headY - 1, 10, 4, 'olive');
-  g.rect(headX + 6, headY + 1, 4, 2, 'coat', 1); // Cap brim
-  g.rect(headX + 7, headY, 2, 2, 'rust', 3); // Cracked orange-red bike reflector
-
-  // Arms & The Springgun (rebuilt nail-gun crossbow with car leaf spring bow)
-  const gunX = cx + 2;
-  const gunY = topY + 10;
-  g.rect(gunX - 1, gunY, 4, 3, 'skin', 2);
-  g.rect(gunX + 1, gunY, 2, 3, 'bone', 2); // Canvas fingerless glove
-  // Springgun body
+  // Hexbane Arbalest (Silver-Runed Crossbow held at chibi side)
+  const gunX = cx + 4;
+  const gunY = topY + 15;
+  g.rect(gunX, gunY, 3, 3, 'chibiSkin', 2);
   g.shadedRect(gunX + 2, gunY - 1, 11, 4, 'steel');
-  // Car leaf spring bow curved vertically at front of gun
-  g.line(gunX + 11, gunY - 5, gunX + 13, gunY + 6, 'rust', 3, 2);
-  g.line(gunX + 6, gunY - 4, gunX + 11, gunY - 5, 'bone', 2, 1); // Bowstring
-  g.line(gunX + 6, gunY + 5, gunX + 11, gunY + 6, 'bone', 2, 1);
-  // Loaded rail bolt & muzzle flash on attack
+  g.line(gunX + 11, gunY - 5, gunX + 13, gunY + 5, 'brass', 3, 2); // Runed crossbow prod
   if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
     if (frameIdx === 1 || frameIdx === 2) {
       g.rect(gunX + 14, gunY - 1, 6, 3, 'brass', 3);
       g.set(gunX + 20, gunY, 'bone', 3);
     }
   } else {
-    g.line(gunX + 8, gunY, gunX + 15, gunY, 'brass', 3, 1);
+    g.line(gunX + 7, gunY, gunX + 15, gunY, 'bone', 3, 1);
   }
 
   return g;
 }
 
 /**
- * INES CALLOWAY — MAGE / MAGNETIST (48x48 canvas, stocky ~29px tall)
- * - Grey streak in dark hair pulled into a tight bun
- * - Thick safety goggles around her neck
- * - Quilted jacket under a heavy canvas apron, tool ring on belt
- * - Backpack frame carrying an old car alternator coil wrapped in copper wire with verdigris-green glowing tips
- * - Thick welding gloves each with a large horseshoe magnet bound to the palm
+ * 3. INES CALLOWAY — OSSUARY NECROMANCER (2-Head Chibi Base + Bone-White Twin Locks + Gravelord Scepter)
  */
 export function buildInesFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
   const g = new PixelGrid(48, 48);
@@ -587,123 +534,87 @@ export function buildInesFrameGrid(anim, frameIdx, dir = 'right', equipped = {},
       ? 'rust'
       : equipped.body === 'riotJacket'
       ? 'bog'
-      : 'steel';
+      : 'coat';
   const legsMat =
     equipped.legs === 'hydraulicShins'
       ? 'brass'
       : equipped.legs === 'courierLeggings'
       ? 'bog'
-      : 'coat';
+      : 'steel';
 
   if (anim === 'dodge') {
     const cx = 24;
-    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
-    g.circle(cx, cy, 8, 'bone', 2);
+    const cy = 26 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 9, 'bone', 2);
     g.circle(cx, cy, 5, 'verdigris', 3);
     return g;
   }
 
   if (anim === 'death') {
-    g.shadedRect(12, 34, 17, 6, 'bone');
-    g.shadedRect(14, 31, 8, 5, 'rust'); // Alternator pack
-    g.rect(15, 30, 3, 2, 'verdigris', 3);
+    g.shadedRect(10, 32, 16, 7, 'coat');
+    g.shadedRect(21, 28, 12, 10, 'chibiSkin');
+    g.shadedRect(20, 26, 13, 6, 'bone');
     return g;
   }
 
-  let bobY = 0;
-  let torsoLeanX = 0;
-  let leftFootX = 0;
-  let rightFootX = 0;
-  let leftFootY = 0;
-  let rightFootY = 0;
+  const pose = getChibiPoseOffsets(anim, frameIdx, dir);
+  const cx = 23 + pose.torsoLeanX;
+  const topY = 9 + pose.bobY;
 
-  if (anim === 'idle') {
-    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
-  } else if (anim === 'run') {
-    bobY = frameIdx % 3 === 1 ? -1 : 0;
-    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 1;
-    const strideX = [-3, -1, 1, 3, 1, -1][frameIdx % 6];
-    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
-    leftFootX = strideX;
-    rightFootX = -strideX;
-    leftFootY = strideY;
-    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
-  } else if (anim === 'hurt') {
-    torsoLeanX = -2;
-    bobY = 1;
-  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
-    torsoLeanX = frameIdx === 1 || frameIdx === 2 ? 2 : 0;
-  }
+  // Floating Bone Reliquary Censer on back with Soul-Verdigris Flame
+  const packX = dir === 'down' ? cx + 6 : cx - 11;
+  const packY = topY + 12;
+  g.shadedRect(packX, packY, 5, 9, 'bone');
+  g.rect(packX, packY - 2, 5, 3, 'verdigris', frameIdx % 2 === 0 ? 3 : 2);
 
-  const cx = 23 + torsoLeanX;
-  const topY = 12 + bobY;
+  drawChibiLowerAndTorsoBase(g, cx, topY, pose, {
+    coatMat,
+    legsMat,
+    trimMat: 'verdigris',
+    capeMat: 'coat',
+    anim,
+    frameIdx,
+    dir,
+    isAttacking: true,
+  });
 
-  // Backpack frame carrying old car alternator coil wrapped in copper wire with verdigris tips
-  const packX = dir === 'down' ? cx + 4 : cx - 9;
-  const packY = topY + 5;
-  g.shadedRect(packX, packY, 6, 12, 'steel');
-  g.shadedRect(packX + 1, packY + 2, 4, 7, 'rust'); // Copper wire coil
-  const tipStep = frameIdx % 2 === 0 ? 3 : 2;
-  g.rect(packX, packY - 2, 5, 3, 'verdigris', tipStep); // Glowing verdigris coil tips
+  // Ossuary Bone Rib-Corset over Necromancer Robes
+  g.rect(cx - 3, topY + 14, 7, 6, 'bone', 2);
+  g.line(cx, topY + 14, cx, topY + 20, 'coat', 0, 1);
 
-  // Legs & Boots
-  const legBaseY = topY + 20;
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 4, 5, 'coat');
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + 4 + leftFootY, 4, 4, legsMat);
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 4, 5, 'coat');
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + 4 + rightFootY, 4, 4, legsMat);
+  // Chibi Head + Emerald-Verdigris Anime Eyes
+  const { headX, headY } = drawChibiHeadBase(g, cx, topY, dir, anim, frameIdx, {
+    irisMat: 'chibiIrisEmerald',
+    hairMat: 'bone',
+    hairStyle: 'necromancer',
+    isUltimateEyes,
+  });
 
-  // Stocky quilted jacket under heavy canvas apron
-  const coatY = topY + 8;
-  g.shadedRect(cx - 5, coatY, 11, 12, coatMat);
-  g.shadedRect(cx - 4, coatY + 2, 9, 10, 'bone'); // Heavy canvas apron
-  g.circle(cx + 3, coatY + 9, 2, 'brass', 3); // Ring of tools on belt
-
-  // Thick safety goggles around neck
-  g.rect(cx - 4, topY + 7, 9, 2, 'brass', 2);
-  g.set(cx - 2, topY + 7, 'verdigris', 3);
-  g.set(cx + 2, topY + 7, 'verdigris', 3);
-
-  // Head & Dark Hair in tight bun with grey streak
-  const headX = cx - 4;
-  const headY = topY;
-  g.shadedRect(headX, headY + 1, 8, 6, 'skin');
+  // Bone-White & Ebon Twin Locks + Skull Hairpins
   if (dir !== 'up') {
-    const eyeX = dir === 'down' ? headX + 2 : headX + 4;
-    const eyeMat = isUltimateEyes ? 'verdigris' : 'coat';
-    const eyeStep = isUltimateEyes ? 3 : 0;
-    g.rect(eyeX, headY + 3, 2, 2, eyeMat, eyeStep);
-    g.set(eyeX, headY + 3, 'bone', 3);
-    if (dir === 'down') {
-      g.rect(eyeX + 4, headY + 3, 2, 2, eyeMat, eyeStep);
-      g.set(eyeX + 4, headY + 3, 'bone', 3);
-    }
+    g.shadedRect(headX + 1, headY - 1, 14, 4, 'coat');
+    g.line(headX + 3, headY, headX + 12, headY + 1, 'bone', 3, 2); // White streak bangs
+    g.shadedRect(headX - 1, headY + 2, 3, 9, 'bone');
+    g.shadedRect(headX + 14, headY + 2, 3, 9, 'bone');
+    // Mini skull hairpins on temples
+    g.rect(headX + 1, headY + 2, 3, 3, 'bone', 3);
+    g.rect(headX + 12, headY + 2, 3, 3, 'bone', 3);
+    g.set(headX + 2, headY + 3, 'verdigris', 3);
   }
-  // Dark hair + tight bun at back + grey streak
-  g.shadedRect(headX - 1, headY - 1, 9, 3, 'coat');
-  g.circle(headX - 2, headY + 1, 3, 'coat', 1); // Tight bun
-  g.line(headX, headY - 1, headX + 5, headY, 'bone', 3, 1); // Grey streak
 
-  // Thick welding gloves with large horseshoe magnet bound to palm
-  const armX = cx + (anim.startsWith('attack') && (frameIdx === 1 || frameIdx === 2) ? 6 : 3);
-  const armY = topY + 10;
-  g.shadedRect(armX, armY, 5, 4, 'bone'); // Thick welding glove
-  // Horseshoe magnet bound to palm (red/steel U-shape with verdigris pole tips)
-  g.rect(armX + 4, armY - 1, 4, 2, 'blood', 3);
-  g.rect(armX + 4, armY + 3, 4, 2, 'blood', 3);
-  g.rect(armX + 3, armY, 2, 4, 'steel', 2);
-  g.set(armX + 8, armY - 1, 'verdigris', 3);
-  g.set(armX + 8, armY + 4, 'verdigris', 3);
+  // Gravelord Scepter (Bone-Crowned Necromancer Staff)
+  const armX = cx + (anim.startsWith('attack') && (frameIdx === 1 || frameIdx === 2) ? 7 : 5);
+  const armY = topY + 15;
+  g.rect(armX, armY, 3, 3, 'chibiSkin', 2);
+  g.line(armX + 3, armY + 6, armX + 5, armY - 6, 'bone', 2, 2); // Bone staff shaft
+  g.circle(armX + 5, armY - 7, 3, 'bone', 3); // Skull scepter head
+  g.circle(armX + 5, armY - 7, 2, 'verdigris', 3); // Soul-emerald core
 
   return g;
 }
 
 /**
- * KAELEN VOS — THERMO-LANCER / PYRO-ALCHEMIST (48x48 canvas, heavy boiler frame ~31px tall)
- * - Slitted brass foundry diving/welding helm with glowing ember visor slit
- * - Scorched leather foundry apron over heavy steel plate coat
- * - Twin-cylinder brass steam boiler strapped to back with glowing ember pressure gauge & smokestack
- * - Weapon: The Ignis Lance (hollow piston spear with glowing pilot tip & fuel hose)
+ * 4. KAELEN VOS — HELLFIRE DRAGOON (2-Head Chibi Base + Dragon-Horn Circlet + Cinderlance)
  */
 export function buildKaelenFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
   const g = new PixelGrid(48, 48);
@@ -722,100 +633,70 @@ export function buildKaelenFrameGrid(anim, frameIdx, dir = 'right', equipped = {
 
   if (anim === 'dodge') {
     const cx = 24;
-    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
-    g.circle(cx, cy, 8, 'rust', 2);
-    g.circle(cx - 3, cy, 4, 'ember', 3);
-    g.line(cx - 8, cy + 3, cx + 9, cy - 3, 'brass', 3, 2);
+    const cy = 26 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 9, 'rust', 2);
+    g.circle(cx, cy, 5, 'ember', 3);
     return g;
   }
 
   if (anim === 'death') {
-    g.shadedRect(11, 33, 19, 7, 'rust');
-    g.shadedRect(14, 29, 9, 6, 'brass'); // Fallen boiler pack
-    g.rect(16, 30, 3, 2, 'ember', 2);
-    g.line(18, 36, 36, 35, 'steel', 2, 2); // Dropped Ignis Lance
+    g.shadedRect(10, 32, 16, 7, 'rust');
+    g.shadedRect(21, 28, 12, 10, 'chibiSkin');
+    g.shadedRect(20, 26, 13, 5, 'ember');
     return g;
   }
 
-  let bobY = 0;
-  let torsoLeanX = 0;
-  let leftFootX = 0;
-  let rightFootX = 0;
-  let leftFootY = 0;
-  let rightFootY = 0;
+  const pose = getChibiPoseOffsets(anim, frameIdx, dir);
+  const cx = 23 + pose.torsoLeanX;
+  const topY = 9 + pose.bobY;
 
-  if (anim === 'idle') {
-    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
-  } else if (anim === 'run') {
-    bobY = frameIdx % 3 === 1 ? -1 : 0;
-    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 2;
-    const strideX = [-4, -2, 1, 4, 2, -1][frameIdx % 6];
-    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
-    leftFootX = strideX;
-    rightFootX = -strideX;
-    leftFootY = strideY;
-    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
-  } else if (anim === 'hurt') {
-    torsoLeanX = -2;
-    bobY = 1;
-  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
-    torsoLeanX = frameIdx === 1 || frameIdx === 2 ? (anim === 'attack3' ? 4 : 2) : -1;
-  }
+  // Twin Hellfire Vent Stacks on back
+  const packX = dir === 'down' ? cx + 6 : cx - 11;
+  const packY = topY + 11;
+  g.shadedRect(packX, packY, 5, 10, 'brass');
+  g.rect(packX + 1, packY - 2, 3, 3, 'ember', frameIdx % 2 === 0 ? 3 : 2);
 
-  const cx = 23 + torsoLeanX;
-  const topY = 10 + bobY;
+  drawChibiLowerAndTorsoBase(g, cx, topY, pose, {
+    coatMat,
+    legsMat,
+    trimMat: 'ember',
+    capeMat: 'rust',
+    anim,
+    frameIdx,
+    dir,
+    isAttacking: true,
+  });
 
-  // Twin-cylinder brass steam boiler strapped to back
-  const packX = dir === 'down' ? cx + 4 : cx - 10;
-  const packY = topY + 4;
-  g.shadedRect(packX, packY, 6, 13, 'brass');
-  g.rect(packX + 1, packY - 3, 3, 4, 'steel', 2); // Smokestack chimney
-  if (frameIdx % 2 === 0) {
-    g.set(packX + 2, packY - 4, 'ember', 3); // Chimney ember spark
-  }
-  // Glowing boiler firebox grate
-  g.rect(packX + 1, packY + 5, 4, 5, 'ember', frameIdx % 2 === 0 ? 3 : 2);
+  // Hellfire Core Crest on Chest
+  g.circle(cx, topY + 17, 2, 'brass', 3);
+  g.set(cx, topY + 17, 'ember', 3);
 
-  // Heavy foundry legs & iron-shod boots
-  const legBaseY = topY + 21;
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 4, 6, 'coat');
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + 5 + leftFootY, 4, 5, legsMat);
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 4, 6, 'coat');
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + 5 + rightFootY, 4, 5, legsMat);
+  // Chibi Head + Molten-Ember Anime Eyes
+  const { headX, headY } = drawChibiHeadBase(g, cx, topY, dir, anim, frameIdx, {
+    irisMat: 'chibiIrisEmber',
+    hairMat: 'rust',
+    hairStyle: 'dragoon',
+    isUltimateEyes,
+  });
 
-  // Torso: Steel coat + Scorched rust leather foundry apron
-  const coatY = topY + 8;
-  g.shadedRect(cx - 5, coatY, 11, 13, coatMat);
-  g.shadedRect(cx - 4, coatY + 2, 9, 11, 'rust'); // Scorched leather apron
-  // Chest pressure gauge
-  g.circle(cx, coatY + 5, 2, 'brass', 3);
-  g.set(cx, coatY + 5, 'ember', 3);
-
-  // Head: Slitted Brass Foundry Helm with glowing Ember Visor
-  const headX = cx - 4;
-  const headY = topY;
-  g.shadedRect(headX, headY, 9, 8, 'brass');
-  g.line(headX + 1, headY + 1, headX + 7, headY + 1, 'steel', 3, 1); // Rivet brow
+  // Fiery Spiky Hair & Dragon-Horn Circlet
   if (dir !== 'up') {
-    const visorX = dir === 'down' ? headX + 1 : headX + 3;
-    g.rect(visorX, headY + 3, 5, 2, 'coat', 0);
-    g.rect(visorX + 1, headY + 3, 4, 2, 'ember', 3);
-    if (isUltimateEyes) {
-      g.set(visorX + 2, headY + 3, 'bone', 3);
-    }
+    g.shadedRect(headX + 1, headY - 1, 14, 4, 'rust');
+    g.rect(headX + 3, headY - 2, 10, 2, 'ember', 3); // Flame-tipped bangs
+    g.shadedRect(headX, headY + 2, 2, 7, 'rust');
+    g.shadedRect(headX + 14, headY + 2, 2, 7, 'rust');
   }
+  // Curved Dragon Horns on brow
+  g.line(headX + 2, headY + 1, headX - 1, headY - 3, 'brass', 3, 2);
+  g.line(headX + 13, headY + 1, headX + 16, headY - 3, 'brass', 3, 2);
+  g.rect(headX + 4, headY + 1, 8, 2, 'brass', 3);
 
-  // Weapon: The Ignis Lance (hollow steel/brass piston spear + flame jet smear on attacks)
-  const lanceY = topY + 12;
-  // Fuel hose from boiler to lance
-  g.line(packX + 3, packY + 11, cx + 3, lanceY + 3, 'coat', 1, 1);
-
+  // Weapon: Cinderlance (Hellfire Dragon-Spear)
+  const lanceY = topY + 16;
   if (anim === 'attack1' || anim === 'attack2') {
-    // Wide Naphtha Flame Sweep
-    g.shadedRect(cx + 2, lanceY - 1, 14, 4, 'steel');
+    g.shadedRect(cx + 3, lanceY - 1, 14, 4, 'steel');
     g.rect(cx + 12, lanceY - 2, 5, 5, 'brass', 3);
     if (frameIdx === 1 || frameIdx === 2) {
-      // Blazing ember flame cone smear
       for (let r = 15; r <= 24; r++) {
         const spread = Math.floor((r - 13) * 0.7);
         for (let dy = -spread; dy <= spread; dy++) {
@@ -823,38 +704,24 @@ export function buildKaelenFrameGrid(anim, frameIdx, dir = 'right', equipped = {
           g.set(cx + r, lanceY + dy, mat, 3);
         }
       }
-      g.set(cx + 18, lanceY, 'bone', 3);
     } else {
       g.rect(cx + 17, lanceY - 1, 3, 3, 'ember', 3);
     }
   } else if (anim === 'attack3') {
-    // Hit 3: Piston Lance Thrust!
     const thrustExt = frameIdx === 1 || frameIdx === 2 ? 7 : 0;
-    g.shadedRect(cx + 2, lanceY - 1, 16 + thrustExt, 4, 'steel');
-    g.rect(cx + 10 + thrustExt, lanceY - 2, 5, 5, 'brass', 3);
+    g.shadedRect(cx + 3, lanceY - 1, 15 + thrustExt, 4, 'steel');
     g.line(cx + 15 + thrustExt, lanceY, cx + 23 + thrustExt, lanceY, 'ember', 3, 3);
-    if (frameIdx === 2) {
-      g.line(cx + 16, lanceY, cx + 24, lanceY, 'bone', 3, 1);
-    }
   } else {
-    // Carried Ignis Lance angled forward
-    g.line(cx - 2, lanceY + 3, cx + 15, lanceY - 4, 'steel', 2, 3);
-    g.rect(cx + 11, lanceY - 4, 4, 3, 'brass', 3);
-    // Pilot flame flickering at nozzle tip
+    g.line(cx - 1, lanceY + 3, cx + 16, lanceY - 4, 'steel', 2, 3);
+    g.rect(cx + 12, lanceY - 4, 4, 3, 'brass', 3);
     g.rect(cx + 15, lanceY - 5, 3, 3, 'ember', frameIdx % 2 === 0 ? 3 : 2);
-    g.set(cx + 16, lanceY - 4, 'bone', 3);
   }
 
   return g;
 }
 
 /**
- * VESPERA LOCKE — ARC-DRONE ARTIFICER / SUMMONER (48x48 canvas, slender ~30px tall)
- * - Asymmetric white-blonde shock of hair over dark undercut
- * - High-collared dark insulated trench coat with copper wire trim & volt-green vents
- * - Illuminated volt-green visor glasses
- * - Floating rotary copper halo dynamo rack behind shoulders
- * - Weapon: The Arc-Lash (flexible copper-braid lightning whip + hovering drone)
+ * 5. VESPERA LOCKE — ELDRITCH SOULBINDER (2-Head Chibi Base + Starlight Hair + Astral Halo & Whip)
  */
 export function buildVesperaFrameGrid(anim, frameIdx, dir = 'right', equipped = {}, isUltimateEyes = false) {
   const g = new PixelGrid(48, 48);
@@ -872,107 +739,78 @@ export function buildVesperaFrameGrid(anim, frameIdx, dir = 'right', equipped = 
       : 'steel';
 
   if (anim === 'dodge') {
-    // Phase-blink electric sphere
     const cx = 24;
-    const cy = 28 + (frameIdx % 2 === 0 ? -1 : 1);
-    g.circle(cx, cy, 8, 'coat', 1);
+    const cy = 26 + (frameIdx % 2 === 0 ? -1 : 1);
+    g.circle(cx, cy, 9, 'coat', 1);
     g.circle(cx, cy, 6, 'volt', 3);
-    g.circle(cx, cy, 3, 'bone', 3);
     return g;
   }
 
   if (anim === 'death') {
-    g.shadedRect(12, 34, 17, 6, coatMat);
-    g.shadedRect(26, 34, 6, 5, 'bone'); // White-blonde hair
-    g.circle(16, 31, 4, 'brass', 2); // Fallen halo dynamo
-    g.set(16, 31, 'volt', 2);
+    g.shadedRect(10, 32, 16, 7, coatMat);
+    g.shadedRect(21, 28, 12, 10, 'chibiSkin');
+    g.shadedRect(20, 26, 13, 6, 'bone');
     return g;
   }
 
-  let bobY = 0;
-  let torsoLeanX = 0;
-  let leftFootX = 0;
-  let rightFootX = 0;
-  let leftFootY = 0;
-  let rightFootY = 0;
+  const pose = getChibiPoseOffsets(anim, frameIdx, dir);
+  const cx = 23 + pose.torsoLeanX;
+  const topY = 9 + pose.bobY;
 
-  if (anim === 'idle') {
-    bobY = frameIdx === 1 || frameIdx === 2 ? 1 : 0;
-  } else if (anim === 'run') {
-    bobY = frameIdx % 3 === 1 ? -1 : 0;
-    torsoLeanX = dir === 'up' || dir === 'down' ? 0 : 2;
-    const strideX = [-3, -1, 1, 3, 1, -1][frameIdx % 6];
-    const strideY = [0, -2, -1, 0, -2, -1][frameIdx % 6];
-    leftFootX = strideX;
-    rightFootX = -strideX;
-    leftFootY = strideY;
-    rightFootY = [-1, 0, -2, -1, 0, -2][frameIdx % 6];
-  } else if (anim === 'hurt') {
-    torsoLeanX = -2;
-    bobY = 1;
-  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
-    torsoLeanX = frameIdx === 1 || frameIdx === 2 ? 2 : 0;
-  }
+  // Floating Eldritch Astral Halo Ring behind Chibi Shoulders
+  const haloX = cx - 2;
+  const haloY = topY + 9 + (frameIdx % 2 === 0 ? -1 : 0);
+  g.circle(haloX, haloY, 8, 'brass', 2);
+  g.circle(haloX, haloY, 6, 'coat', 0);
+  g.set(haloX - 8, haloY, 'volt', 3);
+  g.set(haloX + 8, haloY, 'volt', 3);
+  g.set(haloX, haloY - 8, 'volt', 3);
 
-  const cx = 23 + torsoLeanX;
-  const topY = 10 + bobY;
+  drawChibiLowerAndTorsoBase(g, cx, topY, pose, {
+    coatMat,
+    legsMat,
+    trimMat: 'volt',
+    capeMat: 'coat',
+    anim,
+    frameIdx,
+    dir,
+    isAttacking: true,
+  });
 
-  // Floating Copper Halo Dynamo Rack behind shoulders
-  const haloX = cx - 4;
-  const haloY = topY + 6 + (frameIdx % 2 === 0 ? -1 : 0);
-  g.circle(haloX, haloY, 6, 'brass', 2);
-  g.circle(haloX, haloY, 4, 'coat', 0);
-  // Volt nodes on halo ring
-  g.set(haloX - 6, haloY, 'volt', 3);
-  g.set(haloX, haloY - 6, 'volt', 3);
-  g.set(haloX + 5, haloY - 3, 'volt', 3);
+  // Eldritch Runic Stole down front of robe
+  g.line(cx - 2, topY + 14, cx - 2, topY + 22, 'volt', 3, 1);
+  g.line(cx + 2, topY + 14, cx + 2, topY + 22, 'volt', 3, 1);
 
-  // Legs & Insulated Boots
-  const legBaseY = topY + 21;
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + leftFootY, 3, 6, 'coat');
-  g.shadedRect(cx - 4 + leftFootX, legBaseY + 5 + leftFootY, 4, 5, legsMat);
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + rightFootY, 3, 6, 'coat');
-  g.shadedRect(cx + 1 + rightFootX, legBaseY + 5 + rightFootY, 4, 5, legsMat);
+  // Chibi Head + Astral-Violet Anime Eyes
+  const { headX, headY } = drawChibiHeadBase(g, cx, topY, dir, anim, frameIdx, {
+    irisMat: 'chibiIrisViolet',
+    hairMat: 'bone',
+    hairStyle: 'soulbinder',
+    isUltimateEyes,
+  });
 
-  // High-collared dark insulated trench coat with volt capacitor trim
-  const coatY = topY + 8;
-  g.shadedRect(cx - 5, coatY, 10, 14, coatMat);
-  g.line(cx - 4, coatY + 2, cx - 4, coatY + 12, 'brass', 3, 1);
-  g.line(cx + 3, coatY + 2, cx + 3, coatY + 12, 'volt', 3, 1); // Volt seam
-  // High popped collar
-  g.shadedRect(cx - 5, topY + 6, 10, 3, coatMat);
-
-  // Head, Illuminated Volt Visor Glasses, & White-Blonde Asymmetric Hair
-  const headX = cx - 4;
-  const headY = topY;
-  g.shadedRect(headX, headY + 1, 8, 6, 'skin');
+  // Starlight-Silver Hair Bangs & Eldritch Star Diadem
   if (dir !== 'up') {
-    const visorX = dir === 'down' ? headX + 1 : headX + 3;
-    // Volt visor glasses
-    g.rect(visorX, headY + 3, 5, 2, 'volt', 3);
-    g.set(visorX + 1, headY + 3, 'bone', 3);
-    if (isUltimateEyes) {
-      g.rect(visorX, headY + 2, 5, 3, 'volt', 3);
-    }
+    g.shadedRect(headX + 1, headY - 1, 14, 4, 'bone');
+    g.shadedRect(headX - 1, headY + 2, 3, 9, 'bone');
+    g.shadedRect(headX + 13, headY + 2, 4, 9, 'bone');
+    // Eldritch Star Tiara on forehead
+    g.rect(headX + 4, headY, 8, 2, 'brass', 3);
+    g.rect(headX + 7, headY - 2, 2, 4, 'volt', 3);
   }
-  // White-blonde shock of hair swept forward
-  g.shadedRect(headX - 1, headY - 1, 9, 3, 'bone');
-  g.rect(headX + 5, headY + 1, 3, 4, 'bone', 3); // Swept bangs
 
-  // Weapon: The Arc-Lash (copper-braid whip crackling with volt-green lightning)
-  const armX = cx + 2;
-  const armY = topY + 10;
-  g.rect(armX, armY, 4, 3, 'brass', 3); // Insulated gauntlet
+  // Weapon: Floating Astral Conduit Whip
+  const armX = cx + 5;
+  const armY = topY + 15;
+  g.rect(armX, armY, 3, 3, 'chibiSkin', 2);
   if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
-    // Crackling lightning whip arc across front
     const whipY = anim === 'attack2' ? armY - 5 : anim === 'attack3' ? armY + 2 : armY - 1;
-    g.line(armX + 3, armY, armX + 12, whipY - 3, 'volt', 3, 2);
+    g.line(armX + 2, armY, armX + 12, whipY - 3, 'volt', 3, 2);
     g.line(armX + 12, whipY - 3, armX + 22, whipY + 2, 'volt', 3, 2);
-    g.line(armX + 4, armY, armX + 21, whipY + 1, 'bone', 3, 1);
+    g.line(armX + 3, armY, armX + 21, whipY + 1, 'bone', 3, 1);
   } else {
-    // Coiled whip at side with idle electric spark
-    g.circle(armX + 4, armY + 2, 3, 'brass', 2);
-    g.set(armX + 6, armY + (frameIdx % 2 === 0 ? 0 : 3), 'volt', 3);
+    g.circle(armX + 4, armY + 1, 3, 'brass', 2);
+    g.set(armX + 6, armY + (frameIdx % 2 === 0 ? -1 : 2), 'volt', 3);
   }
 
   return g;
@@ -1935,10 +1773,57 @@ class SpriteRegistry {
 export const spriteRegistry = new SpriteRegistry();
 
 /**
- * 64x64 Anime Portrait Renderer for Sena, Rook, and Ines
- * Supports expressions: 'normal', 'hurt', 'determined', 'ultimate'
- * Plus Journeyman (stage 2) and Master (stage 3) branch visual details.
+ * 64x64 Chibi Anime Portrait Renderer for Sena, Rook, Ines, Kaelen, and Vespera
+ * Modeled on /public/assets/aistudio/image_c95e226e.png:
+ * - Rounded chibi cranium, prominent side ears, soft cheek blush, vertical anime eyes with thick upper lash & 1x2px highlight
  */
+function drawPortraitChibiFace(g, headOffX, irisMat, expression) {
+  // Prominent Chibi Side Ears
+  g.shadedRect(10 + headOffX, 24, 5, 10, 'chibiSkin');
+  g.rect(12 + headOffX, 27, 2, 4, 'chibiBlush', 1);
+  g.shadedRect(49 + headOffX, 24, 5, 10, 'chibiSkin');
+  g.rect(50 + headOffX, 27, 2, 4, 'chibiBlush', 1);
+
+  // Rounded Chibi Head & Neck
+  g.shadedRect(27 + headOffX, 40, 10, 6, 'chibiSkin');
+  g.shadedRect(16 + headOffX, 14, 32, 28, 'chibiSkin');
+  g.shadedRect(14 + headOffX, 17, 36, 22, 'chibiSkin');
+  g.rect(18 + headOffX, 17, 28, 22, 'chibiSkin', 2);
+  g.rect(20 + headOffX, 16, 24, 7, 'chibiSkin', 3);
+
+  // Cheek Blush
+  g.rect(18 + headOffX, 33, 4, 2, 'chibiBlush', 2);
+  g.rect(42 + headOffX, 33, 4, 2, 'chibiBlush', 2);
+
+  if (expression === 'hurt') {
+    g.line(21 + headOffX, 26, 27 + headOffX, 28, 'chibiOutline', 0, 2);
+    g.line(27 + headOffX, 28, 21 + headOffX, 30, 'chibiOutline', 0, 2);
+    g.line(43 + headOffX, 26, 37 + headOffX, 28, 'chibiOutline', 0, 2);
+    g.line(37 + headOffX, 28, 43 + headOffX, 30, 'chibiOutline', 0, 2);
+    g.rect(29 + headOffX, 36, 6, 2, 'chibiOutline', 0);
+  } else {
+    const activeIris = expression === 'ultimate' ? 'signal' : irisMat;
+    // Left Vertical Chibi Anime Eye (6x8px scaled for 64x64 portrait)
+    g.rect(20 + headOffX, 24, 8, 2, 'chibiOutline', 0); // Thick upper lash
+    g.rect(21 + headOffX, 26, 6, 6, activeIris, 2);
+    g.rect(23 + headOffX, 26, 4, 3, activeIris, 1);
+    g.rect(21 + headOffX, 26, 2, 4, 'chibiIrisPink', 3); // Crisp vertical white highlight
+    g.rect(23 + headOffX, 30, 3, 2, activeIris, 3);
+
+    // Right Vertical Chibi Anime Eye
+    g.rect(36 + headOffX, 24, 8, 2, 'chibiOutline', 0); // Thick upper lash
+    g.rect(37 + headOffX, 26, 6, 6, activeIris, 2);
+    g.rect(39 + headOffX, 26, 4, 3, activeIris, 1);
+    g.rect(37 + headOffX, 26, 2, 4, 'chibiIrisPink', 3); // Crisp vertical white highlight
+    g.rect(39 + headOffX, 30, 3, 2, activeIris, 3);
+
+    // Eyebrows & mouth
+    g.line(21 + headOffX, 21, 26 + headOffX, 21, 'chibiOutline', 1, 1);
+    g.line(38 + headOffX, 21, 43 + headOffX, 21, 'chibiOutline', 1, 1);
+    g.rect(30 + headOffX, 36, 4, 1, 'chibiOutline', 1);
+  }
+}
+
 export function drawCharacterPortrait(
   canvas,
   classId = 'sena',
@@ -1958,57 +1843,20 @@ export function drawCharacterPortrait(
   const headOffX = expression === 'hurt' ? -2 : 0;
 
   if (classId === 'rook') {
-    // ROOK MATSUDA PORTRAIT
-    g.shadedRect(10, 46, 44, 18, 'olive');
-    // Bandolier of rail bolts across chest
-    g.line(14, 47, 46, 62, 'bone', 2, 4);
-    g.rect(20, 50, 4, 4, 'brass', 3);
-    g.rect(28, 54, 4, 4, 'brass', 3);
-    g.rect(36, 58, 4, 4, 'brass', 3);
-
-    // Master Surveyor tripod on back OR Master Minelayer fused cans
-    if (stage >= 3 && branch === 'longhand') {
-      g.shadedRect(48, 12, 6, 36, 'brass');
-    } else if (stage >= 3 && branch === 'wirehand') {
-      g.shadedRect(14, 48, 8, 10, 'rust');
-      g.shadedRect(42, 48, 8, 10, 'rust');
-    }
-
-    // Neck & Face
-    g.shadedRect(20 + headOffX, 17, 24, 22, 'skin');
-    // Tired half-smile or hurt grimace
-    if (expression === 'hurt') {
-      g.rect(28 + headOffX, 34, 8, 2, 'coat', 0);
-    } else {
-      g.line(27 + headOffX, 34, 35 + headOffX, 33, 'coat', 0, 1);
-    }
-
-    // Left eye: Salvaged rangefinder monocle with brass rim
-    const monoSize = stage >= 3 && branch === 'longhand' ? 11 : 9;
-    g.shadedRect(20 + headOffX, 22, monoSize, monoSize, 'brass');
-    g.rect(
-      22 + headOffX,
-      24,
-      monoSize - 4,
-      monoSize - 4,
-      expression === 'ultimate' ? 'brass' : 'signal',
-      3
-    );
-    g.set(23 + headOffX, 25, 'bone', 3);
-
-    // Right eye
-    if (expression === 'hurt') {
-      g.line(35 + headOffX, 25, 40 + headOffX, 27, 'coat', 0, 2);
-    } else {
-      g.rect(35 + headOffX, 25, 5, 4, expression === 'ultimate' ? 'brass' : 'coat', expression === 'ultimate' ? 3 : 0);
-      g.set(36 + headOffX, 26, 'bone', 3);
-    }
-
-    // Tilted flat cap with cracked bike reflector sewn on brim
-    g.shadedRect(14 + headOffX, 7, 36, 11, 'olive');
-    g.shadedRect(18 + headOffX, 15, 30, 4, 'coat');
-    g.shadedRect(38 + headOffX, 10, 7, 5, 'rust'); // Cracked bike reflector
-    g.set(40 + headOffX, 12, 'brass', 3);
+    // ROOK MATSUDA — INQUISITOR MARKSMAN CHIBI PORTRAIT
+    g.shadedRect(12, 44, 40, 20, 'olive');
+    g.line(16, 45, 46, 62, 'bone', 2, 4);
+    g.rect(22, 49, 4, 4, 'brass', 3);
+    g.rect(32, 54, 4, 4, 'brass', 3);
+    drawPortraitChibiFace(g, headOffX, 'chibiIrisGold', expression);
+    // Inquisitor Brass Targeting Monocle Rim over left eye
+    g.rect(19 + headOffX, 23, 10, 1, 'brass', 3);
+    g.rect(19 + headOffX, 32, 10, 1, 'brass', 3);
+    // Ash-Silver Bangs & Pointed Witch-Hunter Hat
+    g.shadedRect(15 + headOffX, 12, 34, 6, 'bone');
+    g.shadedRect(10 + headOffX, 9, 44, 5, 'olive');
+    g.shadedRect(18 + headOffX, 3, 28, 7, 'coat');
+    g.rect(20 + headOffX, 8, 24, 2, 'brass', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
     ctx.drawImage(baked, 0, 0);
@@ -2016,48 +1864,21 @@ export function drawCharacterPortrait(
   }
 
   if (classId === 'ines') {
-    // INES CALLOWAY PORTRAIT
-    // Alternator coil frame behind shoulders with verdigris tips
-    g.shadedRect(8, 18, 10, 32, 'steel');
-    g.shadedRect(46, 18, 10, 32, 'steel');
-    g.shadedRect(9, 14, 8, 6, 'verdigris');
-    g.shadedRect(47, 14, 8, 6, 'verdigris');
-
-    // Quilted jacket + Heavy canvas apron
-    g.shadedRect(10, 46, 44, 18, 'steel');
-    g.shadedRect(16, 48, 32, 16, 'bone');
-    if (stage >= 3 && branch === 'slinger') {
-      // Wrecker chain across shoulders
-      g.line(12, 48, 52, 54, 'steel', 3, 3);
-    } else if (stage >= 3 && branch === 'binder') {
-      // Crane hoist hook
-      g.shadedRect(45, 42, 7, 10, 'brass');
-    }
-
-    // Thick safety goggles around neck
-    g.shadedRect(18, 38, 28, 7, 'brass');
-    g.shadedRect(21, 39, 9, 5, 'verdigris');
-    g.shadedRect(34, 39, 9, 5, 'verdigris');
-
-    // Face
-    g.shadedRect(19 + headOffX, 17, 26, 20, 'skin');
-    if (expression === 'hurt') {
-      g.line(23 + headOffX, 25, 28 + headOffX, 27, 'coat', 0, 2);
-      g.line(35 + headOffX, 25, 40 + headOffX, 27, 'coat', 0, 2);
-    } else {
-      const eyeMat = expression === 'ultimate' ? 'verdigris' : 'coat';
-      const eyeStep = expression === 'ultimate' ? 3 : 0;
-      g.rect(23 + headOffX, 25, 5, 5, eyeMat, eyeStep);
-      g.rect(24 + headOffX, 26, 2, 2, 'bone', 3);
-      g.rect(36 + headOffX, 25, 5, 5, eyeMat, eyeStep);
-      g.rect(37 + headOffX, 26, 2, 2, 'bone', 3);
-    }
-    g.rect(29 + headOffX, 33, 6, 1, 'coat', 0);
-
-    // Dark hair pulled into tight bun with grey streak
-    g.circle(32 + headOffX, 7, 7, 'coat', 1); // Top bun
-    g.shadedRect(17 + headOffX, 9, 30, 9, 'coat');
-    g.line(20 + headOffX, 10, 34 + headOffX, 14, 'bone', 3, 2); // Grey streak
+    // INES CALLOWAY — OSSUARY NECROMANCER CHIBI PORTRAIT
+    g.shadedRect(8, 18, 8, 32, 'bone');
+    g.shadedRect(48, 18, 8, 32, 'bone');
+    g.shadedRect(9, 14, 6, 5, 'verdigris');
+    g.shadedRect(49, 14, 6, 5, 'verdigris');
+    g.shadedRect(12, 44, 40, 20, 'coat');
+    g.shadedRect(20, 46, 24, 18, 'bone');
+    drawPortraitChibiFace(g, headOffX, 'chibiIrisEmerald', expression);
+    // Bone-White & Ebon Twin Locks + Skull Hairpins
+    g.shadedRect(14 + headOffX, 9, 36, 8, 'coat');
+    g.line(18 + headOffX, 11, 44 + headOffX, 14, 'bone', 3, 3);
+    g.shadedRect(12 + headOffX, 16, 5, 24, 'bone');
+    g.shadedRect(47 + headOffX, 16, 5, 24, 'bone');
+    g.rect(15 + headOffX, 14, 5, 5, 'bone', 3);
+    g.rect(44 + headOffX, 14, 5, 5, 'bone', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
     ctx.drawImage(baked, 0, 0);
@@ -2065,41 +1886,21 @@ export function drawCharacterPortrait(
   }
 
   if (classId === 'kaelen') {
-    // KAELEN VOS PORTRAIT (Thermo-Lancer in brass/iron foundry diving helm + twin boiler)
-    // Twin boiler cylinders & smokestacks behind shoulders
-    g.shadedRect(6, 12, 11, 38, 'brass');
-    g.shadedRect(47, 12, 11, 38, 'brass');
-    g.rect(8, 8, 6, 5, 'steel', 2);
-    g.rect(50, 8, 6, 5, 'steel', 2);
-    g.rect(9, 6, 4, 3, 'ember', 3);
-    g.rect(51, 6, 4, 3, 'ember', 3);
-
-    // Heavy steel shoulders & scorched rust foundry apron
-    g.shadedRect(10, 44, 44, 20, 'steel');
-    g.shadedRect(16, 46, 32, 18, 'rust');
-    // Chest boiler gauge
-    g.circle(32, 54, 5, 'brass', 3);
-    g.circle(32, 54, 3, 'ember', 3);
-
-    //Domed Brass & Steel Foundry Helmet
-    g.shadedRect(17 + headOffX, 9, 30, 32, 'brass');
-    g.shadedRect(19 + headOffX, 12, 26, 26, 'steel');
-    // Slitted Horizontal Visor Plate
-    g.shadedRect(18 + headOffX, 20, 28, 9, 'coat');
-    if (expression === 'hurt') {
-      // Flickering cracked ember visor
-      g.rect(21 + headOffX, 23, 9, 3, 'ember', 2);
-      g.rect(34 + headOffX, 23, 9, 3, 'ember', 2);
-    } else {
-      const visorStep = expression === 'ultimate' ? 3 : 2;
-      g.rect(20 + headOffX, 22, 24, 5, 'ember', visorStep);
-      g.rect(23 + headOffX, 23, 6, 3, 'bone', 3);
-      g.rect(35 + headOffX, 23, 6, 3, 'bone', 3);
-    }
-    // Vertical breathing grille bars on chin
-    for (let vx = 23; vx <= 39; vx += 4) {
-      g.line(vx + headOffX, 31, vx + headOffX, 36, 'coat', 0, 2);
-    }
+    // KAELEN VOS — HELLFIRE DRAGOON CHIBI PORTRAIT
+    g.shadedRect(8, 16, 9, 34, 'brass');
+    g.shadedRect(47, 16, 9, 34, 'brass');
+    g.rect(10, 12, 5, 4, 'ember', 3);
+    g.rect(49, 12, 5, 4, 'ember', 3);
+    g.shadedRect(12, 44, 40, 20, 'steel');
+    g.shadedRect(18, 46, 28, 18, 'rust');
+    g.circle(32, 54, 4, 'ember', 3);
+    drawPortraitChibiFace(g, headOffX, 'chibiIrisEmber', expression);
+    // Fiery Spiky Hair & Curved Dragon Horns
+    g.shadedRect(14 + headOffX, 9, 36, 8, 'rust');
+    g.rect(20 + headOffX, 7, 24, 4, 'ember', 3);
+    g.line(16 + headOffX, 13, 8 + headOffX, 4, 'brass', 3, 3);
+    g.line(48 + headOffX, 13, 56 + headOffX, 4, 'brass', 3, 3);
+    g.rect(22 + headOffX, 13, 20, 3, 'brass', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
     ctx.drawImage(baked, 0, 0);
@@ -2107,101 +1908,49 @@ export function drawCharacterPortrait(
   }
 
   if (classId === 'vespera') {
-    // VESPERA LOCKE PORTRAIT (Arc-Drone Artificer with copper halo dynamo & volt visor)
-    // Copper Halo Dynamo ring behind head/shoulders
-    g.circle(32, 28, 24, 'brass', 2);
-    g.circle(32, 28, 20, 'coat', 0);
+    // VESPERA LOCKE — ELDRITCH SOULBINDER CHIBI PORTRAIT
+    g.circle(32, 28, 25, 'brass', 2);
+    g.circle(32, 28, 21, 'coat', 0);
     g.rect(30, 3, 4, 4, 'volt', 3);
-    g.rect(8, 26, 4, 4, 'volt', 3);
-    g.rect(52, 26, 4, 4, 'volt', 3);
-
-    // High-collared insulated dark trench coat with volt seams
-    g.shadedRect(10, 45, 44, 19, 'coat');
-    g.shadedRect(15, 38, 34, 10, 'coat'); // High collar
-    g.line(16, 40, 16, 62, 'volt', 3, 2);
-    g.line(48, 40, 48, 62, 'volt', 3, 2);
-
-    // Face
-    g.shadedRect(20 + headOffX, 16, 24, 21, 'skin');
-    // Illuminated Volt Visor Glasses
-    g.shadedRect(18 + headOffX, 22, 28, 7, 'coat');
-    const lensStep = expression === 'ultimate' ? 3 : 2;
-    g.rect(20 + headOffX, 23, 10, 5, 'volt', lensStep);
-    g.rect(34 + headOffX, 23, 10, 5, 'volt', lensStep);
-    if (expression !== 'hurt') {
-      g.rect(22 + headOffX, 24, 3, 2, 'bone', 3);
-      g.rect(36 + headOffX, 24, 3, 2, 'bone', 3);
-    }
-    g.rect(29 + headOffX, 33, 6, 1, 'coat', 0);
-
-    // Asymmetric white-blonde hair swept over right side
-    g.shadedRect(17 + headOffX, 8, 30, 9, 'bone');
-    g.shadedRect(36 + headOffX, 14, 9, 14, 'bone');
+    g.rect(7, 26, 4, 4, 'volt', 3);
+    g.rect(53, 26, 4, 4, 'volt', 3);
+    g.shadedRect(12, 44, 40, 20, 'coat');
+    g.line(22, 44, 22, 62, 'volt', 3, 2);
+    g.line(42, 44, 42, 62, 'volt', 3, 2);
+    drawPortraitChibiFace(g, headOffX, 'chibiIrisViolet', expression);
+    // Starlight-Silver Hair & Eldritch Star Diadem
+    g.shadedRect(14 + headOffX, 9, 36, 8, 'bone');
+    g.shadedRect(12 + headOffX, 15, 5, 24, 'bone');
+    g.shadedRect(46 + headOffX, 15, 6, 24, 'bone');
+    g.rect(24 + headOffX, 11, 16, 3, 'brass', 3);
+    g.rect(30 + headOffX, 7, 4, 8, 'volt', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
     ctx.drawImage(baked, 0, 0);
     return;
   }
 
-  // SENA IBUKI PORTRAIT
+  // SENA IBUKI — ABYSSAL BLADE KNIGHT CHIBI PORTRAIT
   const bodyMat =
     equipped.body === 'plateCoat'
       ? 'rust'
       : equipped.body === 'riotJacket'
       ? 'bog'
       : 'coat';
-  g.shadedRect(10, 47, 44, 17, bodyMat);
-  g.rect(13, 50, 7, 6, 'rust', 2);
-
-  if (stage >= 2 && branch === 'anvil') {
-    // Anvil welded shoulder pauldron
-    g.shadedRect(8, 44, 14, 12, 'steel');
-    if (stage >= 3) {
-      // Girder riveted chest plate
-      g.shadedRect(16, 48, 32, 16, 'steel');
-    }
-  } else if (stage >= 3 && branch === 'cutter') {
-    // Flenser leather butcher's apron
-    g.shadedRect(16, 48, 32, 16, 'rust');
-  }
-
-  // Railcut flange hilt behind right shoulder
-  g.shadedRect(47, 12, 8, 36, 'steel');
-  g.rect(48, 16, 6, 8, stage >= 2 && branch === 'cutter' ? 'blood' : 'bone', 2);
-
-  // Bone scarf around neck + stenciled rust stripe
-  g.shadedRect(14, 36, 36, 14, 'scarf');
-  g.rect(18, 44, 28, 3, 'rust', 2);
-
-  // Face
-  g.shadedRect(19 + headOffX, 16, 26, 20, 'skin');
-
-  if (expression === 'hurt') {
-    g.line(22 + headOffX, 24, 28 + headOffX, 26, 'coat', 0, 2);
-    g.line(28 + headOffX, 26, 22 + headOffX, 28, 'coat', 0, 2);
-    g.line(41 + headOffX, 24, 35 + headOffX, 26, 'coat', 0, 2);
-    g.line(35 + headOffX, 26, 41 + headOffX, 28, 'coat', 0, 2);
-  } else {
-    const eyeMat = expression === 'ultimate' ? 'signal' : 'coat';
-    const eyeStep = expression === 'ultimate' ? 3 : 0;
-    g.rect(23 + headOffX, 24, 5, 5, eyeMat, eyeStep);
-    g.rect(24 + headOffX, 25, 2, 2, 'bone', 3);
-    g.rect(36 + headOffX, 24, 5, 5, eyeMat, eyeStep);
-    g.rect(37 + headOffX, 25, 2, 2, 'bone', 3);
-  }
-
-  g.rect(29 + headOffX, 32, 6, expression === 'hurt' ? 2 : 1, 'coat', 0);
-
-  // Short uneven rust-red hair + paper clip
-  g.shadedRect(15 + headOffX, 7, 34, 10, 'hair');
-  g.shadedRect(14 + headOffX, 15, 5, 19, 'hair');
-  g.rect(14 + headOffX, 23, 6, 2, 'steel', 3);
-
-  // Cracked welding goggles pushed up on forehead
-  g.shadedRect(17 + headOffX, 9, 30, 7, 'steel');
-  g.shadedRect(20 + headOffX, 10, 10, 5, 'brass');
-  g.shadedRect(34 + headOffX, 10, 10, 5, 'brass');
-  g.line(22 + headOffX, 10, 27 + headOffX, 14, 'bone', 3, 1);
+  g.shadedRect(12, 44, 40, 20, bodyMat);
+  g.shadedRect(10, 43, 12, 10, 'steel');
+  g.shadedRect(42, 43, 12, 10, 'steel');
+  // Duskrend Greatsword Hilt behind right shoulder
+  g.shadedRect(48, 12, 7, 34, 'steel');
+  g.rect(49, 16, 5, 6, 'signal', 3);
+  drawPortraitChibiFace(g, headOffX, 'chibiIrisPink', expression);
+  // Crimson-Auburn Hair Locks & Winged Obsidian Circlet
+  g.shadedRect(14 + headOffX, 9, 36, 8, 'hair');
+  g.shadedRect(12 + headOffX, 16, 5, 22, 'hair');
+  g.shadedRect(47 + headOffX, 16, 5, 22, 'hair');
+  g.rect(20 + headOffX, 12, 24, 3, 'steel', 2);
+  g.rect(30 + headOffX, 9, 4, 6, 'brass', 3);
+  g.set(31 + headOffX, 11, 'signal', 3);
 
   const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
   ctx.drawImage(baked, 0, 0);
@@ -2209,6 +1958,70 @@ export function drawCharacterPortrait(
 
 export function drawSenaPortrait(canvas, expression = 'normal', equipped = {}, classId = 'sena', stage = 1, branch = null) {
   drawCharacterPortrait(canvas, classId, expression, equipped, stage, branch);
+}
+
+const _chibiNpcCache = {};
+
+/**
+ * Renders any Duskhollow Town Master, Wandering Merchant, or Cleansed-Territory Pilgrim
+ * using the exact 2-Head Chibi Pixel-Art Base (image_c95e226e.png).
+ */
+export function getChibiNpcCanvas(npcRole = 'forge', frameIdx = 0) {
+  const key = `${npcRole}_${frameIdx % 2}`;
+  if (_chibiNpcCache[key]) return _chibiNpcCache[key];
+
+  const g = new PixelGrid(48, 48);
+  const pose = getChibiPoseOffsets('idle', frameIdx % 2 === 0 ? 0 : 1, 'down');
+  const cx = 24;
+  const topY = 9 + pose.bobY;
+
+  const roleMap = {
+    forge: { coatMat: 'rust', legsMat: 'steel', trimMat: 'brass', capeMat: 'coat', irisMat: 'chibiIrisEmber', hairMat: 'rust', hat: 'horns' },
+    apothecary: { coatMat: 'bog', legsMat: 'coat', trimMat: 'verdigris', capeMat: 'bog', irisMat: 'chibiIrisEmerald', hairMat: 'bone', hat: 'hood' },
+    guild: { coatMat: 'coat', legsMat: 'steel', trimMat: 'brass', capeMat: 'blood', irisMat: 'chibiIrisGold', hairMat: 'bone', hat: 'crown' },
+    sanctum: { coatMat: 'coat', legsMat: 'steel', trimMat: 'volt', capeMat: 'coat', irisMat: 'chibiIrisViolet', hairMat: 'bone', hat: 'tiara' },
+    tavern: { coatMat: 'rust', legsMat: 'coat', trimMat: 'brass', capeMat: null, irisMat: 'chibiIrisPink', hairMat: 'hair', hat: 'band' },
+    gambler: { coatMat: 'olive', legsMat: 'coat', trimMat: 'volt', capeMat: 'coat', irisMat: 'chibiIrisViolet', hairMat: 'coat', hat: 'cowl' },
+    merchant: { coatMat: 'olive', legsMat: 'brass', trimMat: 'brass', capeMat: 'rust', irisMat: 'chibiIrisGold', hairMat: 'bone', hat: 'cowl' },
+    pilgrim: { coatMat: 'steel', legsMat: 'steel', trimMat: 'signal', capeMat: 'bone', irisMat: 'chibiIrisPink', hairMat: 'bone', hat: 'crown' },
+  };
+  const cfg = roleMap[npcRole] || roleMap.guild;
+
+  drawChibiLowerAndTorsoBase(g, cx, topY, pose, {
+    coatMat: cfg.coatMat,
+    legsMat: cfg.legsMat,
+    trimMat: cfg.trimMat,
+    capeMat: cfg.capeMat,
+    anim: 'idle',
+    frameIdx: frameIdx % 2,
+    dir: 'down',
+    isAttacking: false,
+  });
+
+  const { headX, headY } = drawChibiHeadBase(g, cx, topY, 'down', 'idle', 0, {
+    irisMat: cfg.irisMat,
+    hairMat: cfg.hairMat,
+    hairStyle: 'knight',
+    isUltimateEyes: false,
+  });
+
+  // Hair bangs & NPC headgear
+  g.shadedRect(headX + 1, headY - 1, 14, 4, cfg.hairMat);
+  g.shadedRect(headX, headY + 2, 2, 7, cfg.hairMat);
+  g.shadedRect(headX + 14, headY + 2, 2, 7, cfg.hairMat);
+  if (cfg.hat === 'crown') {
+    g.rect(headX + 3, headY - 2, 10, 3, 'brass', 3);
+    g.set(headX + 7, headY - 3, 'signal', 3);
+  } else if (cfg.hat === 'cowl' || cfg.hat === 'hood') {
+    g.shadedRect(headX - 1, headY - 2, 18, 4, cfg.coatMat);
+    g.rect(headX + 4, headY, 8, 1, 'brass', 3);
+  } else if (cfg.hat === 'tiara') {
+    g.rect(headX + 4, headY, 8, 2, 'volt', 3);
+  }
+
+  const canvas = g.bakeToCanvas({ selectiveOutline: true, topLeftHighlight: true });
+  _chibiNpcCache[key] = canvas;
+  return canvas;
 }
 
 /**
