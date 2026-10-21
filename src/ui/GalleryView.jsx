@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { PALETTE } from '../data/config.js';
 import { STATUSES, STATUS_ORDER } from '../data/statuses.js';
 import { bakePlayerSprites, spriteRegistry } from '../game/Sprites.js';
+import { assets } from '../game/AssetLoader.js';
 import { StatusIcon } from './PixelWidgets.jsx';
+
 
 /**
  * StripCanvas: renders an array of offscreen frame canvases horizontally
@@ -81,6 +83,7 @@ function LiveAnimCanvas({ frames, scale = 6, fps = 12 }) {
 
 export function GalleryView({ onBackToGame }) {
   const [ready, setReady] = useState(false);
+  const [assetsLoaded, setAssetsLoaded] = useState(assets.loaded);
   const [selectedClass, setSelectedClass] = useState('sena');
   const [selectedPromo, setSelectedPromo] = useState({ stage: 1, branch: null });
   const [classSheets, setClassSheets] = useState(null);
@@ -88,16 +91,33 @@ export function GalleryView({ onBackToGame }) {
 
   useEffect(() => {
     spriteRegistry.init();
-    const senaBase = bakePlayerSprites({}, 'sena', 1, null);
-    const rookBase = bakePlayerSprites({}, 'rook', 1, null);
-    const inesBase = bakePlayerSprites({}, 'ines', 1, null);
-    setBaseSilhouettes({
-      sena: senaBase.idle.silhouette[0],
-      rook: rookBase.idle.silhouette[0],
-      ines: inesBase.idle.silhouette[0],
+    assets.preloadAll();
+    const refreshGallery = () => {
+      if (assets.loaded) {
+        spriteRegistry.hydrateFromManifest();
+        setAssetsLoaded(true);
+      }
+      const senaBase = bakePlayerSprites({}, 'sena', 1, null);
+      const rookBase = bakePlayerSprites({}, 'rook', 1, null);
+      const inesBase = bakePlayerSprites({}, 'ines', 1, null);
+      const kaelenBase = bakePlayerSprites({}, 'kaelen', 1, null);
+      const vesperaBase = bakePlayerSprites({}, 'vespera', 1, null);
+      setBaseSilhouettes({
+        sena: senaBase.idle.silhouette[0],
+        rook: rookBase.idle.silhouette[0],
+        ines: inesBase.idle.silhouette[0],
+        kaelen: kaelenBase.idle.silhouette[0],
+        vespera: vesperaBase.idle.silhouette[0],
+      });
+      setClassSheets(
+        bakePlayerSprites({}, selectedClass, selectedPromo.stage, selectedPromo.branch)
+      );
+      setReady(true);
+    };
+    refreshGallery();
+    return assets.subscribe(({ loaded }) => {
+      if (loaded) refreshGallery();
     });
-    setClassSheets(senaBase);
-    setReady(true);
   }, []);
 
   useEffect(() => {
@@ -105,7 +125,7 @@ export function GalleryView({ onBackToGame }) {
     setClassSheets(
       bakePlayerSprites({}, selectedClass, selectedPromo.stage, selectedPromo.branch)
     );
-  }, [ready, selectedClass, selectedPromo]);
+  }, [ready, selectedClass, selectedPromo, assetsLoaded]);
 
   if (!ready || !classSheets) return null;
 
@@ -118,7 +138,7 @@ export function GalleryView({ onBackToGame }) {
       { label: 'Master: Girder', stage: 3, branch: 'anvil' },
     ],
     rook: [
-      { label: 'Hand:Drifter', stage: 1, branch: null },
+      { label: 'Hand: Drifter', stage: 1, branch: null },
       { label: 'Journeyman: Deadeye', stage: 2, branch: 'deadeye' },
       { label: 'Master: Longshot', stage: 3, branch: 'deadeye' },
       { label: 'Journeyman: Trapper', stage: 2, branch: 'trapper' },
@@ -131,7 +151,22 @@ export function GalleryView({ onBackToGame }) {
       { label: 'Journeyman: Slinger', stage: 2, branch: 'slinger' },
       { label: 'Master: Wrecker', stage: 3, branch: 'slinger' },
     ],
+    kaelen: [
+      { label: 'Hand: Stoker', stage: 1, branch: null },
+      { label: 'Journeyman: Slagbreaker', stage: 2, branch: 'slagbreaker' },
+      { label: 'Master: Colossus', stage: 3, branch: 'slagbreaker' },
+      { label: 'Journeyman: Pyreknight', stage: 2, branch: 'pyreknight' },
+      { label: 'Master: Hellkite', stage: 3, branch: 'pyreknight' },
+    ],
+    vespera: [
+      { label: 'Hand: Conduit', stage: 1, branch: null },
+      { label: 'Journeyman:weaver', stage: 2, branch: 'weaver' },
+      { label: 'Master: Seraph', stage: 3, branch: 'weaver' },
+      { label: 'Journeyman: Stormcaller', stage: 2, branch: 'stormcaller' },
+      { label: 'Master: Archon', stage: 3, branch: 'stormcaller' },
+    ],
   };
+
 
   const animStrips = [
     { key: 'idle', label: 'Idle (4f · Breathing + Sway + Blink)' },
@@ -296,6 +331,8 @@ export function GalleryView({ onBackToGame }) {
     { name: 'Sena (Melee)', canvas: baseSilhouettes.sena },
     { name: 'Rook (Ranged)', canvas: baseSilhouettes.rook },
     { name: 'Ines (Mage)', canvas: baseSilhouettes.ines },
+    { name: 'Kaelen (Dragoon)', canvas: baseSilhouettes.kaelen },
+    { name: 'Vespera (Soulbinder)', canvas: baseSilhouettes.vespera },
     ...enemyEntries.map((e) => ({
       name: e.id,
       canvas: spriteRegistry.enemies[e.id]?.silhouette[0],
@@ -312,7 +349,9 @@ export function GalleryView({ onBackToGame }) {
               HELLSADVENT · SPRITE, CLASS, FUSION, &amp; STATUS GALLERY (?gallery)
             </h1>
             <p className="text-xs text-[#9E9789] mt-1">
-              Every character class, promotion overlay, status icon, and all 29 enemy &amp; fusion sprites rendered from code at 1x and 6x on soot (#0B0D10).
+              {assetsLoaded
+                ? `Loaded ${Object.keys(assets.manifest?.assets || {}).length} generated pixel-art assets from /assets/manifest.json & /assets/atlas_0.png.`
+                : 'Loading generated pixel-art assets from /assets/manifest.json...'}
             </p>
           </div>
           <button
@@ -327,7 +366,7 @@ export function GalleryView({ onBackToGame }) {
         <section className="bg-[#161A20] border-2 border-[#3A3F47] p-5 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-[#FFC83D] tracking-wider uppercase">
-              1. SOLID BLACK SILHOUETTE RECOGNITION ROW (SENA, ROOK, INES + ALL 29 ENEMIES &amp; FUSIONS)
+              1. SOLID BLACK SILHOUETTE RECOGNITION ROW (ALL 5 CLASSES + ALL 29 ENEMIES &amp; FUSIONS)
             </h2>
             <span className="text-xs text-[#9E9789]">
               Every character and enemy is uniquely identifiable from its silhouette alone.
@@ -353,11 +392,11 @@ export function GalleryView({ onBackToGame }) {
           </div>
         </section>
 
-        {/* SECTION 2: THREE PLAYABLE CLASSES & PROMOTION OVERLAYS */}
+        {/* SECTION 2: FIVE PLAYABLE CLASSES & PROMOTION OVERLAYS */}
         <section className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#3A3F47] pb-2">
             <h2 className="text-sm font-bold text-[#00F0FF] tracking-wider uppercase">
-              2. PLAYABLE CLASSES &amp; PROMOTION OVERLAYS (48x48 · 1x &amp; 6x STRIPS ON SOOT)
+              2. PLAYABLE CLASSES &amp; PROMOTION OVERLAYS (64x64 · 1x &amp; 4x STRIPS ON SOOT)
             </h2>
 
             {/* Class & Promotion Selector */}
@@ -366,6 +405,8 @@ export function GalleryView({ onBackToGame }) {
                 { id: 'sena', label: 'SENA IBUKI (MELEE)', color: PALETTE.signal },
                 { id: 'rook', label: 'ROOK MATSUDA (RANGED)', color: PALETTE.brass },
                 { id: 'ines', label: 'INES CALLOWAY (MAGE)', color: PALETTE.verdigris },
+                { id: 'kaelen', label: 'KAELEN VOS (DRAGOON)', color: PALETTE.ember },
+                { id: 'vespera', label: 'VESPERA LOCKE (SOULBINDER)', color: PALETTE.volt },
               ].map((c) => (
                 <button
                   key={c.id}
@@ -389,7 +430,7 @@ export function GalleryView({ onBackToGame }) {
           {/* Stage / Branch Tabs for Selected Class */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-[#9E9789] mr-2">PROMOTION VISUAL OVERLAY:</span>
-            {promoOptionsByClass[selectedClass].map((opt) => {
+            {(promoOptionsByClass[selectedClass] || promoOptionsByClass.sena).map((opt) => {
               const active =
                 selectedPromo.stage === opt.stage && selectedPromo.branch === opt.branch;
               return (
@@ -407,6 +448,7 @@ export function GalleryView({ onBackToGame }) {
               );
             })}
           </div>
+
 
           {/* 4 Facing Directions + Cut-In Strip */}
           <div className="p-4 bg-[#161A20] border border-[#3A3F47] flex flex-wrap items-center gap-8">

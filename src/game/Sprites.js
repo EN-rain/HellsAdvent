@@ -11,6 +11,7 @@ import {
   bake8AngleFrames,
   MATERIAL_RAMPS,
 } from './PixelArt.js';
+import { assets } from './AssetLoader.js';
 
 /**
  * UNIFIED 2-HEAD CHIBI PIXEL-ART BASE TEMPLATE (Modeled on /public/assets/aistudio/image_c95e226e.png)
@@ -816,6 +817,86 @@ export function buildVesperaFrameGrid(anim, frameIdx, dir = 'right', equipped = 
   return g;
 }
 
+function extractDitherCanvas(baseCanvas, color, density) {
+  if (!baseCanvas) return null;
+  const c = document.createElement('canvas');
+  c.width = baseCanvas.width;
+  c.height = baseCanvas.height;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(baseCanvas, 0, 0);
+  const imgData = ctx.getImageData(0, 0, c.width, c.height);
+  const data = imgData.data;
+  const hex = (color || '#00F0FF').replace('#', '');
+  const cr = parseInt(hex.slice(0, 2), 16) || 0;
+  const cg = parseInt(hex.slice(2, 4), 16) || 240;
+  const cb = parseInt(hex.slice(4, 6), 16) || 255;
+  for (let y = 0; y < c.height; y++) {
+    for (let x = 0; x < c.width; x++) {
+      const idx = (y * c.width + x) * 4;
+      if (data[idx + 3] < 20) {
+        data[idx + 3] = 0;
+        continue;
+      }
+      const bayer = ((x & 1) * 2 + (y & 1)) / 4;
+      if (bayer < density) {
+        data[idx] = cr;
+        data[idx + 1] = cg;
+        data[idx + 2] = cb;
+        data[idx + 3] = 255;
+      } else {
+        data[idx + 3] = 0;
+      }
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  return c;
+}
+
+function getManifestPlayerFrame(classId, anim, f, dir) {
+  if (!assets.loaded) return null;
+  const mirrorX = dir === 'left';
+  const dirSuffix = dir === 'up' ? 'up' : dir === 'down' ? 'down' : 'side';
+
+  let stripId = null;
+  let frameIndex = f;
+  if (anim === 'idle') {
+    stripId = `${classId}_idle_${dirSuffix}`;
+    frameIndex = f % 2;
+  } else if (anim === 'run') {
+    stripId = `${classId}_run_${dirSuffix}`;
+    frameIndex = f % 6;
+  } else if (anim === 'attack1' || anim === 'attack2' || anim === 'attack3') {
+    stripId = `${classId}_${anim}_${dirSuffix}`;
+    frameIndex = Math.min(2, f);
+  } else if (anim === 'hurt') {
+    stripId = `${classId}_hurt_${dirSuffix}`;
+    frameIndex = 0;
+  } else if (anim === 'dodge') {
+    stripId = `${classId}_dodge_side`;
+    frameIndex = Math.min(3, f);
+  } else if (anim === 'death') {
+    stripId = `${classId}_death_side`;
+    frameIndex = Math.min(3, f);
+  }
+
+  if (stripId) {
+    const c = assets.getFrameCanvas(stripId, frameIndex, mirrorX);
+    if (c) return c;
+  }
+
+  // Fallback to <classId>_sheet (384x128: row 0 = idle, row 1 = run) for idle & run states
+  if (anim === 'idle' || anim === 'run') {
+    const sheetId = `${classId}_sheet`;
+    const row = anim === 'idle' ? 0 : 1;
+    const col = anim === 'idle' ? f % 4 : f % 6;
+    const sheetFrame = assets.getGridFrameCanvas(sheetId, col, row, 64, 64, mirrorX);
+    if (sheetFrame) return sheetFrame;
+  }
+
+  return null;
+}
+
 export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, branch = null) {
   const animDefs = {
     idle: 4,
@@ -863,6 +944,38 @@ export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, br
       for (const dir of directions) {
         const baseDir = dir === 'left' ? 'right' : dir;
         const mirrorX = dir === 'left';
+        const manifestCanvas = getManifestPlayerFrame(classId, anim, f, dir);
+
+        if (manifestCanvas) {
+          sheets[anim][dir].push(manifestCanvas);
+          if (dir === 'right') {
+            const leftCanvas = getManifestPlayerFrame(classId, anim, f, 'left') || manifestCanvas;
+            const makeSolid = (srcCanvas, color) => {
+              const sc = document.createElement('canvas');
+              sc.width = srcCanvas.width;
+              sc.height = srcCanvas.height;
+              const sctx = sc.getContext('2d');
+              sctx.imageSmoothingEnabled = false;
+              sctx.drawImage(srcCanvas, 0, 0);
+              sctx.globalCompositeOperation = 'source-in';
+              sctx.fillStyle = color;
+              sctx.fillRect(0, 0, sc.width, sc.height);
+              sctx.globalCompositeOperation = 'source-over';
+              return sc;
+            };
+            sheets[anim].whiteRight.push(makeSolid(manifestCanvas, PALETTE.bone));
+            sheets[anim].whiteLeft.push(makeSolid(leftCanvas, PALETTE.bone));
+            sheets[anim].silhouette.push(makeSolid(manifestCanvas, '#000000'));
+            sheets[anim].dither60Right.push(extractDitherCanvas(manifestCanvas, accentColor, 0.6));
+            sheets[anim].dither35Right.push(extractDitherCanvas(manifestCanvas, accentColor, 0.35));
+            sheets[anim].dither15Right.push(extractDitherCanvas(manifestCanvas, accentColor, 0.15));
+            sheets[anim].dither60Left.push(extractDitherCanvas(leftCanvas, accentColor, 0.6));
+            sheets[anim].dither35Left.push(extractDitherCanvas(leftCanvas, accentColor, 0.35));
+            sheets[anim].dither15Left.push(extractDitherCanvas(leftCanvas, accentColor, 0.15));
+          }
+          continue;
+        }
+
         let grid;
         if (classId === 'rook') {
           grid = buildRookFrameGrid(anim, f, baseDir, equipped, false);
@@ -918,6 +1031,7 @@ export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, br
 
   return sheets;
 }
+
 
 /**
  * ENEMY SPRITE PIPELINE
@@ -1445,40 +1559,41 @@ class SpriteRegistry {
     this.initialized = true;
 
     const enemyDefs = [
-      // 9 Commons
-      { id: 'tinRat', tier: 'common', frames: 2 },
-      { id: 'dustDog', tier: 'common', frames: 4 },
-      { id: 'wireKite', tier: 'common', frames: 4 },
-      { id: 'lyeLeech', tier: 'common', frames: 3 },
-      { id: 'sumpBat', tier: 'common', frames: 3 },
-      { id: 'rivetTick', tier: 'common', frames: 2 },
-      { id: 'signalMite', tier: 'common', frames: 2 },
-      { id: 'siltMimic', tier: 'common', frames: 2 },
-      { id: 'cinderCrow', tier: 'common', frames: 2 },
-      // 7 Elites
-      { id: 'cleaverHauler', tier: 'elite', frames: 2 },
-      { id: 'lyeStrider', tier: 'elite', frames: 2 },
-      { id: 'flatsHarvester', tier: 'elite', frames: 3 },
-      { id: 'plateMarshal', tier: 'elite', frames: 2 },
-      { id: 'switchbackDriver', tier: 'elite', frames: 2 },
-      { id: 'sumpCantor', tier: 'elite', frames: 2 },
-      { id: 'boreSentinel', tier: 'elite', frames: 2 },
-      // 9 Fusion Mid-Bosses
-      { id: 'scrapRatKing', tier: 'fusionBoss', frames: 2 },
-      { id: 'bonepackAlpha', tier: 'fusionBoss', frames: 2 },
-      { id: 'wireCyclone', tier: 'fusionBoss', frames: 2 },
-      { id: 'brineMaw', tier: 'fusionBoss', frames: 2 },
-      { id: 'screechChoir', tier: 'fusionBoss', frames: 2 },
-      { id: 'rivetTitan', tier: 'fusionBoss', frames: 2 },
-      { id: 'relayColossus', tier: 'fusionBoss', frames: 2 },
-      { id: 'dredgeHusk', tier: 'fusionBoss', frames: 2 },
-      { id: 'blackwingFurnace', tier: 'fusionBoss', frames: 2 },
-      // 4 Primary Bosses
-      { id: 'theForeman', tier: 'boss', frames: 2 },
-      { id: 'bigAxle', tier: 'boss', frames: 2 },
-      { id: 'motherSump', tier: 'boss', frames: 2 },
-      { id: 'theLongDry', tier: 'boss', frames: 2 },
+      // 9 Commons (5 frames each in manifest: 0,1 walk, 2 tell, 3 hit, 4 death)
+      { id: 'tinRat', manifestId: 'tin_rat', tier: 'common', frames: 2 },
+      { id: 'dustDog', manifestId: 'dust_dog', tier: 'common', frames: 4 },
+      { id: 'wireKite', manifestId: 'wire_kite', tier: 'common', frames: 4 },
+      { id: 'lyeLeech', manifestId: 'lye_leech', tier: 'common', frames: 3 },
+      { id: 'sumpBat', manifestId: 'sump_bat', tier: 'common', frames: 3 },
+      { id: 'rivetTick', manifestId: 'rivet_tick', tier: 'common', frames: 2 },
+      { id: 'signalMite', manifestId: 'signal_mite', tier: 'common', frames: 2 },
+      { id: 'siltMimic', manifestId: 'silt_mimic', tier: 'common', frames: 2 },
+      { id: 'cinderCrow', manifestId: 'cinder_crow', tier: 'common', frames: 2 },
+      // 7 Elites (7 frames each in manifest: 0,1 walk, 2,3 tell, 4 active, 5 hit, 6 death)
+      { id: 'cleaverHauler', manifestId: 'cleaver_hauler', tier: 'elite', frames: 2 },
+      { id: 'lyeStrider', manifestId: 'lye_strider', tier: 'elite', frames: 2 },
+      { id: 'flatsHarvester', manifestId: 'flats_harvester', tier: 'elite', frames: 3 },
+      { id: 'plateMarshal', manifestId: 'plate_marshal', tier: 'elite', frames: 2 },
+      { id: 'switchbackDriver', manifestId: 'switchback_driver', tier: 'elite', frames: 2 },
+      { id: 'sumpCantor', manifestId: 'sump_cantor', tier: 'elite', frames: 2 },
+      { id: 'boreSentinel', manifestId: 'bore_sentinel', tier: 'elite', frames: 2 },
+      // 9 Fusion Mid-Bosses (use base common manifest sprites with fusionBoss brass/signal rims)
+      { id: 'scrapRatKing', manifestId: 'tin_rat', tier: 'fusionBoss', frames: 2 },
+      { id: 'bonepackAlpha', manifestId: 'dust_dog', tier: 'fusionBoss', frames: 2 },
+      { id: 'wireCyclone', manifestId: 'wire_kite', tier: 'fusionBoss', frames: 2 },
+      { id: 'brineMaw', manifestId: 'lye_leech', tier: 'fusionBoss', frames: 2 },
+      { id: 'screechChoir', manifestId: 'sump_bat', tier: 'fusionBoss', frames: 2 },
+      { id: 'rivetTitan', manifestId: 'rivet_tick', tier: 'fusionBoss', frames: 2 },
+      { id: 'relayColossus', manifestId: 'signal_mite', tier: 'fusionBoss', frames: 2 },
+      { id: 'dredgeHusk', manifestId: 'silt_mimic', tier: 'fusionBoss', frames: 2 },
+      { id: 'blackwingFurnace', manifestId: 'cinder_crow', tier: 'fusionBoss', frames: 2 },
+      // 4 Primary Bosses (9 frames each in manifest)
+      { id: 'theForeman', manifestId: 'the_foreman', tier: 'boss', frames: 2 },
+      { id: 'bigAxle', manifestId: 'big_axle', tier: 'boss', frames: 2 },
+      { id: 'motherSump', manifestId: 'mother_sump', tier: 'boss', frames: 2 },
+      { id: 'theLongDry', manifestId: 'the_long_dry', tier: 'boss', frames: 2 },
     ];
+    this.enemyDefs = enemyDefs;
 
     for (const def of enemyDefs) {
       const entry = {
@@ -1495,6 +1610,10 @@ class SpriteRegistry {
         whiteRight: [],
         whiteLeft: [],
         silhouette: [],
+        hitRight: null,
+        hitLeft: null,
+        deathRight: null,
+        deathLeft: null,
       };
 
       for (let f = 0; f < def.frames; f++) {
@@ -1554,46 +1673,38 @@ class SpriteRegistry {
 
     // Pre-render 8 Scrap Orbit variants at 12x12 with 8 angles each for Ines
     const scrapDrawers = [
-      // 0: Hex Bolt
       (g) => {
         g.shadedRect(2, 4, 8, 4, 'steel');
         g.shadedRect(2, 3, 3, 6, 'brass');
       },
-      // 1: Hubcap
       (g) => {
         g.circle(6, 6, 4, 'steel', 3);
         g.circle(6, 6, 2, 'verdigris', 3);
       },
-      // 2: Toothed Gear
       (g) => {
         g.circle(6, 6, 4, 'brass', 2);
         g.rect(5, 1, 2, 10, 'brass', 3);
         g.rect(1, 5, 10, 2, 'brass', 3);
         g.set(6, 6, 'coat', 0);
       },
-      // 3: Pipe End
       (g) => {
         g.shadedRect(2, 3, 8, 6, 'rust');
         g.shadedRect(8, 2, 2, 8, 'steel');
       },
-      // 4: Copper Coil Ring
       (g) => {
         g.circle(6, 6, 4, 'rust', 3);
         g.set(6, 3, 'verdigris', 3);
       },
-      // 5: Wrench Head
       (g) => {
         g.shadedRect(2, 5, 6, 3, 'steel');
         g.rect(7, 3, 3, 2, 'bone', 3);
         g.rect(7, 7, 3, 2, 'bone', 3);
       },
-      // 6: Rivet Plate
       (g) => {
         g.shadedRect(2, 2, 8, 8, 'steel');
         g.set(4, 4, 'brass', 3);
         g.set(7, 7, 'brass', 3);
       },
-      // 7: Magnetized Shard
       (g) => {
         g.line(2, 8, 9, 3, 'steel', 3, 3);
         g.set(9, 3, 'verdigris', 3);
@@ -1644,6 +1755,159 @@ class SpriteRegistry {
       kaelen: bakePlayerSprites({}, 'kaelen', 1, null),
       vespera: bakePlayerSprites({}, 'vespera', 1, null),
     };
+
+    if (assets.loaded) {
+      this.hydrateFromManifest();
+    }
+  }
+
+  /**
+   * Hydrates all enemy strips, projectiles (rail_spike), shards (fx_shards),
+   * ultimate_cutin, NPC caches, and baseClassSheets directly from the loaded manifest/atlas.
+   */
+  hydrateFromManifest() {
+    if (!assets.loaded) return;
+    if (!this.initialized) this.init();
+
+    // 1. Hydrate all 29 enemy/elite/fusionBoss/boss entries from manifest strips
+    for (const def of this.enemyDefs || []) {
+      const mId = def.manifestId;
+      const spec = mId ? assets.getSpec(mId) : null;
+      if (!spec) continue;
+
+      const f0Right = assets.getFrameCanvas(mId, 0, false);
+      if (!f0Right) continue;
+
+      const baseRim =
+        def.tier === 'elite'
+          ? PALETTE.blood
+          : def.tier === 'fusionBoss'
+          ? PALETTE.brass
+          : null;
+      const pulseRim =
+        def.tier === 'elite'
+          ? MATERIAL_RAMPS.blood[1]
+          : def.tier === 'fusionBoss'
+          ? PALETTE.signal
+          : null;
+
+      const entry = {
+        right: [],
+        left: [],
+        elitePulseRight: [],
+        elitePulseLeft: [],
+        tellRight: [],
+        tellLeft: [],
+        stunRight: [],
+        stunLeft: [],
+        brassRimRight: [],
+        brassRimLeft: [],
+        whiteRight: [],
+        whiteLeft: [],
+        silhouette: [],
+        hitRight: null,
+        hitLeft: null,
+        deathRight: null,
+        deathLeft: null,
+      };
+
+      const walkCount = Math.max(2, def.frames);
+      for (let i = 0; i < walkCount; i++) {
+        const walkFrameIdx = i % 2;
+        const tellFrameIdx = spec.frameCount >= 4 ? 2 + (i % 2) : Math.min(spec.frameCount - 1, 2);
+
+        const rWalk = baseRim
+          ? assets.getOutlinedFrame(mId, walkFrameIdx, false, baseRim)
+          : assets.getFrameCanvas(mId, walkFrameIdx, false);
+        const lWalk = baseRim
+          ? assets.getOutlinedFrame(mId, walkFrameIdx, true, baseRim)
+          : assets.getFrameCanvas(mId, walkFrameIdx, true);
+
+        const rPulse = pulseRim
+          ? assets.getOutlinedFrame(mId, walkFrameIdx, false, pulseRim)
+          : rWalk;
+        const lPulse = pulseRim
+          ? assets.getOutlinedFrame(mId, walkFrameIdx, true, pulseRim)
+          : lWalk;
+
+        const rTell = baseRim
+          ? assets.getOutlinedFrame(mId, tellFrameIdx, false, baseRim)
+          : assets.getFrameCanvas(mId, tellFrameIdx, false);
+        const lTell = baseRim
+          ? assets.getOutlinedFrame(mId, tellFrameIdx, true, baseRim)
+          : assets.getFrameCanvas(mId, tellFrameIdx, true);
+
+        entry.right.push(rWalk);
+        entry.left.push(lWalk);
+        entry.elitePulseRight.push(rPulse);
+        entry.elitePulseLeft.push(lPulse);
+        entry.tellRight.push(rTell);
+        entry.tellLeft.push(lTell);
+        entry.stunRight.push(assets.getOutlinedFrame(mId, walkFrameIdx, false, PALETTE.signal));
+        entry.stunLeft.push(assets.getOutlinedFrame(mId, walkFrameIdx, true, PALETTE.signal));
+        entry.brassRimRight.push(assets.getOutlinedFrame(mId, walkFrameIdx, false, PALETTE.brass));
+        entry.brassRimLeft.push(assets.getOutlinedFrame(mId, walkFrameIdx, true, PALETTE.brass));
+        entry.whiteRight.push(assets.getTintedFrame(mId, walkFrameIdx, false, PALETTE.bone));
+        entry.whiteLeft.push(assets.getTintedFrame(mId, walkFrameIdx, true, PALETTE.bone));
+        entry.silhouette.push(assets.getTintedFrame(mId, walkFrameIdx, false, '#000000'));
+      }
+
+      const hitIdx = spec.frameCount >= 7 ? 5 : spec.frameCount >= 5 ? 3 : 0;
+      const deathIdx = spec.frameCount - 1;
+      entry.hitRight = assets.getFrameCanvas(mId, hitIdx, false);
+      entry.hitLeft = assets.getFrameCanvas(mId, hitIdx, true);
+      entry.deathRight = assets.getFrameCanvas(mId, deathIdx, false);
+      entry.deathLeft = assets.getFrameCanvas(mId, deathIdx, true);
+
+      this.enemies[def.id] = entry;
+    }
+
+    // 2. Hydrate 8-angle rail_spike from manifest
+    const spikeBase = assets.getFrameCanvas('rail_spike', 0, false);
+    if (spikeBase) {
+      const rotated = [];
+      for (let a = 0; a < 8; a++) {
+        const rc = document.createElement('canvas');
+        rc.width = 16;
+        rc.height = 16;
+        const rctx = rc.getContext('2d');
+        rctx.imageSmoothingEnabled = false;
+        rctx.translate(8, 8);
+        rctx.rotate((a * Math.PI) / 4);
+        rctx.drawImage(spikeBase, -8, -8);
+        rotated.push(rc);
+      }
+      this.railSpikeAngles = rotated;
+    }
+
+    // 3. Hydrate fx_shards (6 frames of 16x16) into scrapVariants & debrisParts
+    const shardSpec = assets.getSpec('fx_shards');
+    if (shardSpec) {
+      const shardFrames = [];
+      for (let s = 0; s < shardSpec.frameCount; s++) {
+        const sc = assets.getFrameCanvas('fx_shards', s, false);
+        if (sc) shardFrames.push(sc);
+      }
+      if (shardFrames.length > 0) {
+        this.scrapVariants = Array.from({ length: 8 }, (_, i) => shardFrames[i % shardFrames.length]);
+      }
+    }
+
+    // 4. Hydrate ultimate_cutin (320x90) for Sena
+    const cutinManifest = assets.getFrameCanvas('ultimate_cutin', 0, false);
+    if (cutinManifest) {
+      this.cutInCanvases.sena = cutinManifest;
+      this.cutInCanvas = cutinManifest;
+    }
+
+    // 5. Rebuild baseClassSheets with manifest player sprites & class sheets
+    this.baseClassSheets = {
+      sena: bakePlayerSprites({}, 'sena', 1, null),
+      rook: bakePlayerSprites({}, 'rook', 1, null),
+      ines: bakePlayerSprites({}, 'ines', 1, null),
+      kaelen: bakePlayerSprites({}, 'kaelen', 1, null),
+      vespera: bakePlayerSprites({}, 'vespera', 1, null),
+    };
   }
 
   getCutIn(classId = 'sena') {
@@ -1664,14 +1928,12 @@ class SpriteRegistry {
     cctx.fillRect(0, 0, 64, 16);
 
     if (classId === 'kaelen') {
-      // Kaelen: Slitted brass foundry helmet visor blazing with pressurized white-hot ember fire
       cctx.fillStyle = MATERIAL_RAMPS.brass[2];
       cctx.fillRect(6, 1, 52, 14);
       cctx.fillStyle = MATERIAL_RAMPS.steel[1];
       cctx.fillRect(10, 4, 44, 8);
       cctx.fillStyle = PALETTE.soot;
       cctx.fillRect(12, 5, 40, 6);
-      // Blazing ember visor slit + twin furnace glare points
       cctx.fillStyle = PALETTE.ember;
       cctx.fillRect(14, 6, 36, 4);
       cctx.fillStyle = PALETTE.brass;
@@ -1684,12 +1946,10 @@ class SpriteRegistry {
     }
 
     if (classId === 'vespera') {
-      // Vespera: Illuminated volt-green visor glasses with electric arc telemetry & white-blonde hair
       cctx.fillStyle = PALETTE.bone;
       cctx.fillRect(4, 0, 56, 4);
       cctx.fillStyle = MATERIAL_RAMPS.skin[2];
       cctx.fillRect(12, 4, 40, 11);
-      // Sleek angular volt visor glasses
       cctx.fillStyle = PALETTE.soot;
       cctx.fillRect(14, 4, 36, 8);
       cctx.fillStyle = PALETTE.volt;
@@ -1702,12 +1962,10 @@ class SpriteRegistry {
     }
 
     if (classId === 'rook') {
-      // Rook: Single eye behind the brass rangefinder monocle, brass flash
       cctx.fillStyle = MATERIAL_RAMPS.olive[2];
       cctx.fillRect(0, 0, 64, 4);
       cctx.fillStyle = MATERIAL_RAMPS.skin[2];
       cctx.fillRect(10, 4, 44, 10);
-      // Brass monocle ring over left side (x=18..32)
       cctx.fillStyle = PALETTE.brass;
       cctx.fillRect(17, 3, 14, 11);
       cctx.fillStyle = PALETTE.soot;
@@ -1716,28 +1974,23 @@ class SpriteRegistry {
       cctx.fillRect(21, 6, 6, 5);
       cctx.fillStyle = '#FFFFFF';
       cctx.fillRect(23, 7, 2, 2);
-      // Crosshair tick lines inside monocle
       cctx.fillStyle = PALETTE.bone;
       cctx.fillRect(15, 8, 18, 1);
-      // Right eye narrowed
       cctx.fillStyle = PALETTE.soot;
       cctx.fillRect(39, 7, 9, 2);
       return c;
     }
 
     if (classId === 'ines') {
-      // Ines: Eyes behind safety goggles, verdigris magnetic light
       cctx.fillStyle = PALETTE.soot;
       cctx.fillRect(0, 0, 64, 16);
       cctx.fillStyle = MATERIAL_RAMPS.skin[2];
       cctx.fillRect(12, 3, 40, 11);
-      // Heavy safety goggle frames
       cctx.fillStyle = MATERIAL_RAMPS.steel[2];
       cctx.fillRect(15, 4, 34, 9);
       cctx.fillStyle = PALETTE.soot;
       cctx.fillRect(17, 5, 12, 7);
       cctx.fillRect(35, 5, 12, 7);
-      // Verdigris glowing eyes inside goggles
       cctx.fillStyle = PALETTE.verdigris;
       cctx.fillRect(20, 6, 6, 5);
       cctx.fillRect(38, 6, 6, 5);
@@ -1747,7 +2000,6 @@ class SpriteRegistry {
       return c;
     }
 
-    // Default Sena: Rust hair locks framing face + Signal cyan eyes
     cctx.fillStyle = PALETTE.rust;
     cctx.fillRect(0, 0, 64, 3);
     cctx.fillRect(4, 3, 10, 13);
@@ -1773,25 +2025,21 @@ class SpriteRegistry {
 export const spriteRegistry = new SpriteRegistry();
 
 /**
- * 64x64 Chibi Anime Portrait Renderer for Sena, Rook, Ines, Kaelen, and Vespera
- * Modeled on /public/assets/aistudio/image_c95e226e.png:
- * - Rounded chibi cranium, prominent side ears, soft cheek blush, vertical anime eyes with thick upper lash & 1x2px highlight
+ * 64x64 / 96x96 Character Portrait Renderer for Sena, Rook, Ines, Kaelen, and Vespera
+ * Uses the generated 96x96 pixel-art portraits when loaded, with procedural fallback.
  */
 function drawPortraitChibiFace(g, headOffX, irisMat, expression) {
-  // Prominent Chibi Side Ears
   g.shadedRect(10 + headOffX, 24, 5, 10, 'chibiSkin');
   g.rect(12 + headOffX, 27, 2, 4, 'chibiBlush', 1);
   g.shadedRect(49 + headOffX, 24, 5, 10, 'chibiSkin');
   g.rect(50 + headOffX, 27, 2, 4, 'chibiBlush', 1);
 
-  // Rounded Chibi Head & Neck
   g.shadedRect(27 + headOffX, 40, 10, 6, 'chibiSkin');
   g.shadedRect(16 + headOffX, 14, 32, 28, 'chibiSkin');
   g.shadedRect(14 + headOffX, 17, 36, 22, 'chibiSkin');
   g.rect(18 + headOffX, 17, 28, 22, 'chibiSkin', 2);
   g.rect(20 + headOffX, 16, 24, 7, 'chibiSkin', 3);
 
-  // Cheek Blush
   g.rect(18 + headOffX, 33, 4, 2, 'chibiBlush', 2);
   g.rect(42 + headOffX, 33, 4, 2, 'chibiBlush', 2);
 
@@ -1803,21 +2051,18 @@ function drawPortraitChibiFace(g, headOffX, irisMat, expression) {
     g.rect(29 + headOffX, 36, 6, 2, 'chibiOutline', 0);
   } else {
     const activeIris = expression === 'ultimate' ? 'signal' : irisMat;
-    // Left Vertical Chibi Anime Eye (6x8px scaled for 64x64 portrait)
-    g.rect(20 + headOffX, 24, 8, 2, 'chibiOutline', 0); // Thick upper lash
+    g.rect(20 + headOffX, 24, 8, 2, 'chibiOutline', 0);
     g.rect(21 + headOffX, 26, 6, 6, activeIris, 2);
     g.rect(23 + headOffX, 26, 4, 3, activeIris, 1);
-    g.rect(21 + headOffX, 26, 2, 4, 'chibiIrisPink', 3); // Crisp vertical white highlight
+    g.rect(21 + headOffX, 26, 2, 4, 'chibiIrisPink', 3);
     g.rect(23 + headOffX, 30, 3, 2, activeIris, 3);
 
-    // Right Vertical Chibi Anime Eye
-    g.rect(36 + headOffX, 24, 8, 2, 'chibiOutline', 0); // Thick upper lash
+    g.rect(36 + headOffX, 24, 8, 2, 'chibiOutline', 0);
     g.rect(37 + headOffX, 26, 6, 6, activeIris, 2);
     g.rect(39 + headOffX, 26, 4, 3, activeIris, 1);
-    g.rect(37 + headOffX, 26, 2, 4, 'chibiIrisPink', 3); // Crisp vertical white highlight
+    g.rect(37 + headOffX, 26, 2, 4, 'chibiIrisPink', 3);
     g.rect(39 + headOffX, 30, 3, 2, activeIris, 3);
 
-    // Eyebrows & mouth
     g.line(21 + headOffX, 21, 26 + headOffX, 21, 'chibiOutline', 1, 1);
     g.line(38 + headOffX, 21, 43 + headOffX, 21, 'chibiOutline', 1, 1);
     g.rect(30 + headOffX, 36, 4, 1, 'chibiOutline', 1);
@@ -1835,7 +2080,34 @@ export function drawCharacterPortrait(
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0, 0, 64, 64);
+  const cw = canvas.width || 64;
+  const ch = canvas.height || 64;
+  ctx.clearRect(0, 0, cw, ch);
+
+  if (assets.loaded) {
+    let portraitId = `${classId}_neutral`;
+    if (expression === 'hurt') portraitId = `${classId}_hurt`;
+    else if (expression === 'ultimate') portraitId = `${classId}_ultimate`;
+    else if (expression === 'determined') portraitId = `${classId}_determined`;
+
+    const manifestPortrait =
+      assets.getFrameCanvas(portraitId, 0, false) ||
+      (expression === 'normal' ? assets.getFrameCanvas(`${classId}_neutral`, 0, false) : null);
+    if (manifestPortrait) {
+      ctx.drawImage(
+        manifestPortrait,
+        0,
+        0,
+        manifestPortrait.width,
+        manifestPortrait.height,
+        0,
+        0,
+        cw,
+        ch
+      );
+      return;
+    }
+  }
 
   const g = new PixelGrid(64, 64);
   g.rect(0, 0, 64, 64, 'coat', 0);
@@ -1843,28 +2115,24 @@ export function drawCharacterPortrait(
   const headOffX = expression === 'hurt' ? -2 : 0;
 
   if (classId === 'rook') {
-    // ROOK MATSUDA — INQUISITOR MARKSMAN CHIBI PORTRAIT
     g.shadedRect(12, 44, 40, 20, 'olive');
     g.line(16, 45, 46, 62, 'bone', 2, 4);
     g.rect(22, 49, 4, 4, 'brass', 3);
     g.rect(32, 54, 4, 4, 'brass', 3);
     drawPortraitChibiFace(g, headOffX, 'chibiIrisGold', expression);
-    // Inquisitor Brass Targeting Monocle Rim over left eye
     g.rect(19 + headOffX, 23, 10, 1, 'brass', 3);
     g.rect(19 + headOffX, 32, 10, 1, 'brass', 3);
-    // Ash-Silver Bangs & Pointed Witch-Hunter Hat
     g.shadedRect(15 + headOffX, 12, 34, 6, 'bone');
     g.shadedRect(10 + headOffX, 9, 44, 5, 'olive');
     g.shadedRect(18 + headOffX, 3, 28, 7, 'coat');
     g.rect(20 + headOffX, 8, 24, 2, 'brass', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
-    ctx.drawImage(baked, 0, 0);
+    ctx.drawImage(baked, 0, 0, 64, 64, 0, 0, cw, ch);
     return;
   }
 
   if (classId === 'ines') {
-    // INES CALLOWAY — OSSUARY NECROMANCER CHIBI PORTRAIT
     g.shadedRect(8, 18, 8, 32, 'bone');
     g.shadedRect(48, 18, 8, 32, 'bone');
     g.shadedRect(9, 14, 6, 5, 'verdigris');
@@ -1872,7 +2140,6 @@ export function drawCharacterPortrait(
     g.shadedRect(12, 44, 40, 20, 'coat');
     g.shadedRect(20, 46, 24, 18, 'bone');
     drawPortraitChibiFace(g, headOffX, 'chibiIrisEmerald', expression);
-    // Bone-White & Ebon Twin Locks + Skull Hairpins
     g.shadedRect(14 + headOffX, 9, 36, 8, 'coat');
     g.line(18 + headOffX, 11, 44 + headOffX, 14, 'bone', 3, 3);
     g.shadedRect(12 + headOffX, 16, 5, 24, 'bone');
@@ -1881,12 +2148,11 @@ export function drawCharacterPortrait(
     g.rect(44 + headOffX, 14, 5, 5, 'bone', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
-    ctx.drawImage(baked, 0, 0);
+    ctx.drawImage(baked, 0, 0, 64, 64, 0, 0, cw, ch);
     return;
   }
 
   if (classId === 'kaelen') {
-    // KAELEN VOS — HELLFIRE DRAGOON CHIBI PORTRAIT
     g.shadedRect(8, 16, 9, 34, 'brass');
     g.shadedRect(47, 16, 9, 34, 'brass');
     g.rect(10, 12, 5, 4, 'ember', 3);
@@ -1895,7 +2161,6 @@ export function drawCharacterPortrait(
     g.shadedRect(18, 46, 28, 18, 'rust');
     g.circle(32, 54, 4, 'ember', 3);
     drawPortraitChibiFace(g, headOffX, 'chibiIrisEmber', expression);
-    // Fiery Spiky Hair & Curved Dragon Horns
     g.shadedRect(14 + headOffX, 9, 36, 8, 'rust');
     g.rect(20 + headOffX, 7, 24, 4, 'ember', 3);
     g.line(16 + headOffX, 13, 8 + headOffX, 4, 'brass', 3, 3);
@@ -1903,12 +2168,11 @@ export function drawCharacterPortrait(
     g.rect(22 + headOffX, 13, 20, 3, 'brass', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
-    ctx.drawImage(baked, 0, 0);
+    ctx.drawImage(baked, 0, 0, 64, 64, 0, 0, cw, ch);
     return;
   }
 
   if (classId === 'vespera') {
-    // VESPERA LOCKE — ELDRITCH SOULBINDER CHIBI PORTRAIT
     g.circle(32, 28, 25, 'brass', 2);
     g.circle(32, 28, 21, 'coat', 0);
     g.rect(30, 3, 4, 4, 'volt', 3);
@@ -1918,7 +2182,6 @@ export function drawCharacterPortrait(
     g.line(22, 44, 22, 62, 'volt', 3, 2);
     g.line(42, 44, 42, 62, 'volt', 3, 2);
     drawPortraitChibiFace(g, headOffX, 'chibiIrisViolet', expression);
-    // Starlight-Silver Hair & Eldritch Star Diadem
     g.shadedRect(14 + headOffX, 9, 36, 8, 'bone');
     g.shadedRect(12 + headOffX, 15, 5, 24, 'bone');
     g.shadedRect(46 + headOffX, 15, 6, 24, 'bone');
@@ -1926,11 +2189,10 @@ export function drawCharacterPortrait(
     g.rect(30 + headOffX, 7, 4, 8, 'volt', 3);
 
     const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
-    ctx.drawImage(baked, 0, 0);
+    ctx.drawImage(baked, 0, 0, 64, 64, 0, 0, cw, ch);
     return;
   }
 
-  // SENA IBUKI — ABYSSAL BLADE KNIGHT CHIBI PORTRAIT
   const bodyMat =
     equipped.body === 'plateCoat'
       ? 'rust'
@@ -1940,11 +2202,9 @@ export function drawCharacterPortrait(
   g.shadedRect(12, 44, 40, 20, bodyMat);
   g.shadedRect(10, 43, 12, 10, 'steel');
   g.shadedRect(42, 43, 12, 10, 'steel');
-  // Duskrend Greatsword Hilt behind right shoulder
   g.shadedRect(48, 12, 7, 34, 'steel');
   g.rect(49, 16, 5, 6, 'signal', 3);
   drawPortraitChibiFace(g, headOffX, 'chibiIrisPink', expression);
-  // Crimson-Auburn Hair Locks & Winged Obsidian Circlet
   g.shadedRect(14 + headOffX, 9, 36, 8, 'hair');
   g.shadedRect(12 + headOffX, 16, 5, 22, 'hair');
   g.shadedRect(47 + headOffX, 16, 5, 22, 'hair');
@@ -1953,7 +2213,7 @@ export function drawCharacterPortrait(
   g.set(31 + headOffX, 11, 'signal', 3);
 
   const baked = g.bakeToCanvas({ selectiveOutline: false, topLeftHighlight: true });
-  ctx.drawImage(baked, 0, 0);
+  ctx.drawImage(baked, 0, 0, 64, 64, 0, 0, cw, ch);
 }
 
 export function drawSenaPortrait(canvas, expression = 'normal', equipped = {}, classId = 'sena', stage = 1, branch = null) {
@@ -1962,11 +2222,29 @@ export function drawSenaPortrait(canvas, expression = 'normal', equipped = {}, c
 
 const _chibiNpcCache = {};
 
+const NPC_ROLE_TO_MANIFEST_ID = {
+  forge: 'npc_vaelen',
+  apothecary: 'npc_isolde',
+  guild: 'npc_malakor',
+  sanctum: 'npc_solen',
+  tavern: 'npc_maeve',
+  gambler: 'npc_vex',
+  merchant: 'npc_morwen',
+  pilgrim: 'ume',
+  ume: 'ume',
+};
+
 /**
- * Renders any Duskhollow Town Master, Wandering Merchant, or Cleansed-Territory Pilgrim
- * using the exact 2-Head Chibi Pixel-Art Base (image_c95e226e.png).
+ * Renders any Duskhollow Town Master, Wandering Merchant, or Cleansed-Territory Pilgrim.
+ * Uses the generated 64x64 2-frame NPC strips from manifest when loaded.
  */
 export function getChibiNpcCanvas(npcRole = 'forge', frameIdx = 0) {
+  if (assets.loaded) {
+    const manifestNpcId = NPC_ROLE_TO_MANIFEST_ID[npcRole] || npcRole;
+    const npcCanvas = assets.getFrameCanvas(manifestNpcId, frameIdx % 2, false);
+    if (npcCanvas) return npcCanvas;
+  }
+
   const key = `${npcRole}_${frameIdx % 2}`;
   if (_chibiNpcCache[key]) return _chibiNpcCache[key];
 
@@ -2005,7 +2283,6 @@ export function getChibiNpcCanvas(npcRole = 'forge', frameIdx = 0) {
     isUltimateEyes: false,
   });
 
-  // Hair bangs & NPC headgear
   g.shadedRect(headX + 1, headY - 1, 14, 4, cfg.hairMat);
   g.shadedRect(headX, headY + 2, 2, 7, cfg.hairMat);
   g.shadedRect(headX + 14, headY + 2, 2, 7, cfg.hairMat);
@@ -2026,8 +2303,7 @@ export function getChibiNpcCanvas(npcRole = 'forge', frameIdx = 0) {
 
 /**
  * 96x96 Character Select Card Renderer
- * Shows the 64x64 portrait on the left/backdrop and a live 2x (96x96) animated character sprite
- * that plays idle normally and cycles idle + short attack when hovered.
+ * Shows the live animated character sprite from the loaded class sheet / directional strip.
  */
 export function drawCharacterSelectCardArt(canvas, classId = 'sena', isHovered = false, tick = 0) {
   if (!canvas) return;
@@ -2065,10 +2341,20 @@ export function drawCharacterSelectCardArt(canvas, classId = 'sena', isHovered =
   const frames = sheets[animKey]?.right || sheets.idle.right;
   const frameCanvas = frames[frameIdx % frames.length];
   if (frameCanvas) {
-    // Draw 48x48 sprite at 2x integer scale (96x96)
-    ctx.drawImage(frameCanvas, 0, 0, 48, 48, 0, 0, 96, 96);
+    ctx.drawImage(
+      frameCanvas,
+      0,
+      0,
+      frameCanvas.width,
+      frameCanvas.height,
+      0,
+      0,
+      96,
+      96
+    );
   }
 }
+
 
 export function drawPixelText(ctx, text, x, y, color = PALETTE.bone, align = 'center') {
   ctx.save();

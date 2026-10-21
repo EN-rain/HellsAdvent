@@ -6,6 +6,7 @@
 
 import { PALETTE, WORLD_CONFIG } from '../data/config.js';
 import { drawBresenhamCircle, drawPixelLine } from './PixelArt.js';
+import { assets } from './AssetLoader.js';
 
 /**
  * Reusable Data-Driven Obstacle Registry (Section 5)
@@ -1383,6 +1384,53 @@ export class ObstacleManager {
   _drawObstacleVisual(ctx, o, sx, sy, r) {
     const id = o.defId;
 
+    if (assets.loaded) {
+      const seed = Math.abs(Math.round((o.x || 0) * 7 + (o.y || 0) * 13));
+      const propPools = {
+        slab_concrete_wall_short: ['prop_slab_collapsed_wall', 'prop_slab_broken_stairs'],
+        slab_scrap_barricade: ['prop_slab_rebar_pile', 'prop_slab_rubble_heap', 'prop_slab_shopping_cart'],
+        foreman_scrap_wall: ['prop_slab_rebar_pile', 'prop_slab_collapsed_wall'],
+        slab_rusted_container: ['prop_slab_vending_machine', 'prop_slab_dead_mall_sign'],
+        slab_abandoned_machinery: ['prop_slab_vending_machine', 'prop_slab_rubble_heap'],
+        slab_steel_support: ['prop_slab_bent_streetlight', 'prop_slab_dead_mall_sign'],
+
+        r9_abandoned_truck: ['prop_route9_overturned_truck', 'prop_route9_burnt_car'],
+        r9_crashed_vehicle: ['prop_route9_burnt_car', 'prop_route9_tire_stack'],
+        axle_lane_machinery: ['prop_route9_oil_drum', 'prop_route9_tire_stack'],
+        r9_road_divider: ['prop_route9_guardrail', 'prop_route9_road_sign'],
+        r9_broken_guardrail: ['prop_route9_guardrail', 'prop_route9_dead_tree'],
+        r9_collapsed_overpass: ['prop_route9_billboard_frame', 'prop_route9_overturned_truck'],
+
+        lm_chemical_tank: ['prop_marsh_rusted_drum_cluster', 'prop_marsh_tarp_shack'],
+        lm_corroded_pipe: ['prop_marsh_pipe_outflow', 'prop_marsh_sunken_car_roof'],
+        lm_submerged_debris: ['prop_marsh_dead_reed_clump', 'prop_marsh_glowing_spore_pods', 'prop_marsh_fog_patch'],
+        lm_raised_sludge_bank: ['prop_marsh_bone_pile', 'prop_marsh_tarp_shack'],
+        sump_sludge_barrier: ['prop_marsh_bone_pile', 'prop_marsh_rusted_drum_cluster'],
+
+        cf_mining_equipment: ['prop_flats_wrecked_harvester', 'prop_flats_rusted_silo'],
+        cf_rusted_machinery: ['prop_flats_machine_rib_cage', 'prop_flats_buried_antenna'],
+        cf_buried_wreck: ['prop_flats_tire_half_sunk', 'prop_flats_buried_antenna'],
+        cf_rock_formation: ['prop_flats_bone_arch', 'prop_flats_cactus_husk'],
+        dry_sand_ridge: ['prop_flats_sand_dune_crest', 'prop_flats_bone_arch'],
+        cf_drill_head: ['prop_flats_rusted_silo', 'prop_flats_wrecked_harvester'],
+      };
+      const pool = propPools[id] || ['prop_flats_machine_rib_cage'];
+      const propId = pool[seed % pool.length];
+      const spec = assets.getSpec(propId);
+      const frameIdx = spec && spec.frameCount > 1 ? Math.floor(this.clock * 4) % spec.frameCount : 0;
+      const propCanvas = assets.getFrameCanvas(propId, frameIdx, seed % 2 === 1);
+      if (propCanvas) {
+        const pw = propCanvas.width;
+        const ph = propCanvas.height;
+        ctx.drawImage(
+          propCanvas,
+          Math.round(sx - pw / 2),
+          Math.round(sy + r - ph + 4)
+        );
+        return;
+      }
+    }
+
     // SLAB TOWN OBSTACLES
     if (id === 'slab_concrete_wall_short') {
       ctx.fillStyle = PALETTE.slagDark;
@@ -1397,6 +1445,7 @@ export class ObstacleManager {
       ctx.fillRect(sx + r - 8, sy - r + 1, 2, 4);
       return;
     }
+
 
     if (id === 'slab_scrap_barricade' || id === 'foreman_scrap_wall') {
       ctx.fillStyle = PALETTE.slagDark;

@@ -234,6 +234,82 @@ class AssetManager {
   }
 
   /**
+   * Extracts a single cell (col, row) from a 2D sprite sheet (such as the 384x128 6x2 class sheets).
+   */
+  getGridFrameCanvas(id, col = 0, row = 0, cellW = 64, cellH = 64, flipX = false) {
+    const key = `grid_${id}_${col}_${row}_${cellW}x${cellH}_${flipX ? 1 : 0}`;
+    if (this.tintCache.has(key)) return this.tintCache.get(key);
+
+    const spec = this.getSpec(id);
+    const atlasInfo = spec?.atlas;
+    const atlasImg = atlasInfo ? this.atlases.get(atlasInfo.atlas) : null;
+    const stripImg = this.images.get(id);
+
+    const hasValidAtlas = atlasImg && atlasImg.complete && atlasImg.naturalWidth > 0;
+    const hasValidStrip = stripImg && stripImg.complete && stripImg.naturalWidth > 0;
+    if (!hasValidAtlas && !hasValidStrip) return null;
+
+    try {
+      const c = document.createElement('canvas');
+      c.width = cellW;
+      c.height = cellH;
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+
+      if (flipX) {
+        ctx.translate(cellW, 0);
+        ctx.scale(-1, 1);
+      }
+
+      const sx = col * cellW;
+      const sy = row * cellH;
+      if (hasValidAtlas) {
+        ctx.drawImage(
+          atlasImg,
+          atlasInfo.x + sx,
+          atlasInfo.y + sy,
+          cellW,
+          cellH,
+          0,
+          0,
+          cellW,
+          cellH
+        );
+      } else if (hasValidStrip) {
+        ctx.drawImage(stripImg, sx, sy, cellW, cellH, 0, 0, cellW, cellH);
+      }
+
+      this.tintCache.set(key, c);
+      return c;
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  getTintedGridFrame(id, col = 0, row = 0, cellW = 64, cellH = 64, flipX = false, color = PALETTE.bone) {
+    const key = `grid_${id}_${col}_${row}_${cellW}x${cellH}_${flipX ? 1 : 0}_${color}`;
+    if (this.whiteMaskCache.has(key)) return this.whiteMaskCache.get(key);
+
+    const baseCanvas = this.getGridFrameCanvas(id, col, row, cellW, cellH, flipX);
+    if (!baseCanvas) return null;
+
+    const c = document.createElement('canvas');
+    c.width = baseCanvas.width;
+    c.height = baseCanvas.height;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+
+    ctx.drawImage(baseCanvas, 0, 0);
+    ctx.globalCompositeOperation = 'source-in';
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = 'source-over';
+
+    this.whiteMaskCache.set(key, c);
+    return c;
+  }
+
+  /**
    * Draws a simple pixel-art blob shadow under characters/mobs (cached as an image).
    */
   drawBlobShadow(ctx, x, y, rx = 10, ry = 4) {

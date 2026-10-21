@@ -1,10 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { PALETTE, GRADES } from '../data/config.js';
 import { drawCharacterPortrait } from '../game/Sprites.js';
+import { assets } from '../game/AssetLoader.js';
 
 /**
- * 64x64 Pixel-Art Anime Portrait Component for Sena, Rook, or Ines
- * Reflects classId, expression, equipped headgear/coat, stage, and branch.
+ * 96x96 Pixel-Art Anime Portrait Component for Sena, Rook, Ines, Kaelen, or Vespera
+ * Uses the generated 96x96 portrait assets when loaded, with procedural fallback.
  */
 export function CharacterPortrait({
   classId = 'sena',
@@ -16,6 +17,17 @@ export function CharacterPortrait({
   className = '',
 }) {
   const canvasRef = useRef(null);
+  const [assetsReady, setAssetsReady] = useState(assets.loaded);
+
+  useEffect(() => {
+    if (assets.loaded) {
+      setAssetsReady(true);
+      return undefined;
+    }
+    return assets.subscribe(({ loaded }) => {
+      if (loaded) setAssetsReady(true);
+    });
+  }, []);
 
   useEffect(() => {
     if (canvasRef.current) {
@@ -28,18 +40,19 @@ export function CharacterPortrait({
         branch
       );
     }
-  }, [classId, expression, equipped?.head, equipped?.body, equipped?.legs, stage, branch]);
+  }, [classId, expression, equipped?.head, equipped?.body, equipped?.legs, stage, branch, assetsReady]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={64}
-      height={64}
+      width={96}
+      height={96}
       style={{ width: size, height: size }}
       className={`pixelated block border border-[#3A3F47] bg-[#0B0D10] ${className}`}
     />
   );
 }
+
 
 // Backwards-compatible export
 export function SenaPortrait(props) {
@@ -425,23 +438,87 @@ export function StatusIcon({ statusId, size = 24 }) {
   );
 }
 
+const ITEM_OR_SKILL_TO_MANIFEST_ICON = {
+  weldingGoggles: 'icon_item_welding_goggles',
+  surplusRespirator: 'icon_item_surplus_respirator',
+  ridersHelmet: 'icon_item_riders_helmet',
+  patchedVest: 'icon_item_patched_vest',
+  riotJacket: 'icon_item_riot_jacket',
+  plateCoat: 'icon_item_plate_coat',
+  workBoots: 'icon_item_work_boots',
+  courierLeggings: 'icon_item_courier_leggings',
+  hydraulicShins: 'icon_item_hydraulic_shins',
+  gauzeRoll: 'icon_item_gauze_roll',
+  sugarTin: 'icon_item_sugar_tin',
+  // Dark fantasy shop items mapped to generated 32x32 icons
+  obsidian_visor: 'icon_item_welding_goggles',
+  plague_mask: 'icon_item_surplus_respirator',
+  abyssal_crown: 'icon_item_riders_helmet',
+  stalker_brigandine: 'icon_item_patched_vest',
+  inquisitor_coat: 'icon_item_riot_jacket',
+  dreadplate_cuirass: 'icon_item_plate_coat',
+  ashen_greaves: 'icon_item_work_boots',
+  phantom_striders: 'icon_item_courier_leggings',
+  hellforged_sabatons: 'icon_item_hydraulic_shins',
+  crimson_elixir: 'icon_item_gauze_roll',
+  soul_nectar: 'icon_item_sugar_tin',
+  // Skills
+  lunge: 'icon_skill_lunge',
+  skill_lunge: 'icon_skill_lunge',
+  groundBreak: 'icon_skill_ground_break',
+  skill_groundBreak: 'icon_skill_ground_break',
+  railSpike: 'icon_skill_rail_spike',
+  skill_railSpike: 'icon_skill_rail_spike',
+  sevenCuts: 'icon_skill_seven_cuts',
+  nineCuts: 'icon_skill_seven_cuts',
+  skill_sevenCuts: 'icon_skill_seven_cuts',
+  locked: 'icon_skill_locked',
+  skill_locked: 'icon_skill_locked',
+  coin: 'ui_coin',
+};
+
 /**
- * 16x16 Pixel-Art Item / Skill Icon drawn from code onto an offscreen canvas
+ * 32x32 Pixel-Art Item / Skill Icon Component
+ * Draws the generated 32x32 manifest icon when available, or scales the 16x16 procedural icon cleanly.
  */
 export function PixelIcon({ itemId, size = 32 }) {
   const canvasRef = useRef(null);
+  const [assetsReady, setAssetsReady] = useState(assets.loaded);
+
+  useEffect(() => {
+    if (assets.loaded) {
+      setAssetsReady(true);
+      return undefined;
+    }
+    return assets.subscribe(({ loaded }) => {
+      if (loaded) setAssetsReady(true);
+    });
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, 16, 16);
+    ctx.clearRect(0, 0, 32, 32);
+
+    if (assets.loaded) {
+      const directManifestId = ITEM_OR_SKILL_TO_MANIFEST_ICON[itemId] || itemId;
+      const iconCanvas = assets.getFrameCanvas(directManifestId, 0, false);
+      if (iconCanvas) {
+        ctx.drawImage(iconCanvas, 0, 0, iconCanvas.width, iconCanvas.height, 0, 0, 32, 32);
+        return;
+      }
+    }
+
+    ctx.save();
+    ctx.scale(2, 2);
 
     switch (itemId) {
       case 'weldingGoggles': {
         ctx.fillStyle = PALETTE.soot;
         ctx.fillRect(1, 5, 14, 6);
+
         ctx.fillStyle = PALETTE.boneDark;
         ctx.fillRect(2, 6, 5, 4);
         ctx.fillRect(9, 6, 5, 4);
@@ -916,18 +993,20 @@ export function PixelIcon({ itemId, size = 32 }) {
         ctx.fillRect(6, 6, 4, 4);
       }
     }
-  }, [itemId]);
+    ctx.restore();
+  }, [itemId, assetsReady]);
 
   return (
     <canvas
       ref={canvasRef}
-      width={16}
-      height={16}
+      width={32}
+      height={32}
       style={{ width: size, height: size }}
       className="pixelated block shrink-0 bg-[#0B0D10] border border-[#3A3F47]"
     />
   );
 }
+
 
 export function getGradeColor(grade) {
   return GRADES[grade]?.color || PALETTE.boneDark;

@@ -1082,6 +1082,32 @@ export const ASSET_CATALOG = [
   { id: 'ui_cursor', category: 'ui', frameWidth: 16, frameHeight: 16, frameCount: 1, fps: 1, anchor: [8, 8], prompt: '16x16 signal cyan and bone targeting crosshair cursor' },
   { id: 'title_logo', category: 'ui', frameWidth: 360, frameHeight: 64, frameCount: 1, fps: 1, anchor: [180, 32], prompt: 'GRAVEL SKY title lettering drawn in chunky pixel letters with a rust and bone worn-stencil look' },
   { id: 'title_key_art', category: 'key_art', frameWidth: 480, frameHeight: 270, frameCount: 1, fps: 1, anchor: [0, 0], prompt: "wide pixel-art scene: Sena standing on a collapsed overpass, scarf blowing, Kettle's boiler glow far below, burnt sky" },
+
+  // Expansion Assets from ASSETS_NEEDED.md (5 Class 6x2 Sheets, 4 Class Portraits, 4 Common Enemies, 4 Elite Enemies, 7 Town NPCs)
+  { id: 'sena_sheet', category: 'player_sheet', classId: 'sena', frameWidth: 64, frameHeight: 64, frameCount: 6, rows: 2, sheetW: 384, sheetH: 128, fps: 10, anchor: [32, 60], prompt: 'Sena Ibuki 384x128 6x2 chibi sheet (Row 1: 4 Idle, Row 2: 6 Run)' },
+  { id: 'rook_sheet', category: 'player_sheet', classId: 'rook', frameWidth: 64, frameHeight: 64, frameCount: 6, rows: 2, sheetW: 384, sheetH: 128, fps: 10, anchor: [32, 60], prompt: 'Rook Matsuda Inquisitor Marksman 384x128 6x2 chibi sheet' },
+  { id: 'ines_sheet', category: 'player_sheet', classId: 'ines', frameWidth: 64, frameHeight: 64, frameCount: 6, rows: 2, sheetW: 384, sheetH: 128, fps: 10, anchor: [32, 60], prompt: 'Ines Calloway Ossuary Necromancer 384x128 6x2 chibi sheet' },
+  { id: 'kaelen_sheet', category: 'player_sheet', classId: 'kaelen', frameWidth: 64, frameHeight: 64, frameCount: 6, rows: 2, sheetW: 384, sheetH: 128, fps: 10, anchor: [32, 60], prompt: 'Kaelen Vos Hellfire Dragoon 384x128 6x2 chibi sheet' },
+  { id: 'vespera_sheet', category: 'player_sheet', classId: 'vespera', frameWidth: 64, frameHeight: 64, frameCount: 6, rows: 2, sheetW: 384, sheetH: 128, fps: 10, anchor: [32, 60], prompt: 'Vespera Locke Eldritch Soulbinder 384x128 6x2 chibi sheet' },
+  { id: 'rook_neutral', category: 'portrait', frameWidth: 96, frameHeight: 96, frameCount: 1, fps: 1, anchor: [48, 96], prompt: '96x96 anime bust portrait of Rook Matsuda with highwayman hat, brass monocle, and Hexbane Arbalest' },
+  { id: 'ines_neutral', category: 'portrait', frameWidth: 96, frameHeight: 96, frameCount: 1, fps: 1, anchor: [48, 96], prompt: '96x96 anime bust portrait of Ines Calloway with bone-braided hair, verdigris streaks, and dorsal reliquary coil' },
+  { id: 'kaelen_neutral', category: 'portrait', frameWidth: 96, frameHeight: 96, frameCount: 1, fps: 1, anchor: [48, 96], prompt: '96x96 anime bust portrait of Kaelen Vos in obsidian dragonplate with horned crest helm and ember eyes' },
+  { id: 'vespera_neutral', category: 'portrait', frameWidth: 96, frameHeight: 96, frameCount: 1, fps: 1, anchor: [48, 96], prompt: '96x96 anime bust portrait of Vespera Locke with astral visor, floating brass halo, and familiar skull' },
+  { id: 'rivet_tick', category: 'enemy_common', frameWidth: 40, frameHeight: 40, frameCount: 5, fps: 8, anchor: [20, 36], alignFeet: true, prompt: 'Ossuary Skitter / Rivet Tick skull-shelled 6-legged iron crypt spider' },
+  { id: 'signal_mite', category: 'enemy_common', frameWidth: 40, frameHeight: 40, frameCount: 5, fps: 8, anchor: [20, 34], alignFeet: false, prompt: 'Cursed Wisp / Signal Mite floating iron lantern-skull wreathed in signal-cyan soulfire' },
+  { id: 'silt_mimic', category: 'enemy_common', frameWidth: 40, frameHeight: 40, frameCount: 5, fps: 8, anchor: [20, 36], alignFeet: true, prompt: 'Cursed Mimic / Silt Mimic bog-crusted iron coffer splitting open with jagged bone teeth' },
+  { id: 'cinder_crow', category: 'enemy_common', frameWidth: 40, frameHeight: 40, frameCount: 5, fps: 10, anchor: [20, 34], alignFeet: false, prompt: 'Carrion Crow / Cinder Crow undead raven with bone skull beak and ember-orange wingtips' },
+  { id: 'plate_marshal', category: 'enemy_elite', frameWidth: 80, frameHeight: 80, frameCount: 7, fps: 8, anchor: [40, 74], alignFeet: true, prompt: 'Dread Templar / Plate Marshal undead cathedral knight with tower shield and rusted broadsword' },
+  { id: 'switchback_driver', category: 'enemy_elite', frameWidth: 80, frameHeight: 80, frameCount: 7, fps: 8, anchor: [40, 74], alignFeet: true, prompt: 'Hell-Steed Outrider / Switchback Driver armored outrider on spiked monowheel steed' },
+  { id: 'sump_cantor', category: 'enemy_elite', frameWidth: 80, frameHeight: 80, frameCount: 7, fps: 8, anchor: [40, 74], alignFeet: true, prompt: 'Hex Chanter / Sump Cantor hunched fen-priest swinging a corroded brass plague-bell staff' },
+  { id: 'bore_sentinel', category: 'enemy_elite', frameWidth: 80, frameHeight: 80, frameCount: 7, fps: 8, anchor: [40, 74], alignFeet: true, prompt: 'Crypt Wyrmling / Bore Sentinel segmented iron-and-bone burrowing drake with furnace throat' },
+  { id: 'npc_vaelen', category: 'npc', frameWidth: 64, frameHeight: 64, frameCount: 2, fps: 2, anchor: [32, 58], alignFeet: true, prompt: 'Master Smith Vaelen bearded runesmith with glowing runehammer and soulfire anvil' },
+  { id: 'npc_isolde', category: 'npc', frameWidth: 64, frameHeight: 64, frameCount: 2, fps: 2, anchor: [32, 58], alignFeet: true, prompt: 'Sister Isolde plague-alchemist nun in bog-teal and bone veil with crimson blood vial and alembic table' },
+  { id: 'npc_malakor', category: 'npc', frameWidth: 64, frameHeight: 64, frameCount: 2, fps: 2, anchor: [32, 58], alignFeet: true, prompt: 'Chronicler Malakor hooded chronicler with brass astrolabe spectacles beside the Bloodline Ledger board' },
+  { id: 'npc_solen', category: 'npc', frameWidth: 64, frameHeight: 64, frameCount: 2, fps: 2, anchor: [32, 58], alignFeet: true, prompt: 'Archmage Solen grand astromancer with levitating signal-cyan grimoire and starforged staff' },
+  { id: 'npc_maeve', category: 'npc', frameWidth: 64, frameHeight: 64, frameCount: 2, fps: 2, anchor: [32, 58], alignFeet: true, prompt: 'Maeve the Hearthkeeper warm tavern hostess with wyrm-steak platter and spiced ale tankard' },
+  { id: 'npc_vex', category: 'npc', frameWidth: 64, frameHeight: 64, frameCount: 2, fps: 2, anchor: [32, 58], alignFeet: true, prompt: 'Vex the Veil-Peddler masked curio broker with 3 sealed reliquary coffers' },
+  { id: 'npc_morwen', category: 'npc', frameWidth: 64, frameHeight: 64, frameCount: 2, fps: 2, anchor: [32, 58], alignFeet: true, prompt: 'Morwen the Veil-Peddler wandering caravan mystic with monster-repelling ward lantern' },
 ];
 
 // ============================================================================
@@ -1907,8 +1933,14 @@ function drawUiAsset(surf, spec) {
 }
 
 export function ensureRawAsset(spec, force = false) {
+  const gptPath = path.join(ROOT, 'gptgen', `${spec.id}.png`);
+  const geminiPath = path.join(ROOT, 'geminigen', `${spec.id}.png`);
   const rawPath = path.join(RAW_DIR, `${spec.id}.png`);
-  if (!force && fs.existsSync(rawPath)) return rawPath;
+  if (!force) {
+    if (fs.existsSync(gptPath)) return gptPath;
+    if (fs.existsSync(geminiPath)) return geminiPath;
+    if (fs.existsSync(rawPath)) return rawPath;
+  }
 
   const totalW = spec.frameWidth * spec.frameCount;
   const totalH = spec.frameHeight;
@@ -1975,8 +2007,8 @@ function nearestPaletteColor(r, g, b) {
 
 export function processRawSheet(rawImg, spec) {
   const { frameWidth: fw, frameHeight: fh, frameCount: fc } = spec;
-  const targetW = fw * fc;
-  const targetH = fh;
+  const targetW = spec.sheetW || fw * fc;
+  const targetH = spec.sheetH || fh;
 
   // Stage 1: Remove #FF00FF background with tolerance 40, then clean pink-tinted fringe pixels
   const srcW = rawImg.width;
@@ -2348,4 +2380,7 @@ function runPipeline() {
   console.log(`Processed ${ASSET_CATALOG.length} asset strips into /public/assets/manifest.json and /public/assets/atlas_0.png.`);
 }
 
-runPipeline();
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve( ROOT, 'tools', 'process-assets.mjs')) {
+  runPipeline();
+}
+

@@ -1150,16 +1150,485 @@ Every asset below includes its exact **Manifest ID** (for `/assets-src/raw/<id>.
 
 | Hell's Advent Asset Group | Exact Reference File(s) in `tempartreference(DONOTCOMPLETELYCOPY)/` | Target Dimensions |
 | :--- | :--- | :--- |
-| **Sena Ibuki (`sena_*`)** | `Playable Characters - JP Gen 2/529969 - Nakiri Ayame/Ayame.png`, `Ayame_slash.png`, `Ayame_spiritslash.png`, `Ayame_Port.png`, `Ayame_Special.png` | `64x64` frames (`384x128` or directional strips) & `96x96` portraits |
-| **Rook Matsuda (`rook_*`)** | `Playable Characters - Holoh3ro (ID Gen 3)/530074 - Vestia Zeta/Zeta.png`, `Zeta_pistol.png`, `Zeta_BigBullet.png`, `204785 - Amelia Watson.png` | `64x64` frames (`384x128` sheet) & `96x96` portrait |
-| **Ines Calloway (`ines_*`)** | `Playable Characters - Myth (EN Gen 1)/529763 - Ninomae Inanis/Ina.png`, `Ina__wheel.png`, `529968 - Murasaki Shion/Shion.png`, `Shion_Circle.png` | `64x64` frames (`384x128` sheet) & `96x96` portrait |
-| **Kaelen Vos (`kaelen_*`)** | `Playable Characters - Myth (EN Gen 1)/204696 - Takanashi Kiara.png`, `530011 - Shirogane Noel/Noel.png`, `530030 - Kiryu Coco/Coco.png` | `64x64` frames (`384x128` sheet) & `96x96` portrait |
-| **Vespera Locke (`vespera_*`)** | `Playable Characters - JP Gen 0/529818 - Roboco-san/Roboco.png`, `Roboco_electric.png`, `529784 - Ouro Kronii/Kronii.png` | `64x64` frames (`384x128` sheet) & `96x96` portrait |
+| **Sena Ibuki (`sena_*`)** | `Playable Characters - JP Gen 2/529969 - Nakiri Ayame/Ayame.png`, `Ayame_slash.png`, `Ayame_spiritslash.png`, `Ayame_Port.png`, `Ayame_Special.png` | `64x64` frames (`384x128` master sheet + 21 directional/action strips) & `96x96` portraits |
+| **Rook Matsuda (`rook_*`)** | `Playable Characters - Holoh3ro (ID Gen 3)/530074 - Vestia Zeta/Zeta.png`, `Zeta_pistol.png`, `Zeta_BigBullet.png`, `204785 - Amelia Watson.png` | `64x64` frames (`384x128` master sheet + 21 directional/action strips) & `96x96` portraits |
+| **Ines Calloway (`ines_*`)** | `Playable Characters - Myth (EN Gen 1)/529763 - Ninomae Inanis/Ina.png`, `Ina__wheel.png`, `529968 - Murasaki Shion/Shion.png`, `Shion_Circle.png` | `64x64` frames (`384x128` master sheet + 21 directional/action strips) & `96x96` portraits |
+| **Kaelen Vos (`kaelen_*`)** | `Playable Characters - Myth (EN Gen 1)/204696 - Takanashi Kiara.png`, `530011 - Shirogane Noel/Noel.png`, `530030 - Kiryu Coco/Coco.png` | `64x64` frames (`384x128` master sheet + 21 directional/action strips) & `96x96` portraits |
+| **Vespera Locke (`vespera_*`)** | `Playable Characters - JP Gen 0/529818 - Roboco-san/Roboco.png`, `Roboco_electric.png`, `529784 - Ouro Kronii/Kronii.png` | `64x64` frames (`384x128` master sheet + 21 directional/action strips) & `96x96` portraits |
 | **Common Enemies (`40x40`)** | `Enemies/206132 - Myth Enemies (EN Gen1).png`, `206133 - CouncilRyS Enemies.png`, `206134 - Gamers Enemies (JP).png`, `529823 - Haachama/Haachama_Spider.png`, `529825 - Yozora Mel/Mel_bat.png` | `40x40` frames × 5 = `200x40` strip |
 | **Elite Enemies (`80x80`)** | `Enemies/206549 - Enemies (Miscellaneous).png`, `Bosses/206503 - Stage 4 Mini Boss (Udin).png`, `Enemies/206132 - Myth Enemies.png` | `80x80` frames × 7 = `560x80` strip |
-| **Bosses (`the_foreman`, `big_axle`, `mother_sump`, `the_long_dry`)** | `Bosses/206501 - Stage 3 Mini Boss (Shubangelion).png`, `206502 - Stage 3 Hard Boss (Myth or Treat).png`, `206500 - Stage 3 Boss (Hachama).png`, `206495 - Stage 1 Mini Boss (Fubuzilla).png` | `192x192`, `224x160`, `256x192` × 9 frames |
+| **Fusion & King Bosses (`96x96` / `128x128`)** | `Bosses/206495 - Stage 1 Mini Boss (Fubuzilla).png`, `206497 - Stage 2 Mini Boss (Mikodanye).png`, `206503 - Stage 4 Mini Boss (Udin).png` | `96x96` × 7 = `672x96` (10× Fusion) & `128x128` × 7 = `896x128` (5× King) |
+| **Bloodline Bosses (`the_foreman`, `big_axle`, `mother_sump`, `the_long_dry` + Floors 1–5)** | `Bosses/206501 - Stage 3 Mini Boss (Shubangelion).png`, `206502 - Stage 3 Hard Boss (Myth or Treat).png`, `206500 - Stage 3 Boss (Hachama).png`, `206495 - Stage 1 Mini Boss (Fubuzilla).png` | `128x128` (Warden), `160x160` (Executioner), `192x192`–`256x192` (Overlord) × 9 frames |
 | **Combat VFX (`fx_*`)** | `Miscellaneous/206506 - Effects.png`, `Items/206879 - Weapons.png`, `Items/206880 - Weapons (Collabs).png` | `128x128`, `160x48`, `256x256`, `192x192`, `480x120` |
-| **World Tiles (`tile_*`) & Props (`prop_*`)** | `Levels/206852 - Stage 3 - Halloween Castle - Stage 3 Hard - Halloween Castle (Myth).png`, `206142 - Stage 1.png`, `206841 - Stage 1 Hard (Night).png`, `206853 - Stage 4.png`, `Holo House/206120..206127` | `16x16` tiles & `32x32`–`96x96` props |
-| **NPCs (`ume.png` & Duskhollow Cast)** | `Shop/206131 - Shop Menu.png`, `Holo House/206141 - NPCs.png`, `Holo House/206116 - Cooking.png` | `64x64` frames × 2 = `128x64` strip |
-| **Skill & Item Icons (`icon_*`)** | `Items/206883 - Item Icons.png`, Character `_Perk1..3.png`, `_Weapon.png`, `_Special.png` | `32x32` framed square icons |
+| **World Tiles (`tile_*`) & Props (`prop_*`)** | `Levels/206852 - Stage 3 - Halloween Castle - Stage 3 Hard - Halloween Castle (Myth).png`, `206142 - Stage 1.png`, `206841 - Stage 1 Hard (Night).png`, `206853 - Stage 4.png`, `Holo House/206120..206127` | `16x16` tiles & `32x32`–`160x120` props/buildings |
+| **NPCs (`ume.png` & Duskhollow Cast)** | `Shop/206131 - Shop Menu.png`, `Holo House/206141 - NPCs.png`, `Holo House/206116 - Cooking.png` | `64x64` frames × 2 = `128x64` strip & `96x96` portraits |
+| **Skill, Status & Item Icons (`icon_*`)** | `Items/206883 - Item Icons.png`, Character `_Perk1..3.png`, `_Weapon.png`, `_Special.png` | `32x32` framed square icons & `16x16` HUD status badges |
 | **HUD, Menus & Title (`ui_*`, `title_*`)** | `Miscellaneous/206965 - Game Menus and HUDs.png`, `206964 - Title.png`, `206508 - Pickups.png`, `206962 - Holozon Box.png` | `48x48`, `128x12`, `96x24`, `96x96`, `16x16`, `360x64`, `480x270` |
+
+---
+
+## SECTION 12: FULL 21-STRIP DIRECTIONAL & COMBAT ANIMATIONS FOR ROOK, INES, KAELEN & VESPERA (Plus 15 Specialization Costume Sheets)
+
+To give **Rook Matsuda (`rook`)**, **Ines Calloway (`ines`)**, **Kaelen Vos (`kaelen`)**, and **Vespera Locke (`vespera`)** 100% animation parity with **Sena Ibuki (`sena`)**, each character uses the exact same **21-strip directional & combat animation architecture** (`64x64` cells, feet anchored at `[32, 60]`, left-facing mirrored at runtime from `_side`):
+
+### 12.1 Universal 21-Strip Animation Specification (Applies to `sena`, `rook`, `ines`, `kaelen`, `vespera`)
+
+| Strip Suffix | Dimensions | Frames | FPS | Anchor | Gameplay Trigger & Animation Keyframe Breakdown |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`<char>_turnaround.png`** | `256x64` | 4 | 2 | `[32, 60]` | Character model sheet: Frame 1 Front/Down, Frame 2 Back/Up, Frame 3 Left Side, Frame 4 Right Side. |
+| **`<char>_idle_down.png`** | `128x64` | 2 | 4 | `[32, 60]` | Down-facing combat ready idle: Frame 1 neutral stance; Frame 2 1px torso/head breathing bob + secondary hair/cloak shift. |
+| **`<char>_idle_up.png`** | `128x64` | 2 | 4 | `[32, 60]` | Up-facing (back view) idle: shows dorsal weapon/reliquary/boiler/halo details with 1px breathing bob. |
+| **`<char>_idle_side.png`** | `128x64` | 2 | 4 | `[32, 60]` | Right-facing profile idle (mirrored for left): 1px breathing bob, signature weapon poised in front/side hand. |
+| **`<char>_run_down.png`** | `384x64` | 6 | 12 | `[32, 60]` | Down-facing 6-frame run cycle: alternating boot strides (`[-3, -1, 1, 3, 1, -1]`), cape/coat flare, 1px vertical bounce. |
+| **`<char>_run_up.png`** | `384x64` | 6 | 12 | `[32, 60]` | Up-facing 6-frame run cycle: back-view footwork, cloak/scarf streaming toward camera, dorsal pack bobbing. |
+| **`<char>_run_side.png`** | `384x64` | 6 | 12 | `[32, 60]` | Right-facing 6-frame sprint cycle: 1px forward torso lean, full 6-step stride, trailing cloak/scarf/hair. |
+| **`<char>_attack1_down.png`** | `192x64` | 3 | 14 | `[32, 60]` | Combo Hit 1 (Down): Frame 1 windup/draw; Frame 2 active weapon discharge/slash smear; Frame 3 recovery. |
+| **`<char>_attack2_down.png`** | `192x64` | 3 | 14 | `[32, 60]` | Combo Hit 2 (Down): Frame 1 reverse/secondary windup; Frame 2 secondary arc/volley smear; Frame 3 recovery. |
+| **`<char>_attack3_down.png`** | `192x64` | 3 | 12 | `[32, 60]` | Combo Hit 3 Finisher (Down): Frame 1 heavy charge; Frame 2 oversized finisher cleave/blast; Frame 3 recovery. |
+| **`<char>_attack1_up.png`** | `192x64` | 3 | 14 | `[32, 60]` | Combo Hit 1 (Up / Back View): 3-frame upward attack arc. |
+| **`<char>_attack2_up.png`** | `192x64` | 3 | 14 | `[32, 60]` | Combo Hit 2 (Up / Back View): 3-frame reverse upward attack arc. |
+| **`<char>_attack3_up.png`** | `192x64` | 3 | 12 | `[32, 60]` | Combo Hit 3 Finisher (Up / Back View): 3-frame heavy upward finisher. |
+| **`<char>_attack1_side.png`** | `192x64` | 3 | 14 | `[32, 60]` | Combo Hit 1 (Right Side, mirrored for Left): Frame 1 coil; Frame 2 forward strike/shot flash; Frame 3 follow-through. |
+| **`<char>_attack2_side.png`** | `192x64` | 3 | 14 | `[32, 60]` | Combo Hit 2 (Right Side): Frame 1 low/reverse coil; Frame 2 rising arc/rapid shot; Frame 3 high guard. |
+| **`<char>_attack3_side.png`** | `192x64` | 3 | 12 | `[32, 60]` | Combo Hit 3 Finisher (Right Side): Frame 1 full windup; Frame 2 heavy lunging finisher; Frame 3 recovery. |
+| **`<char>_hurt_down.png`** | `64x64` | 1 | 8 | `[32, 60]` | Down-facing impact flinch: wincing eyes, torso knocked back 2px, weapon raised defensively. |
+| **`<char>_hurt_up.png`** | `64x64` | 1 | 8 | `[32, 60]` | Up-facing impact flinch: shoulders jolted, cloak/hair flaring outward. |
+| **`<char>_hurt_side.png`** | `64x64` | 1 | 8 | `[32, 60]` | Side-facing impact recoil: leaning back 2px from hit, grit teeth. |
+| **`<char>_dodge_side.png`** | `256x64` | 4 | 16 | `[32, 60]` | 4-frame evasive roll/dash: Frame 1 crouch push-off; Frames 2–3 class-colored dash/roll blur; Frame 4 knee-slide recovery. |
+| **`<char>_death_side.png`** | `256x64` | 4 | 6 | `[32, 60]` | 4-frame defeat sequence: Frame 1 stagger; Frame 2 drop to knees; Frame 3 weapon planted/dropped; Frame 4 slumped kneel. |
+
+---
+
+### 12.2 Rook Matsuda (`rook` — Inquisitor Marksman) Full 21-Strip Prompts
+- **Primary Reference File(s)**: `Playable Characters - Holoh3ro (ID Gen 3)/530074 - Vestia Zeta/Zeta.png`, `Zeta_pistol.png`, `Zeta_Flash.png`, `530068 - Kureiji Ollie/Ollie_chargerifle1.png`, `public/assets/aistudio/image_c95e226e.png`
+- **Character Design Lock**: 2-head chibi witch-hunter marksman in slate-olive inquisitor duster coat (`#26313A` / `#3A4A24`), wide-brimmed dark leather highwayman hat with brass buckle (`#FFC83D`), brass targeting monocle over right amber-gold eye, silver-stake bandolier across chest, wielding the **Hexbane Arbalest** (heavy repeating iron crossbow with curved brass leaf-spring prod and glowing `#FFC83D` / `#EFE9DA` silver bolts).
+- **All 21 Strip Files & Prompts**:
+  1. **`rook_turnaround.png`** (`256x64`, 4 frames):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match 2-head chibi anatomy of `Zeta.png` and `image_c95e226e.png`. Generate a 4-frame horizontal turnaround strip (256x64px, four 64x64px cells: Down, Up, Left, Right) of Rook Matsuda, Inquisitor Marksman: ash-silver hair under a pointed dark highwayman hat with brass buckle (#FFC83D), brass monocle over one amber eye, weathered slate-olive duster coat with silver-stake bandolier, holding the Hexbane Arbalest repeating crossbow with brass bow prod.
+     ```
+  2. **`rook_idle_down.png`**, **`rook_idle_up.png`**, **`rook_idle_side.png`** (`128x64`, 2 frames each, 4 fps):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match Row 1 idle frames of `Zeta.png`. Generate a 2-frame horizontal strip (128x64px, two 64x64px cells) of Rook Matsuda in [down-facing / up-facing back / right-side profile] combat idle stance: Frame 1 poised holding Hexbane Arbalest at hip level with brass prod glinting; Frame 2 1px breathing bob with duster coat hem and hat brim shifting 1px.
+     ```
+  3. **`rook_run_down.png`**, **`rook_run_up.png`**, **`rook_run_side.png`** (`384x64`, 6 frames each, 12 fps):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match Row 2 6-frame run cycle of `Zeta.png`. Generate a 6-frame horizontal strip (384x64px, six 64x64px cells) of Rook Matsuda running in [down-facing / up-facing back / right-side profile] view: 6-frame boot stride, inquisitor duster coat tail flaring, one hand steadying his highwayman hat brim while the other carries the Hexbane Arbalest.
+     ```
+  4. **`rook_attack1_down.png`**, **`rook_attack1_up.png`**, **`rook_attack1_side.png`** (`192x64`, 3 frames each, 14 fps — *Snap-Shot Bolt*):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match `Zeta.png` and `Zeta_Flash.png`. Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Rook Matsuda performing Attack 1 (Snap-Shot Silver Bolt) in [down / up / right-side] view: Frame 1 raising Hexbane Arbalest to eye level with brass monocle glint; Frame 2 firing a consecrated silver bolt with a crisp brass-gold (#FFC83D) and bone-white (#EFE9DA) muzzle cross-flash and recoil; Frame 3 lever-cocking recovery.
+     ```
+  5. **`rook_attack2_down.png`**, **`rook_attack2_up.png`**, **`rook_attack2_side.png`** (`192x64`, 3 frames each, 14 fps — *Twin Repeater Volley*):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match `Zeta.png` and `Zeta_pistol.png`. Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Rook Matsuda performing Attack 2 (Twin Repeater Volley) in [down / up / right-side] view: Frame 1 low braced stance; Frame 2 rapid double-bolt discharge with twin staggered brass-gold (#FFC83D) muzzle streaks; Frame 3 crisp reload snap.
+     ```
+  6. **`rook_attack3_down.png`**, **`rook_attack3_up.png`**, **`rook_attack3_side.png`** (`192x64`, 3 frames each, 12 fps — *Heavy Piercing Stake Blast*):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match `Ollie_chargerifle1.png` and `Zeta_BigBullet.png`. Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Rook Matsuda performing Attack 3 Finisher (Heavy Piercing Stake Blast) in [down / up / right-side] view: Frame 1 kneeling/bracing heavy arbalest as brass prod glows bright #FFE478; Frame 2 firing a massive armor-piercing silver stake with a wide cone of brass-gold shock-sparks and 2px knockback slide; Frame 3 venting smoke recovery.
+     ```
+  7. **`rook_hurt_down.png`**, **`rook_hurt_up.png`**, **`rook_hurt_side.png`** (`64x64`, 1 frame each):
+     ```text
+     [Global Style Lock] Generate a single 64x64px frame of Rook Matsuda in [down / up / right-side] hurt recoil pose: knocked back 2px, holding onto his highwayman hat brim, brass monocle sparking, Hexbane Arbalest held across torso.
+     ```
+  8. **`rook_dodge_side.png`** (`256x64`, 4 frames, 16 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Rook Matsuda performing a right-facing combat tumble/grapple-roll: Frame 1 low dive push-off; Frames 2–3 tucked duster-coat roll with brass-gold (#FFC83D) shell casings and dust streak; Frame 4 one-knee aiming slide recovery.
+     ```
+  9. **`rook_death_side.png`** (`256x64`, 4 frames, 6 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Rook Matsuda's defeat sequence in side profile: Frame 1 staggering back; Frame 2 dropping to one knee as his highwayman hat tips forward; Frame 3 resting the Hexbane Arbalest stock on the stones; Frame 4 slumped forward in shadow with hat brim covering his eyes.
+     ```
+
+---
+
+### 12.3 Ines Calloway (`ines` — Ossuary Necromancer / Magnetist) Full 21-Strip Prompts
+- **Primary Reference File(s)**: `Playable Characters - Myth (EN Gen 1)/529763 - Ninomae Inanis/Ina.png`, `Ina__wheel.png`, `529968 - Murasaki Shion/Shion.png`, `Shion_Circle.png`, `public/assets/aistudio/image_c95e226e.png`
+- **Character Design Lock**: 2-head chibi ossuary necromancer & industrial magnetist with bone-white & ebon twin-locks (`#D9D2C3` / `#1A2228`), skull hairpins, emerald-verdigris anime eyes (`#4FD6A0`), bone rib-corset over soot-black robes, dorsal bone-reliquary censer emitting verdigris soulfire on her back, wielding the **Gravelord Scepter** (skull-topped bone staff with glowing verdigris `#4FD6A0` core) and orbiting bone/iron shards.
+- **All 21 Strip Files & Prompts**:
+  1. **`ines_turnaround.png`** (`256x64`, 4 frames):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match 2-head chibi proportions of `Ina.png` and `Shion.png`. Generate a 4-frame horizontal turnaround strip (256x64px, four 64x64px cells: Down, Up, Left, Right) of Ines Calloway, Ossuary Necromancer: bone-white twin locks with skull hairpins, emerald-verdigris (#4FD6A0) eyes, bone rib-corset over dark catacomb robes, dorsal bone reliquary censer with green soulfire on her back, holding the skull-crowned Gravelord Scepter with 3 tiny bone shards hovering around her waist.
+     ```
+  2. **`ines_idle_down.png`**, **`ines_idle_up.png`**, **`ines_idle_side.png`** (`128x64`, 2 frames each, 4 fps):
+     ```text
+     [Global Style Lock] Generate a 2-frame horizontal strip (128x64px, two 64x64px cells) of Ines Calloway in [down / up / right-side] idle stance: 1px breathing bob, dorsal reliquary censer flickering with verdigris (#4FD6A0) soulfire, 3 bone-and-iron shards orbiting 2px around her waist.
+     ```
+  3. **`ines_run_down.png`**, **`ines_run_up.png`**, **`ines_run_side.png`** (`384x64`, 6 frames each, 12 fps):
+     ```text
+     [Global Style Lock] Generate a 6-frame horizontal strip (384x64px, six 64x64px cells) of Ines Calloway in a [down / up / right-side] 6-frame glide-run cycle: bone-white twin locks and dark catacomb mantle billowing, Gravelord Scepter held forward, verdigris soulfire trail streaming from her dorsal reliquary.
+     ```
+  4. **`ines_attack1_down.png`**, **`ines_attack1_up.png`**, **`ines_attack1_side.png`** (`192x64`, 3 frames each, 14 fps — *Scepter Shard Lash*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Ines Calloway performing Attack 1 (Scepter Shard Lash) in [down / up / right-side] view: Frame 1 drawing Gravelord Scepter back as skull eyes flare #4FD6A0; Frame 2 sweeping scepter forward, hurling a crescent wave of bone shards and verdigris magnetic arcs; Frame 3 poised recovery.
+     ```
+  5. **`ines_attack2_down.png`**, **`ines_attack2_up.png`**, **`ines_attack2_side.png`** (`192x64`, 3 frames each, 14 fps — *Polarity Claw Pulse*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Ines Calloway performing Attack 2 (Polarity Claw Pulse) in [down / up / right-side] view: Frame 1 left hand raised with glowing verdigris sigil; Frame 2 spectral bone-claw & magnetic ring erupting outward in #4FD6A0 and #EFE9DA; Frame 3 recovery.
+     ```
+  6. **`ines_attack3_down.png`**, **`ines_attack3_up.png`**, **`ines_attack3_side.png`** (`192x64`, 3 frames each, 12 fps — *Ossuary Monolith Crush*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Ines Calloway performing Attack 3 Finisher (Ossuary Monolith Crush) in [down / up / right-side] view: Frame 1 raising both scepter and hand overhead as orbiting shards converge; Frame 2 slamming the scepter down to unleash a massive verdigris (#4FD6A0) and bone-white skull shockwave; Frame 3 recovery.
+     ```
+  7. **`ines_hurt_down.png`**, **`ines_hurt_up.png`**, **`ines_hurt_side.png`** (`64x64`, 1 frame each):
+     ```text
+     [Global Style Lock] Generate a single 64x64px frame of Ines Calloway in [down / up / right-side] hurt recoil pose: wincing, twin bone-white locks whipped back, verdigris sparks scattering from her dorsal reliquary.
+     ```
+  8. **`ines_dodge_side.png`** (`256x64`, 4 frames, 16 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Ines Calloway performing a right-facing necrotic mist-step dodge: Frame 1 dissolving into bone shards; Frames 2–3 low swirling vortex of bone-white (#D9D2C3) and verdigris (#4FD6A0) spirit-mist; Frame 4 reforming into poised caster stance.
+     ```
+  9. **`ines_death_side.png`** (`256x64`, 4 frames, 6 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Ines Calloway's defeat sequence in side profile: Frame 1 staggering; Frame 2 dropping to knees as orbiting shards fall inert; Frame 3 Gravelord Scepter clattering to the floor as its green glow fades; Frame 4 slumped in her dark mantle.
+     ```
+
+---
+
+### 12.4 Kaelen Vos (`kaelen` — Hellfire Dragoon / Thermo-Lancer) Full 21-Strip Prompts
+- **Primary Reference File(s)**: `Playable Characters - Myth (EN Gen 1)/204696 - Takanashi Kiara.png`, `530011 - Shirogane Noel/Noel.png`, `530030 - Kiryu Coco/Coco.png`, `public/assets/aistudio/image_c95e226e.png`
+- **Character Design Lock**: 2-head chibi hellfire dragoon in dark slag-and-rust dragonplate (`#2A353D` / `#8B3A1E`), curved brass dragon-horns on brow (`#FFC83D`), flame-tipped spiky rust hair, molten ember-orange anime eyes (`#FF5A26`), twin brass boiler exhaust stacks on his back venting ember flames, wielding the **Cinderlance** (heavy serrated obsidian-and-brass dragon-spear with a molten `#FF5A26` furnace tip).
+- **All 21 Strip Files & Prompts**:
+  1. **`kaelen_turnaround.png`** (`256x64`, 4 frames):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match armoured 2-head chibi proportions of `Noel.png` and `204696 - Takanashi Kiara.png`. Generate a 4-frame horizontal turnaround strip (256x64px, four 64x64px cells: Down, Up, Left, Right) of Kaelen Vos, Hellfire Dragoon: spiky rust-red hair with ember tips, curved brass dragon-horn circlet (#FFC83D), molten ember-orange (#FF5A26) eyes, dark obsidian dragonplate with glowing chest core, twin dorsal brass boiler vents on his back, wielding the serrated Cinderlance great-spear.
+     ```
+  2. **`kaelen_idle_down.png`**, **`kaelen_idle_up.png`**, **`kaelen_idle_side.png`** (`128x64`, 2 frames each, 4 fps):
+     ```text
+     [Global Style Lock] Generate a 2-frame horizontal strip (128x64px, two 64x64px cells) of Kaelen Vos in [down / up / right-side] idle stance: 1px heavy plate breathing bob, dorsal brass boiler stacks puffing 2px ember-orange (#FF5A26) sparks, Cinderlance held ready.
+     ```
+  3. **`kaelen_run_down.png`**, **`kaelen_run_up.png`**, **`kaelen_run_side.png`** (`384x64`, 6 frames each, 12 fps):
+     ```text
+     [Global Style Lock] Generate a 6-frame horizontal strip (384x64px, six 64x64px cells) of Kaelen Vos in a [down / up / right-side] 6-frame heavy dragoon run cycle: armored greaves pounding, tattered rust cape flaring, dorsal boiler vents jetting ember sparks, Cinderlance couched at his side.
+     ```
+  4. **`kaelen_attack1_down.png`**, **`kaelen_attack1_up.png`**, **`kaelen_attack1_side.png`** (`192x64`, 3 frames each, 14 fps — *Cinderlance Wide Flame Sweep*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Kaelen Vos performing Attack 1 (Wide Cinderlance Flame Sweep) in [down / up / right-side] view: Frame 1 drawing Cinderlance back as vents flare; Frame 2 wide 160-degree horizontal spear sweep trailing a crescent of ember-orange (#FF5A26) and brass-yellow (#FFE478) dragonfire; Frame 3 recovery.
+     ```
+  5. **`kaelen_attack2_down.png`**, **`kaelen_attack2_up.png`**, **`kaelen_attack2_side.png`** (`192x64`, 3 frames each, 14 fps — *Reverse Crucible Slash*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Kaelen Vos performing Attack 2 (Reverse Crucible Slash) in [down / up / right-side] view: Frame 1 coiled reverse grip; Frame 2 reverse backhand lance cleave erupting with molten slag sparks (#FF5A26, #D16B38); Frame 3 braced recovery.
+     ```
+  6. **`kaelen_attack3_down.png`**, **`kaelen_attack3_up.png`**, **`kaelen_attack3_side.png`** (`192x64`, 3 frames each, 12 fps — *Hell-Drake Drill Thrust*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Kaelen Vos performing Attack 3 Finisher (Hell-Drake Jet Thrust) in [down / up / right-side] view: Frame 1 dorsal boilers roaring at max pressure; Frame 2 explosive two-handed Cinderlance thrust projecting a 24px cone of white-hot (#EFE9DA) and ember-orange (#FF5A26) dragonfire; Frame 3 steam-venting recovery.
+     ```
+  7. **`kaelen_hurt_down.png`**, **`kaelen_hurt_up.png`**, **`kaelen_hurt_side.png`** (`64x64`, 1 frame each):
+     ```text
+     [Global Style Lock] Generate a single 64x64px frame of Kaelen Vos in [down / up / right-side] hurt recoil pose: braced behind Cinderlance shaft, ember sparks venting from dorsal stacks, grit teeth.
+     ```
+  8. **`kaelen_dodge_side.png`** (`256x64`, 4 frames, 16 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Kaelen Vos performing a right-facing thruster-dash dodge: Frame 1 low crouched ignition; Frames 2–3 jet-propelled horizontal dash wreathed in ember-orange (#FF5A26) and brass (#FFC83D) thruster flames; Frame 4 heavy armored boot slide recovery.
+     ```
+  9. **`kaelen_death_side.png`** (`256x64`, 4 frames, 6 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Kaelen Vos's defeat sequence in side profile: Frame 1 staggering as boiler vents sputter dark smoke; Frame 2 dropping to one knee; Frame 3 planting Cinderlance upright into the ground as its ember core dims; Frame 4 bowed head resting against the lance shaft.
+     ```
+
+---
+
+### 12.5 Vespera Locke (`vespera` — Eldritch Soulbinder / Signal Artificer) Full 21-Strip Prompts
+- **Primary Reference File(s)**: `Playable Characters - JP Gen 0/529818 - Roboco-san/Roboco.png`, `Roboco_electric.png`, `529784 - Ouro Kronii/Kronii.png`, `public/assets/aistudio/image_c95e226e.png`
+- **Character Design Lock**: 2-head chibi eldritch soulbinder & arc-artificer with starlight-silver hair (`#D9D2C3`), brass-and-volt star tiara (`#FFC83D` / `#C9F24B`), astral-violet/volt anime eyes, midnight sanctum cloak with twin glowing volt-green (`#C9F24B`) runic stoles, a floating starforged brass **Astral Halo Ring** behind her shoulders, and an **Astral Conduit Whip / Levitating Grimoire** with hovering wisp-skulls.
+- **All 21 Strip Files & Prompts**:
+  1. **`vespera_turnaround.png`** (`256x64`, 4 frames):
+     ```text
+     [Global Style Lock] REFERENCE-GUIDED INSTRUCTION: Match 2-head chibi proportions and floating halo geometry of `Kronii.png` and `Roboco.png`. Generate a 4-frame horizontal turnaround strip (256x64px, four 64x64px cells: Down, Up, Left, Right) of Vespera Locke, Eldritch Soulbinder: long starlight-silver hair (#D9D2C3), brass star tiara with volt-green (#C9F24B) gem, midnight sanctum cloak with volt runic stoles, floating brass Astral Halo Ring behind her shoulders studded with 3 volt-green nodes, and an Astral Conduit Whip & levitating Grimoire.
+     ```
+  2. **`vespera_idle_down.png`**, **`vespera_idle_up.png`**, **`vespera_idle_side.png`** (`128x64`, 2 frames each, 4 fps):
+     ```text
+     [Global Style Lock] Generate a 2-frame horizontal strip (128x64px, two 64x64px cells) of Vespera Locke in [down / up / right-side] idle stance: 1px breathing bob, floating brass Astral Halo Ring hovering 1px up/down behind her shoulders with volt-green (#C9F24B) sparks.
+     ```
+  3. **`vespera_run_down.png`**, **`vespera_run_up.png`**, **`vespera_run_side.png`** (`384x64`, 6 frames each, 12 fps):
+     ```text
+     [Global Style Lock] Generate a 6-frame horizontal strip (384x64px, six 64x64px cells) of Vespera Locke in a [down / up / right-side] 6-frame run cycle: starlight-silver hair and midnight sanctum cloak flowing, Astral Halo Ring rotating slightly behind her shoulders, volt-green (#C9F24B) arc sparks trailing her boots.
+     ```
+  4. **`vespera_attack1_down.png`**, **`vespera_attack1_up.png`**, **`vespera_attack1_side.png`** (`192x64`, 3 frames each, 14 fps — *Astral Conduit Whip Lash*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Vespera Locke performing Attack 1 (Astral Conduit Whip Lash) in [down / up / right-side] view: Frame 1 Halo ring flaring volt-green (#C9F24B); Frame 2 snapping a jagged bolt-whip of volt-green (#C9F24B) and bone-white (#EFE9DA) lightning forward; Frame 3 coil recovery.
+     ```
+  5. **`vespera_attack2_down.png`**, **`vespera_attack2_up.png`**, **`vespera_attack2_side.png`** (`192x64`, 3 frames each, 14 fps — *Twin Halo Arc Discharge*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Vespera Locke performing Attack 2 (Twin Halo Arc Discharge) in [down / up / right-side] view: Frame 1 open grimoire page glowing; Frame 2 twin intersecting arcs of volt-green (#C9F24B) and signal-cyan (#00F0FF) lightning firing from her Astral Halo; Frame 3 recovery.
+     ```
+  6. **`vespera_attack3_down.png`**, **`vespera_attack3_up.png`**, **`vespera_attack3_side.png`** (`192x64`, 3 frames each, 12 fps — *Seraphic Overcharge Nova*):
+     ```text
+     [Global Style Lock] Generate a 3-frame horizontal strip (192x64px, three 64x64px cells) of Vespera Locke performing Attack 3 Finisher (Seraphic Overcharge Nova) in [down / up / right-side] view: Frame 1 levitating 2px as her Astral Halo expands; Frame 2 unleashing a wide multi-pronged volt-green (#C9F24B) and brass-gold (#FFC83D) lightningburst; Frame 3 landing recovery.
+     ```
+  7. **`vespera_hurt_down.png`**, **`vespera_hurt_up.png`**, **`vespera_hurt_side.png`** (`64x64`, 1 frame each):
+     ```text
+     [Global Style Lock] Generate a single 64x64px frame of Vespera Locke in [down / up / right-side] hurt recoil pose: knocked back 2px, Astral Halo Ring tilted and sparking volt-green (#C9F24B), silver hair flaring.
+     ```
+  8. **`vespera_dodge_side.png`** (`256x64`, 4 frames, 16 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Vespera Locke performing a right-facing astral phase-blink dodge: Frame 1 stepping into a volt-green (#C9F24B) geometric ring; Frames 2–3 high-voltage lightning ball & starlight afterimage streak; Frame 4 emerging from an arrival ring.
+     ```
+  9. **`vespera_death_side.png`** (`256x64`, 4 frames, 6 fps):
+     ```text
+     [Global Style Lock] Generate a 4-frame horizontal strip (256x64px, four 64x64px cells) of Vespera Locke's defeat sequence in side profile: Frame 1 staggering; Frame 2 dropping to her knees as her Astral Halo Ring Powers down; Frame 3 the brass halo ring settling onto the ground around her; Frame 4 slumped gently with closed eyes.
+     ```
+
+---
+
+### 12.6 All 15 Specialization Costume Sprite Sheets (`384x128` 6×2 Grid: Row 1 = 4 Idle, Row 2 = 6 Run)
+*(Reference: Alternate outfits `_O1.png`, `_O2.png`, `_O3.png` inside `tempartreference(DONOTCOMPLETELYCOPY)/Playable Characters - .../`)*
+
+| Spec Sheet ID | Character & Specialization | Visual Costume & Weapon Transformation (`384x128` Chibi Sheet) |
+| :--- | :--- | :--- |
+| **`sena_spec_phantom_edge_sheet.png`** | Sena — **Phantom Edge** | Sleeveless hooded assassin shroud, twin spectral phase-knives (`Anya_keris.png` ref) glowing `#00F0FF`, afterimage scarf tails. |
+| **`sena_spec_rift_breaker_sheet.png`** | Sena — **Rift Breaker** | Heavy hydraulic siege gauntlets (`Kaela.png` / `Korone.png` ref) with brass pistons `#FFC83D` and riveted shoulder pauldrons. |
+| **`sena_spec_pulse_dancer_sheet.png`** | Sena — **Pulse Dancer** | Flowing electro-silk battle tunic with twin conductive volt-cyan (`#00F0FF` / `#C9F24B`) ribbon hoops orbiting her wrists. |
+| **`rook_spec_rail_hunter_sheet.png`** | Rook — **Rail Hunter** | Long camou-slate sniper cloak, multi-lens brass rangefinder visor, oversized tethered Coil Harpoon Rifle (`Ollie_chargerifle1.png` ref). |
+| **`rook_spec_siege_gunner_sheet.png`** | Rook — **Siege Gunner** | Heavy blast-apron and artillery pauldron rig, carrying a drum-fed Mortar Bombard Cannon and dorsal shell rack (`Pekora.png` ref). |
+| **`rook_spec_circuit_warden_sheet.png`** | Rook — **Circuit Warden** | Copper-wired combat engineer trench coat, dorsal pylon dispenser pack, and short-barrel Arc-Tool carbine (`Roboco.png` ref). |
+| **`ines_spec_magnet_crusher_sheet.png`** | Ines — **Magnet Crusher** | Heavy iron-plated grav-vest, oversized twin horseshoe-magnet crushing gauntlets, floating compressed iron sphere (`Sana.png` ref). |
+| **`ines_spec_scrapstorm_sheet.png`** | Ines — **Scrapstorm** | Wind-swept shroud surrounded by a permanent whirling ring of 8 razor bone-and-steel micro-blades (`Ina__wheel.png` ref). |
+| **`ines_spec_polarity_breaker_sheet.png`** | Ines — **Polarity Breaker** | Asymmetrical split coat (left side signal-cyan `+`, right side blood-crimson `-`), dual electromagnetic pulse tonfas. |
+| **`kaelen_spec_cinder_corsair_sheet.png`** | Kaelen — **Cinder Corsair** | Winged twin-thruster jetpack on back, aviator heat-visor, wielding paired curved Combustion Cutters (`204696 - Takanashi Kiara.png` ref). |
+| **`kaelen_spec_crucible_architect_sheet.png`** | Kaelen — **Crucible Architect** | Master foundry apron-plate, giant molten Crucible Stamp-Glove on right arm and forge hammer on left (`Kaela_hammer.png` ref). |
+| **`kaelen_spec_cryo_saboteur_sheet.png`** | Kaelen — **Cryo Saboteur** | Frost-rimmed chemical trench coat, twin dorsal sub-zero coolant tanks (`#7CE8FF`), dual cryo-injector gauntlets. |
+| **`vespera_spec_volt_reaver_sheet.png`** | Vespera — **Volt Reaver** | Armored storm-duelist coat, crackling volt-green (`#C9F24B`) shoulder coils, wielding a massive Electrified Heavy Cleaver (`Suisei_axswing.png` ref). |
+| **`vespera_spec_iron_puppeteer_sheet.png`** | Vespera — **Iron Puppeteer** | Brass-and-wire control harness on both hands with glowing tether cables linked to a miniature floating Iron Automaton Skull. |
+| **`vespera_spec_storm_cartographer_sheet.png`** | Vespera — **Storm Cartographer** | Star-charted astromancer mantle, Conductive Weather Baton in hand, and a miniature thundercloud halo above her head (`Kobo.png` ref). |
+
+---
+
+## SECTION 13: ALL REMAINING CHARACTER EXPRESSION PORTRAITS (`96x96`), ULTIMATE CUT-INS (`480x120`) & NPC PORTRAITS (`96x96`)
+
+### 13.1 Companion Playable Character Expression Portraits (`96x96` — 16 Files)
+- **Primary Reference File(s)**: `public/assets/characters/sheet_combined_272x208_4x.png` + `530074 - Vestia Zeta/Zeta_Port.png` + `529763 - Ninomae Inanis/Ina_Portrait.png`
+- **Rook Matsuda (`rook`)**:
+  - **`rook_neutral.png`**: Calm, sharp-eyed inquisitor marksman bust portrait (`96x96`), pointed highwayman hat with brass buckle, brass targeting monocle over right amber-gold eye, silver-stake bandolier, Hexbane Arbalest stock behind shoulder.
+  - **`rook_hurt.png`**: Battle-damaged wince, cracked monocle lens sparking brass, hat brim nicked, grit teeth, soot smudge on cheek.
+  - **`rook_determined.png`**: Focused sniper lock-on expression, monocle crosshair glowing `#FFC83D`, confident smirk, raising Hexbane Arbalest.
+  - **`rook_ultimate.png`**: Unleashing *Judgement Silver Spear*: amber-gold eye and brass monocle blazing `#FFE478`, solar-silver energy wisps rising around his hat brim.
+- **Ines Calloway (`ines`)**:
+  - **`ines_neutral.png`**: Composed gothic-industrial necromancer bust portrait (`96x96`), bone-white & ebon twin-locks with skull hairpins, emerald-verdigris (`#4FD6A0`) eyes, bone rib-corset, dorsal reliquary censer glowing behind shoulder.
+  - **`ines_hurt.png`**: Wincing expression, bone hairpin cracked, verdigris sparks leaking from reliquary collar.
+  - **`ines_determined.png`**: Fierce occult chant expression, orbiting bone shards floating past her cheeks, Gravelord Scepter skull glowing bright `#4FD6A0`.
+  - **`ines_ultimate.png`**: Unleashing *Catacomb Bone-Tempest*: eyes blazing pure emerald-verdigris (`#4FD6A0`), bone-white hair levitating upward in a necrotic vortex.
+- **Kaelen Vos (`kaelen`)**:
+  - **`kaelen_neutral.png`**: Stoic hellfire dragoon bust portrait (`96x96`), spiky rust-red hair, curved brass dragon-horns on brow, molten ember-orange (`#FF5A26`) eyes, obsidian dragonplate pauldrons and dorsal boiler stacks.
+  - **`kaelen_hurt.png`**: Grimacing through heavy impact, soot and ash across cheek, dorsal boiler stack venting emergency steam.
+  - **`kaelen_determined.png`**: Fierce battle roar grin, flame-tipped bangs flaring, Cinderlance blade tip glowing `#FF5A26` beside his face.
+  - **`kaelen_ultimate.png`**: Unleashing *Avatar of the Hell-Drake*: eyes and dragon-horns wreathed in white-hot (`#FFE478`) and molten ember (`#FF5A26`) dragonfire, obsidian scales glowing along his jaw.
+- **Vespera Locke (`vespera`)**:
+  - **`vespera_neutral.png`**: Serene eldritch soulbinder bust portrait (`96x96`), starlight-silver hair, brass-and-volt star tiara, violet/volt anime eyes, midnight sanctum collar, floating brass Astral Halo Ring behind her head.
+  - **`vespera_hurt.png`**: Wincing recoil, star tiara flickering with erratic volt-green (`#C9F24B`) static, silver hair disheveled.
+  - **`vespera_determined.png`**: Intense coven-weaver gaze, levitating Astral Grimoire open in the foreground with glowing `#C9F24B` runes.
+  - **`vespera_ultimate.png`**: Unleashing *Choir of Twelve Seraphim*: eyes and tiara blazing electric volt-green (`#C9F24B`) and signal-cyan (`#00F0FF`), concentric seraphic halo rings radiating behind her head.
+
+### 13.2 Companion Ultimate Cut-In Banners (`480x120` — 4 Additional Banners)
+- **Primary Reference File(s)**: `Miscellaneous/206506 - Effects.png` (`Anime Zoom` speed-lines) + Character `_Port.png`
+- **`rook_cutin.png`** (`480x120`): Extreme close-up widescreen anime eye cut-in of Rook Matsuda across a diagonal soot-and-brass speed-line slash banner; his left amber eye and right brass targeting monocle lock onto the target with a blazing `#FFC83D` crosshair flare.
+- **`ines_cutin.png`** (`480x120`): Extreme close-up widescreen anime eye cut-in of Ines Calloway across a soot-and-verdigris speed-line banner; her emerald-verdigris (`#4FD6A0`) eyes blaze with necrotic runes while bone-white hair strands and skull sigils whip across the frame.
+- **`kaelen_cutin.png`** (`480x120`): Extreme close-up widescreen anime eye cut-in of Kaelen Vos across a soot-and-ember speed-line banner; his molten `#FF5A26` draconic eyes and curved brass horns erupt with white-hot (`#FFE478`) furnace flames.
+- **`vespera_cutin.png`** (`480x120`): Extreme close-up widescreen anime eye cut-in of Vespera Locke across a soot-and-volt speed-line banner; her eyes and forehead star-tiara blaze with `#C9F24B` volt lightning and geometric astral rings.
+
+### 13.3 Cleansed-Territory Pilgrim NPCs (`128x64` 2-Frame Idle Strips) & All 11 NPC Dialogue Portraits (`96x96`)
+- **3 Cleansed-Territory Pilgrim Sprites (`64x64` × 2 frames = `128x64`, anchor `[32, 58]`)**:
+  - **`npc_pilgrim_caelum.png` (Sir Caelum the Undying — Cleansed Sanctuary Knight)**: Weathered silver-plate paladin kneeling/standing with a blessed signal-cyan (`#00F0FF`) banner-spear and bone-white cloak.
+  - **`npc_pilgrim_lyra.png` (Sister Lyra of the Veil — Wandering Shrine Maiden)**: Shrine maiden in bone-white and bog-teal (`#2E6962`) vestments holding a purifying brass thurible censer.
+  - **`npc_pilgrim_orin.png` (Runeseeker Orin — Relic Chronicler)**: Scholar-explorer carrying a scroll-packed leather rucksack and glowing astrolabe lantern (`#FFC83D`).
+- **11 NPC Dialogue Bust Portraits (`96x96`, 1 frame each)**:
+  - **`portrait_ume.png`** (Quartermaster Ume), **`portrait_vaelen.png`** (Master Smith Vaelen), **`portrait_isolde.png`** (Sister Isolde), **`portrait_malakor.png`** (Chronicler Malakor), **`portrait_solen.png`** (Archmage Solen), **`portrait_maeve.png`** (Maeve the Hearthkeeper), **`portrait_vex.png`** (Vex the Veil-Peddler), **`portrait_morwen.png`** (Morwen the Caravan Mystic), **`portrait_caelum.png`** (Sir Caelum), **`portrait_lyra.png`** (Sister Lyra), **`portrait_orin.png`** (Runeseeker Orin).
+
+---
+
+## SECTION 14: ALL 9 SAME-SPECIES 10× FUSION MID-BOSSES (`672x96`) & 9 SECOND-STAGE 5× KING FUSION BOSSES (`896x128`)
+
+### 14.1 Nine 10× Same-Species Fusion Mid-Bosses (`96x96` × 7 Frames = `672x96`, 8 fps, anchor `[48, 88]`)
+*(Frame Layout: Frames 1–2 Move, Frame 3 Brass-Glint Telegraph Windup, Frames 4–5 Signature Special Attack, Frame 6 Hurt, Frame 7 Dead)*
+- **Primary Reference File(s)**: `Bosses/206503 - Stage 4 Mini Boss (Udin).png`, `Bosses/206495 - Stage 1 Mini Boss (Fubuzilla).png`, `Enemies/206549 - Enemies (Miscellaneous).png`
+1. **`fusion_scrap_rat_king.png` (`scrapRatKing` — 10× Tin Rat Amalgam)**: Multi-headed rat-king juggernaut fused inside a welded sphere of 10 rusted iron torture-cans (`#8B3A1E`), rolling forward as a spiked iron wheel (`rollingRush`).
+2. **`fusion_bonepack_alpha.png` (`bonepackAlpha` — 10× Dust Dog Amalgam)**: Three-headed ossuary dire-hound stitched from 10 grave-hound skeletons (`#D9D2C3`) wearing a crown of tangled chain collars and brass goggles (`pairedLungeHowl`).
+3. **`fusion_wire_cyclone.png` (`wireCyclone` — 10× Wire Kite Amalgam)**: Whirling aerialgyre of 10 bone-winged gargoyle imps bound by electrified barbed wire and a central crimson oculus (`aerialBoltArcs`).
+4. **`fusion_brine_maw.png` (`brineMaw` — 10× Lye Leech Amalgam)**: Cavernous multi-ringed abyssal worm-maw formed from 10 bloated bile-green (`#9CB34C`) leeches fused around a central suction gullet (`suctionDrain`).
+5. **`fusion_screech_choir.png` (`screechChoir` — 10× Sump Bat Amalgam)**: Hanging gothic cathedral chandelier of 10 fused crypt-bats with a giant amplified rib-cage resonator bell (`sonicCone`).
+6. **`fusion_rivet_titan.png` (`rivetTitan` — 10× Rivet Tick Amalgam)**: Towering 12-legged iron-skull arachnid colossus built from 10 riveted crypt-ticks with glowing furnace vents under its carapace (`titanSlamLeap`).
+7. **`fusion_relay_colossus.png` (`relayColossus` — 10× Signal Mite Amalgam)**: Floating obelisk-chandelier of 10 lantern-skulls linked by signal-cyan (`#00F0FF`) lightning coils and brass chimes (`overclockBroadcast`).
+8. **`fusion_dredge_husk.png` (`dredgeHusk` — 10× Silt Mimic Amalgam)**: Hulking crab-like reliquary golem made of 10 chained iron treasure coffers overflowing with bone jaws and bile-green tongues (`feintCounterSlam`).
+9. **`fusion_blackwing_furnace.png` (`blackwingFurnace` — 10× Cinder Crow Amalgam)**: Six-winged undead phoenix-roc of charred bone and rusted boiler grates venting ember-orange (`#FF5A26`) firestorms (`furnaceAirstrike`).
+
+### 14.2 Nine Second-Stage 5× Mid-Boss "KING" Fusion Bosses (`128x128` × 7 Frames = `896x128`, 8 fps, anchor `[64, 118]`)
+*(Triggered when 5 Mid-Level Fused Bosses merge into `"King <Mob Name>"`, outlined in a 2px Sovereign Brass-Gold `#FFC83D` & Blood-Crimson `#FF3B3B` double rim)*
+1. **`king_tin_rat.png` (King Tin Rat)**: Sovereign Rat-Emperor seated atop a rolling cathedral-throne of crushed iron canisters, wearing a jagged tin-can crown (`#FFC83D`).
+2. **`king_dust_dog.png` (King Dust Dog)**: Colossal Cerberus-Behemoth of fused ossuary bone-plate with blazing crimson eye-sockets and spiked iron shoulder-chains.
+3. **`king_wire_kite.png` (King Wire Kite)**: Seraphic Gargoyle Archon with 6 razor-wire wings and a revolving brass astrolabe halo firing blood-lightning.
+4. **`king_lye_leech.png` (King Lye Leech)**: Sovereign Hydra-Leech with 5 crowned lamprey necks rising from a boiling cauldron of caustic bile (`#9CB34C`).
+5. **`king_sump_bat.png` (King Sump Bat)**: Nosferatu Chiropteran Lord draped in a royal cloak of leathery wings with a brass cathedral organ fused to its spine.
+6. **`king_rivet_tick.png` (King Rivet Tick)**: Fortress-Spider Monarch carrying a gothic iron citadel crown on its abdomen with 8 hydraulic pile-driver legs.
+7. **`king_signal_mite.png` (King Signal Mite)**: Astral Lich-Lantern Sovereign — a giant crowned skull-sun of signal-cyan (`#00F0FF`) soulfire orbited by 10 brass satellite bells.
+8. **`king_silt_mimic.png` (King Silt Mimic)**: Royal Treasury Gargantua — an ornate gilded vault-door sarcophagus split open into a three-jawed bone leviathan.
+9. **`king_cinder_crow.png` (King Cinder Crow)**: Ashen Crow-King in a cloak of burning black feathers, wearing a crown of molten iron thorns (`#FF5A26`).
+
+---
+
+## SECTION 15: ALL 60 BLOODLINE BOSSES ACROSS FLOORS 1–5 (4 Bloodlines × 5 Floors × 3 Stages)
+
+Each Floor features 4 Sectors (`slabTown` North = **House of Malgorth**, `route9` West = **Cavalcade of Varkos**, `lyeMarsh` East = **Coven of Hagra**, `copperFlats` South = **Brood of Skarath**), and each Sector has a 3-stage sequential boss chain:
+- **Stage I · Warden**: `128x128` × 9 frames (`1152x128`, anchor `[64, 118]`)
+- **Stage II · Executioner**: `160x160` × 9 frames (`1440x160`, anchor `[80, 148]`)
+- **Stage III · Overlord**: `192x192` to `256x192` × 9 frames (`1728x192` / `2016x160` / `2304x192`)
+
+### 15.1 Floor 1 — The Blighted Catacombs (12 Bosses — Accent: `#00F0FF` Signal Cyan & `#8B3A1E` Rust)
+- **North (House of Malgorth)**:
+  - `boss_f1_north_warden.png` (**Grave-Warden Vorn** — Ossuary Gatekeeper, `128x128`×9): Towering undead gatekeeper in riveted crypt-plate swinging a chained iron portcullis mace.
+  - `boss_f1_north_exec.png` (**Bone-Cleaver Gorath** — Crypt Headsman, `160x160`×9): Executioner lord in a bone-horned hood wielding a twin-handed guillotine greatsword.
+  - `the_foreman.png` (**High Executioner Malgorth / The Foreman** — Stage III Overlord, `192x192`×9, already detailed in Section 5).
+- **West (Cavalcade of Varkos)**:
+  - `boss_f1_west_warden.png` (**Houndsman Kael** — Gallows Outrider, `128x128`×9): Mounted skeletal outrider with a pack-leash of chained grave-hounds and a barbed harpoon.
+  - `boss_f1_west_exec.png` (**Iron-Wheel Draven** — Chain-Flail Rider, `160x160`×9): Heavy spiked monowheel juggernaut swinging twin burning furnace flails.
+  - `big_axle.png` (**Dread Charioteer Varkos / Big Axle** — Stage III Overlord, `224x160`×9, already detailed in Section 5).
+- **East (Coven of Hagra)**:
+  - `boss_f1_east_warden.png` (**Mire-Witch Syla** — Keeper of Leech Vats, `128x128`×9): Stilted bog-witch stirring a cauldron-staff of glowing bile-green (`#9CB34C`) leeches.
+  - `boss_f1_east_exec.png` (**Leech-Cantor Morvath** — Choir of the Fens, `160x160`×9): Multi-armed plague bishop carrying a rack of corroded brass curse-bells.
+  - `mother_sump.png` (**Bog-Matriarch Hagra / Mother Sump** — Stage III Overlord, `192x192`×9, already detailed in Section 5).
+- **South (Brood of Skarath)**:
+  - `boss_f1_south_warden.png` (**Crypt-Stalker Vorx** — Burrower of Ash, `128x128`×9): Armored centipede-drake with旋转 brass drill-mandibles emerging from red ash.
+  - `boss_f1_south_exec.png` (**Tomb-Gorger Krag** — Carapace Behemoth, `160x160`×9): Hulking siege-tortoise wyrm with a furnace-mortar shell on its back.
+  - `the_long_dry.png` (**Catacomb Wyrm Skarath / The Long Dry** — Stage III Overlord, `256x192`×9, already detailed in Section 5).
+
+### 15.2 Floor 2 — The Frostbound Crypt (12 Bosses — Accent: `#7CE8FF` Hoarfrost Cyan & `#1B3144` Glacial Slate)
+- **North**: `boss_f2_north_warden.png` (**Rime-Warden Vorn**), `boss_f2_north_exec.png` (**Deathknight Gorath**), `boss_f2_north_overlord.png` (**Dreadlord Malgorth** — Frostbound siege dreadnought encased in glacier spikes and blue soul-ice).
+- **West**: `boss_f2_west_warden.png` (**Frost-Stalker Kael**), `boss_f2_west_exec.png` (**Glacier-Ram Draven**), `boss_f2_west_overlord.png` (**Cryo-Cavalier Varkos** — Icebreaker war-chariot with frost-turbine blades).
+- **East**: `boss_f2_east_warden.png` (**Frost-Siren Syla**), `boss_f2_east_exec.png` (**Rime-Priest Morvath**), `boss_f2_east_overlord.png` (**Ice-Matriarch Hagra** — Frozen charnel queen encased in a crystalline cryo-brood sac).
+- **South**: `boss_f2_south_warden.png` (**Ice-Borer Vorx**), `boss_f2_south_exec.png` (**Frost-Gorger Krag**), `boss_f2_south_overlord.png` (**Glacier-Wyrm Skarath** — Sub-zero permafrost leviathan with diamond-ice drill jaws).
+
+### 15.3 Floor 3 — The Hellfire Abyss (12 Bosses — Accent: `#FF5A26` Molten Ember & `#3B1A14` Brimstone Obsidian)
+- **North**: `boss_f3_north_warden.png` (**Cinder-Warden Vorn**), `boss_f3_north_exec.png` (**Hellblade Gorath**), `boss_f3_north_overlord.png` (**Archfiend Malgorth** — Demon-forged caldera colossus with molten guillotine arms).
+- **West**: `boss_f3_west_warden.png` (**Hellhound Kael**), `boss_f3_west_exec.png` (**Magma-Ram Draven**), `boss_f3_west_overlord.png` (**Infernal Chariot Varkos** — Brimstone locomotive war-rig dragging red-hot iron maidens).
+- **East**: `boss_f3_east_warden.png` (**Pyre-Witch Syla**), `boss_f3_east_exec.png` (**Ash-Cantor Morvath**), `boss_f3_east_overlord.png` (**Cinder-Queen Hagra** — Magma-cauldron matriarch birthing cinder-larvae).
+- **South**: `boss_f3_south_warden.png` (**Magma-Burrower Vorx**), `boss_f3_south_exec.png` (**Slag-Maw Krag**), `boss_f3_south_overlord.png` (**Hell-Drake Skarath** — Volcanic elder dragon of obsidian plate and liquid fire).
+
+### 15.4 Floor 4 — The Rotwood Mire (12 Bosses — Accent: `#C9F24B` Spore Volt-Lime & `#1F3D2E` Mycelium Green)
+- **North**: `boss_f4_north_warden.png` (**Blight-Warden Vorn**), `boss_f4_north_exec.png` (**Spore-Reaver Gorath**), `boss_f4_north_overlord.png` (**Pestilent Lord Malgorth** — Overgrown fungal-cathedral executioner).
+- **West**: `boss_f4_west_warden.png` (**Carrion-Hound Kael**), `boss_f4_west_exec.png` (**Bile-Hulk Draven**), `boss_f4_west_overlord.png` (**Plague-Rider Varkos** — Contagion war-wagon overgrown with weeping bile-roots).
+- **East**: `boss_f4_east_warden.png` (**Spore-Witch Syla**), `boss_f4_east_exec.png` (**Rot-Cantor Morvath**), `boss_f4_east_overlord.png` (**Brood-Mother Hagra** — Towering mycelium empress of the Carrion Fen).
+- **South**: `boss_f4_south_warden.png` (**Root-Chewer Vorx**), `boss_f4_south_exec.png` (**Venom-Maw Krag**), `boss_f4_south_overlord.png` (**Putrid Leviathan Skarath** — Rot-wood root-wyrm dripping corrosive spores).
+
+### 15.5 Floor 5 — The Void Citadel (12 Bosses — Accent: `#FFC83D` Sovereign Gold, `#9FA7FF` Astral Violet & `#110C1D` Void Black)
+- **North**: `boss_f5_north_warden.png` (**Void-Warden Vorn**), `boss_f5_north_exec.png` (**Astral-Blade Gorath**), `boss_f5_north_overlord.png` (**Eternal Sovereign Malgorth** — Six-winged astral executioner progenitor with dimensional rift-blades).
+- **West**: `boss_f5_west_warden.png` (**Rift-Hound Kael**), `boss_f5_west_exec.png` (**Star-Ram Draven**), `boss_f5_west_overlord.png` (**Void-Cavalier Varkos** — Starforged nebula chariot pulled by void-steeds).
+- **East**: `boss_f5_east_warden.png` (**Void-Oracle Syla**), `boss_f5_east_exec.png` (**Void-Choir Morvath**), `boss_f5_east_overlord.png` (**Abyss-Mother Hagra** — Cosmic high priestess of the Eclipsed Star).
+- **South**: `boss_f5_south_warden.png` (**Rift-Serpent Vorx**), `boss_f5_south_exec.png` (**Star-Gorger Krag**), `boss_f5_south_overlord.png` (**Elder Void-Dragon Skarath** — Constellation-scaled apex wyrm of the Demiurge).
+
+---
+
+## SECTION 16: ALL 95 SKILL ICONS, TRAIT ICONS & 28 STATUS EFFECT ICONS (`32x32` & `16x16`)
+
+> **Reference File for All Icons**: `tempartreference(DONOTCOMPLETELYCOPY)/Items/206883 - Item Icons.png` (`444x430` master icon sheet) + Character `_Weapon.png`, `_Perk1..3.png`, `_Special.png`.
+> Every `32x32` icon uses a `1px #0B0D10` outer outline, `1px #3A3F47` bevel (or `#FFC83D` brass border for Ultimates), and `#11171B` dark slate interior.
+
+### 16.1 Base Class Active & Ultimate Skill Icons (`32x32` — 16 Additional Base Icons)
+- **Rook Matsuda (`#FFC83D` Brass Accent)**:
+  - `icon_skill_rivet_spread.png` (*Silver Stake Spread*): 5 consecrated silver crossbow bolts fanning outward in a cone with brass-gold trails.
+  - `icon_skill_kickback.png` (*Sanctified Kickback*): Crossbow muzzle blast firing downward-right with backward vault speed-arrows.
+  - `icon_skill_rapid_fire.png` (*Inquisitor Volley*): 3 rapid-fire silver bolts stacked in parallel motion lines.
+  - `icon_skill_rail_slug.png` (*Judgement Silver Spear* Ultimate): Colossal glowing solar-silver spear-bolt piercing a cracked iron shield (`#FFC83D` border).
+- **Ines Calloway (`#4FD6A0` Verdigris Accent)**:
+  - `icon_skill_pull.png` (*Grave-Grasp Pull*): Spectral bone hand & horseshoe magnet pulling 3 iron shards inward.
+  - `icon_skill_spin_up.png` (*Whirling Bone-Vortex*): Circular saw-ring of orbiting bone-and-steel shards with verdigris motion arcs.
+  - `icon_skill_lump.png` (*Ossuary Monolith*): Giant compressed skull-boulder of fused bones and scrap iron being hurled.
+  - `icon_skill_scrapfall.png` (*Catacomb Bone-Tempest* Ultimate): Rain of ancestral bone pillars and iron debris falling from a verdigris rift (`#FFC83D` border).
+- **Kaelen Vos (`#FF5A26` Ember Accent)**:
+  - `icon_skill_naphtha_jet.png` (*Brimstone Dragon-Rush*): Blazing Cinderlance tip hurtling forward with twin ember thruster trails.
+  - `icon_skill_caustic_mortar.png` (*Hellfire Crucible Bomb*): Lobbed molten brimstone shell exploding into an ember-and-bile puddle.
+  - `icon_skill_vent_supernova.png` (*Infernal Wyrm-Roar*): 360-degree radial dragonfire eruption from twin brass boiler vents.
+  - `icon_skill_supercritical_meltdown.png` (*Avatar of the Hell-Drake* Ultimate): Horned Hell-Drake skull wreathed in white-hot and molten ember flames (`#FFC83D` border).
+- **Vespera Locke (`#C9F24B` Volt & `#00F0FF` Signal Accent)**:
+  - `icon_skill_tesla_pylon.png` (*Eldritch Obelisk*): Pair of runic brass-and-stone obelisks linked by a crackling volt-green laser beam.
+  - `icon_skill_seeker_swarm.png` (*Wisp-Skull Swarm*): 3 winged mechanical wisp-skulls diving with volt-green eye trails.
+  - `icon_skill_phase_blink.png` (*Astral Rift-Step*): Twin linked astral teleportation portals with a lightning step-streak between them.
+  - `icon_skill_overclocked_armada.png` (*Choir of Twelve Seraphim* Ultimate): 12-pointed seraphic brass halo firing twin intersecting astral lasers (`#FFC83D` border).
+
+### 16.2 All 75 Specialization Skill & Ultimate Icons (`32x32` — 5 Icons × 15 Specializations)
+- **Sena — Phantom Edge**: `icon_skill_shadow_pin.png`, `icon_skill_false_exit.png`, `icon_skill_seam_cut.png`, `icon_skill_borrowed_second.png`, `icon_skill_midnight_corridor.png` (Ult).
+- **Sena — Rift Breaker**: `icon_skill_pile_fist.png`, `icon_skill_faultline_stomp.png`, `icon_skill_anchor_grip.png`, `icon_skill_seismic_guard.png`, `icon_skill_worldsplitter.png` (Ult).
+- **Sena — Pulse Dancer**: `icon_skill_snapstep.png`, `icon_skill_conductive_loop.png`, `icon_skill_backbeat.png`, `icon_skill_chain_waltz.png`, `icon_skill_perfect_frequency.png` (Ult).
+- **Rook — Rail Hunter**: `icon_skill_harpoon_line.png`, `icon_skill_sightline_break.png`, `icon_skill_ricochet_survey.png`, `icon_skill_pinpoint_verdict.png`, `icon_skill_dead_meridian.png` (Ult).
+- **Rook — Siege Gunner**: `icon_skill_mortar_beacon.png`, `icon_skill_bunker_roller.png`, `icon_skill_salvo_grid.png`, `icon_skill_breakwater_shot.png`, `icon_skill_iron_weather.png` (Ult).
+- **Rook — Circuit Warden**: `icon_skill_arc_pylon.png`, `icon_skill_scrambler_disk.png`, `icon_skill_relay_swap.png`, `icon_skill_overload_command.png`, `icon_skill_blackout_cascade.png` (Ult).
+- **Ines — Magnet Crusher**: `icon_skill_crush_point.png`, `icon_skill_iron_coffin.png`, `icon_skill_mass_driver.png`, `icon_skill_pressure_inversion.png`, `icon_skill_singularity_press.png` (Ult).
+- **Ines — Scrapstorm**: `icon_skill_razor_monsoon.png`, `icon_skill_shiver_step.png`, `icon_skill_crosswind.png`, `icon_skill_shard_cathedral.png`, `icon_skill_thousand_knife_typhoon.png` (Ult).
+- **Ines — Polarity Breaker**: `icon_skill_northbound.png`, `icon_skill_reverse_charge.png`, `icon_skill_collision_course.png`, `icon_skill_mag_rail_surf.png`, `icon_skill_zero_point_reversal.png` (Ult).
+- **Kaelen — Cinder Corsair**: `icon_skill_jet_sickle.png`, `icon_skill_thruster_feint.png`, `icon_skill_skyhook_dive.png`, `icon_skill_razor_afterburn.png`, `icon_skill_crimson_flyover.png` (Ult).
+- **Kaelen — Crucible Architect**: `icon_skill_mold_stamp.png`, `icon_skill_pourline.png`, `icon_skill_foundry_press.png`, `icon_skill_quench_fracture.png`, `icon_skill_cathedral_of_iron.png` (Ult).
+- **Kaelen — Cryo Saboteur**: `icon_skill_cold_snap_canister.png`, `icon_skill_fracture_wire.png`, `icon_skill_thermocline_kick.png`, `icon_skill_zero_kelvin_flask.png`, `icon_skill_whiteout_rupture.png` (Ult).
+- **Vespera — Volt Reaver**: `icon_skill_arc_rend.png`, `icon_skill_breaker_step.png`, `icon_skill_countercoil.png`, `icon_skill_thunder_guillotine.png`, `icon_skill_cataclysm_edge.png` (Ult).
+- **Vespera — Iron Puppeteer**: `icon_skill_titan_hand.png`, `icon_skill_anchor_walk.png`, `icon_skill_chain_hoist.png`, `icon_skill_break_order.png`, `icon_skill_colossus_directive.png` (Ult).
+- **Vespera — Storm Cartographer**: `icon_skill_cloud_etching.png`, `icon_skill_pressure_drop.png`, `icon_skill_isobar_sweep.png`, `icon_skill_eye_of_storm.png`, `icon_skill_worldstorm_atlas.png` (Ult).
+
+### 16.3 All 28 Status Effect & Buff HUD Icons (`16x16` & `32x32` — `icon_status_<id>.png`)
+*(Reference: `Effect Icons` & `Other` in `Items/206883 - Item Icons.png`)*
+- **Debuffs (14)**: `icon_status_bleed.png` (crimson blood drop), `icon_status_burn.png` (ember flame), `icon_status_corrode.png` (acid-cracked shield), `icon_status_exposed.png` (split bone-white armor plate), `icon_status_weakened.png` (cracked sword), `icon_status_slow.png` (chained iron boot), `icon_status_pinned.png` (rail-spike driven through chain), `icon_status_stun.png` (signal-cyan lightning star), `icon_status_lifted.png` (verdigris levitation arrow), `icon_status_blind.png` (slashed dark eye), `icon_status_choked.png` (ash-cloud lungs), `icon_status_marked.png` (brass inquisitor crosshair), `icon_status_overloaded.png` (verdigris magnet spark), `icon_status_staggered.png` (shattered brass crown).
+- **Buffs (14)**: `icon_status_momentum.png` (cyan double chevron), `icon_status_redline.png` (crimson-cyan overdrive gauge), `icon_status_guarding.png` (cyan aegis shield), `icon_status_steadyAim.png` (brass scope reticle), `icon_status_holdBreath.png` (golden sniper bullet), `icon_status_quickHands.png` (winged brass gauntlets), `icon_status_ironHide.png` (riveted boiler plate), `icon_status_secondSkin.png` (orbiting bone-shard ring), `icon_status_grounded.png` (anchored iron boot), `icon_status_fed.png` (roasted wyrm-steak haunch), `icon_status_haste.png` (brass lightning boot), `icon_status_focus.png` (glowing crit diamond), `icon_status_warmed.png` (hearth campfire flame), `icon_status_bounty.png` (sovereign gold coin crest).
+
+---
+
+## SECTION 17: EXTENDED SUPPLIES, TAVERN MEALS, CURIO COFFERS, WANDERING MERCHANT RELICS & CLASS VFX
+
+### 17.1 Extended Consumables, Tavern Meals, Curios & Relics (`32x32` Framed Icons)
+- **Additional Supplies (`src/data/config.js`)**:
+  - `icon_item_lye_wash.png` (*Purifying Salt Phial / Lye Wash*): Bog-teal glass flask (`#2E6962`) with purifying bone-white salt crystals that cleanse Burn and Corrode.
+  - `icon_item_hot_stew.png` (*Sanctuary Marrow Tin / Hot Stew*): Steaming copper mess-tin (`#D16B38`) of rich crimson marrow stew granting *Fed*.
+  - `icon_item_stim_stick.png` (*Quicksilver Adrenaline Injector / Stim Stick*): Brass-and-glass syringe (`#FFC83D`, `#00F0FF`) sparking with haste energy (`Choco_Needle.png` ref).
+- **Raven's Rest Tavern Meals (`TAVERN_MEALS` — Reference: `Holo House/206116 - Cooking.png`)**:
+  - `icon_meal_wyrm_steak.png` (*Charred Wyrm Steak*): Sizzling bone-in drake rib steak with ember grill marks on an iron platter.
+  - `icon_meal_frost_ale.png` (*Spiced Abyssal Stout*): Frothy iron-hooped tavern tankard with golden-amber foam and cinnamon spice glow.
+  - `icon_meal_spiced_marrow.png` (*Seer's Moonlit Broth*): Glowing signal-cyan (`#00F0FF`) herbal bone-broth bowl with floating star-anise.
+  - `icon_meal_void_nectar.png` (*Sovereign Feast of the Eclipse*): Royal gilded banquet platter with roast wyrm, chalice of void-wine, and golden fruit.
+- **Vex's Curio Gambling Coffers (`CURIO_GAMBLE_TIERS` — Reference: `Miscellaneous/206962 - Holozon Box.png`)**:
+  - `icon_curio_tarnished.png` (*Tarnished Catacomb Coffer*): Rusted iron-and-bone lockbox bound with a heavy chain.
+  - `icon_curio_bloodbound.png` (*Hellforged Reliquary Box*): Crimson-and-brass runed reliquary chest glowing with ember seams.
+  - `icon_curio_sovereign.png` (*Astral Demiurge Casket*): Ornate gold-and-void casket radiating signal-cyan and violet starlight.
+- **Morwen's Wandering Merchant Relics & Elixirs (`WANDERING_MERCHANT_STOCK`)**:
+  - `icon_relic_blood_chalice.png` (*Cursed Blood Chalice*): Gothic gilded goblet overflowing with glowing crimson (`#FF3B3B`) vitae.
+  - `icon_relic_obsidian_signet.png` (*Abyssal Ward Signet*): Heavy obsidian ring set with a signal-cyan (`#00F0FF`) ward-stone.
+  - `icon_relic_astral_eye.png` (*Eye of the Eclipsed Star*): Levitating brass oculus talisman with a blazing violet-gold iris.
+  - `icon_elixir_soul_harvest.png` (*Elixir of Soul Harvest*): Faceted emerald-gold alchemical phial swirling with captured soul motes.
+  - `icon_elixir_void_ascendance.png` (*Draught of Abyssal Ascendance*): Winged sovereign flask glowing with starlight cyan and brass gold.
+
+### 17.2 Class-Specific Projectiles, Summons & Specialization VFX (`fx_*` Category)
+- **Rook Ballistics & Devices**:
+  - `fx_rook_bolt.png` (`16x16` × 4 orientations = `64x16`): Silver-and-brass crossbow bolt with a crisp `#FFC83D` tracer tail.
+  - `fx_rook_rail_slug.png` (`64x24` × 3 frames = `192x24`): Colossal solar-silver Judgement Spear projectile surrounded by spiral brass shock-rings.
+  - `fx_rook_trap.png` (`32x32` × 3 frames = `96x32`): Jawed iron snare / Arc Pylon / Bunker Roller deployed on the ground.
+- **Ines Necromancy & Magnetism**:
+  - `fx_ines_bone_orbit.png` (`24x24` × 4 frames = `96x24`): Orbiting jagged bone-and-iron shard wreathed in `#4FD6A0` verdigris flame.
+  - `fx_ines_pull_sigil.png` (`128x128` × 4 frames = `512x128`): Top-down necrotic magnetic implosion circle (`Shion_Circle.png` ref) in `#4FD6A0` and `#D9D2C3`.
+  - `fx_ines_monolith.png` (`48x48` × 4 frames = `192x48`): Hurled Ossuary Monolith skull-boulder & Iron Coffin plates.
+- **Kaelen Hellfire & Cryo**:
+  - `fx_kaelen_flame_jet.png` (`96x64` × 4 frames = `384x64`): Roaring cone of `#FF5A26` and `#FFE478` dragonfire breath (`Coco.png` ref).
+  - `fx_kaelen_lava_pool.png` (`96x96` × 3 frames = `288x96`): Bubbling top-down molten brimstone crater pool (`Items/206880 - Weapons (Collabs).png` `MiComet` magma pool ref).
+  - `fx_kaelen_cryo_shatter.png` (`96x96` × 4 frames = `384x96`): Endothermic `#7CE8FF` hoarfrost crystal explosion.
+- **Vespera Eldritch & Automaton**:
+  - `fx_vespera_pylon.png` (`32x48` × 3 frames = `96x48`): Levitating brass-and-stone Eldritch Obelisk pulsing with `#C9F24B` volt runes.
+  - `fx_vespera_wisp_skull.png` (`24x24` × 4 frames = `96x24`): Homing winged mechanical wisp-skull with volt-green eye trail.
+  - `fx_vespera_automaton.png` (`96x96` × 6 frames = `576x96`): Iron Puppeteer's walking siege automaton construct (Idle 2, March 2, Titan Fist Slam 2).
+
+---
+
+## SECTION 18: DUSKHOLLOW TOWN 6 RPG BUILDINGS & FLOORS 2–5 BIOME TILES/PROPS
+
+### 18.1 Duskhollow Town (Floor 0) Landmark Buildings (`160x120`, 1 Frame Each, with Baked `#0B0D10` Ground Shadow)
+*(Reference: `Holo House/206123 - Furniture - Structure.png`, `206141 - NPCs.png`, `Levels/206852 - Stage 3 - Halloween Castle.png`)*
+1. **`building_abyssal_gatehouse.png`** (`192x144`): Monolithic northern Spire entrance gatehouse with twin soulfire braziers and a swirling `#00F0FF` waystone portal arch.
+2. **`building_runesmith_forge.png`** (`160x120`): Master Smith Vaelen's dark-stone smithy with a roaring `#FF5A26` open blast furnace, chimney smoke, anvil yard, and weapon racks.
+3. **`building_alchemist_apothecary.png`** (`160x120`): Sister Isolde's bog-teal slate apothecary with stained-glass herbarium windows, copper distillation coils, and glowing `#2EE6A8` / `#FF3B3B` potion jars.
+4. **`building_hunters_guild.png`** (`160x120`): Chronicler Malakor's gothic guildhall with crimson banners, mounted wyrm skulls, and the illuminated Bloodline Ledger board outside.
+5. **`building_arcane_sanctum.png`** (`160x120`): Archmage Solen's astronomical observatory tower with a revolving brass armillary dome and floating `#00F0FF` grimoire pedestals.
+6. **`building_ravens_rest_tavern.png`** (`160x120`): Maeve's warm timber-and-stone inn with glowing `#FFC83D` hearth windows, hanging raven signboard, and outdoor ale barrels.
+7. **`building_mystic_enchanter.png`** (`160x120`): Vex's purple-draped occult curio pavilion with floating violet lanterns (`#E879F9`) and 3 sealed reliquary chests on display.
+
+### 18.2 Upper Spire Floors 2–5 Seamless Ground Tiles (`48x16` Strips — Three `16x16` Variants Each)
+- **Floor 2 (The Frostbound Crypt — `#0D1822` / `#7CE8FF`)**:
+  - `tile_f2_rime_vaults.png`, `tile_f2_glacial_viaduct.png`, `tile_f2_frozen_charnel.png`, `tile_f2_hoarfrost_citadel.png`
+- **Floor 3 (The Hellfire Abyss — `#1C0E0C` / `#FF5A26`)**:
+  - `tile_f3_brimstone_caldera.png`, `tile_f3_iron_maiden_causeway.png`, `tile_f3_cinder_pit.png`, `tile_f3_throne_of_scars.png`
+- **Floor 4 (The Rotwood Mire — `#0E1D16` / `#C9F24B`)**:
+  - `tile_f4_fungal_catacombs.png`, `tile_f4_bile_root_hollow.png`, `tile_f4_carrion_fen.png`, `tile_f4_heart_of_blight.png`
+- **Floor 5 (The Void Citadel — `#110C1D` / `#FFC83D` / `#9FA7FF`)**:
+  - `tile_f5_starfall_cloister.png`, `tile_f5_eclipsed_spire.png`, `tile_f5_choir_of_silence.png`, `tile_f5_sanctum_demiurge.png`
+

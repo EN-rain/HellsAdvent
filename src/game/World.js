@@ -18,6 +18,7 @@ import {
   MATERIAL_RAMPS,
 } from './PixelArt.js';
 import { getChibiNpcCanvas, drawPixelText } from './Sprites.js';
+import { assets } from './AssetLoader.js';
 import { worldLedger } from './WorldLedger.js';
 
 export class World {
@@ -196,6 +197,53 @@ export class World {
   _drawTile(ctx, px, py, tx, ty, wx, wy, h, area, floorNum = 0) {
     const s = this.tileSize;
 
+    // When manifest tile strips are loaded, draw regional 16x16 pixel-art tiles
+    if (assets.loaded) {
+      let tileStripId = 'tile_kettle';
+      if (floorNum === 0) {
+        const dx = Math.abs(wx - 3000);
+        const dy = Math.abs(wy - 3000);
+        const onRoad =
+          (dx < 56 && wy <= 3020 && wy >= 2520) ||
+          (dy < 44 && dx < 460) ||
+          (dx < 44 && dy < 380) ||
+          dx * dx + dy * dy <= 210 * 210;
+        tileStripId = onRoad ? 'tile_kettle' : 'tile_slab_town';
+      } else if (area.id === 'kettle') {
+        tileStripId = 'tile_kettle';
+      } else if (area.id === 'slabTown') {
+        tileStripId = 'tile_slab_town';
+      } else if (area.id === 'route9') {
+        tileStripId = 'tile_route_9';
+      } else if (area.id === 'lyeMarsh') {
+        tileStripId = 'tile_lye_marsh';
+      } else {
+        tileStripId = 'tile_copper_flats';
+      }
+
+      // Check border transition band between regions
+      const relX = wx - 3000;
+      const relY = wy - 3000;
+      const nearDiagonal = Math.abs(Math.abs(relX) - Math.abs(relY)) < 24;
+      if (floorNum > 0 && nearDiagonal) {
+        const transCanvas = assets.getFrameCanvas('tile_transitions', h % 8, false);
+        if (transCanvas) {
+          ctx.drawImage(transCanvas, 0, 0, transCanvas.width, transCanvas.height, px, py, s, s);
+          return;
+        }
+      }
+
+      const spec = assets.getSpec(tileStripId);
+      if (spec) {
+        const frameIdx = (h + tx * 3 + ty * 5) % Math.max(1, spec.frameCount);
+        const tileCanvas = assets.getFrameCanvas(tileStripId, frameIdx, false);
+        if (tileCanvas) {
+          ctx.drawImage(tileCanvas, 0, 0, tileCanvas.width, tileCanvas.height, px, py, s, s);
+          return;
+        }
+      }
+    }
+
     // FLOOR 0: DUSKHOLLOW TOWN COBBLESTONE PLAZA & LANTERN AVENUES
     if (floorNum === 0) {
       const dx = Math.abs(wx - 3000);
@@ -346,6 +394,7 @@ export class World {
     }
   }
 
+
   getChunk(cx, cy) {
     const fl = worldLedger.currentFloor ?? 0;
     const key = `${fl}:${cx},${cy}`;
@@ -421,19 +470,48 @@ export class World {
     const camY = camera.renderY;
     const animFrame = Math.floor(this.windPhase * 2) % 2;
 
-    // 1. Central Town Well & Sanctuary Brazier at (3000, 3000)
+    // 1. Central Town Well & Sanctuary Boiler/Campfire at (3000, 3000)
     if (camera.isVisible(3000, 3000, 180)) {
       const wx = Math.round(3000 - camX);
       const wy = Math.round(3000 - camY);
       drawBresenhamCircle(ctx, wx, wy, 52, '#342D42', 0.65);
-      ctx.fillStyle = PALETTE.soot;
-      ctx.fillRect(wx - 14, wy - 10, 28, 20);
-      ctx.fillStyle = MATERIAL_RAMPS.steel[2];
-      ctx.fillRect(wx - 12, wy - 8, 24, 16);
-      ctx.fillStyle = '#00F0FF';
-      ctx.fillRect(wx - 7, wy - 4, 14, 8);
+
+      const boilerCanvas = assets.loaded ? assets.getFrameCanvas('prop_kettle_boiler_tower', 0, false) : null;
+      const fireCanvas = assets.loaded ? assets.getFrameCanvas('prop_kettle_campfire', animFrame % 3, false) : null;
+      const signCanvas = assets.loaded ? assets.getFrameCanvas('prop_kettle_signs', 0, false) : null;
+      const benchCanvas = assets.loaded ? assets.getFrameCanvas('prop_kettle_bench', 0, false) : null;
+      const barrelsCanvas = assets.loaded ? assets.getFrameCanvas('prop_kettle_barrels', 0, false) : null;
+      const cratesCanvas = assets.loaded ? assets.getFrameCanvas('prop_kettle_crates', 0, false) : null;
+
+      if (boilerCanvas) {
+        ctx.drawImage(boilerCanvas, wx - (boilerCanvas.width >> 1), wy - boilerCanvas.height + 10);
+      } else {
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(wx - 14, wy - 10, 28, 20);
+        ctx.fillStyle = MATERIAL_RAMPS.steel[2];
+        ctx.fillRect(wx - 12, wy - 8, 24, 16);
+        ctx.fillStyle = '#00F0FF';
+        ctx.fillRect(wx - 7, wy - 4, 14, 8);
+      }
+
+      if (fireCanvas) {
+        ctx.drawImage(fireCanvas, wx - (fireCanvas.width >> 1), wy + 2);
+      }
+      if (signCanvas) {
+        ctx.drawImage(signCanvas, wx + 36, wy - 28);
+      }
+      if (benchCanvas) {
+        ctx.drawImage(benchCanvas, wx - 56, wy - 8);
+      }
+      if (barrelsCanvas) {
+        ctx.drawImage(barrelsCanvas, wx - 48, wy - 36);
+      }
+      if (cratesCanvas) {
+        ctx.drawImage(cratesCanvas, wx + 34, wy + 2);
+      }
+
       drawDitheredGlowRings(ctx, wx, wy, 14, PALETTE.brass);
-      drawPixelText(ctx, 'DUSKHOLLOW PLAZA · NORTH TO ABYSSAL SPIRE ▲', wx, wy + 24, '#D4AF37', 'center');
+      drawPixelText(ctx, 'DUSKHOLLOW PLAZA · NORTH TO ABYSSAL SPIRE ▲', wx, wy + 28, '#D4AF37', 'center');
     }
 
     // 2. Top-Center ABYSSAL TOWER GATEHOUSE at (3000, 2560)
@@ -479,6 +557,15 @@ export class World {
       mystic_enchanter: 'gambler',
     };
 
+    const propByBuildingId = {
+      runesmith_forge: 'prop_kettle_shack',
+      alchemist_apothecary: 'prop_kettle_tent',
+      hunters_guild: 'prop_kettle_shack',
+      arcane_sanctum: 'prop_kettle_boiler_tower',
+      ravens_rest_tavern: 'prop_kettle_shack',
+      mystic_enchanter: 'prop_kettle_tent',
+    };
+
     for (const b of DUSKHOLLOW_TOWN.buildings) {
       if (!camera.isVisible(b.x, b.y, 160)) continue;
       const bx = Math.round(b.x - camX);
@@ -494,19 +581,34 @@ export class World {
       ctx.fillStyle = '#1B1824';
       ctx.fillRect(bx - 36, by - 22, 72, 26);
 
-      // Doorway & Warm Lanterns
-      ctx.fillStyle = PALETTE.soot;
-      ctx.fillRect(bx - 10, by - 14, 20, 18);
-      ctx.fillStyle = b.accentColor || '#D4AF37';
-      ctx.fillRect(bx - 24, by - 12, 4, 5);
-      ctx.fillRect(bx + 20, by - 12, 4, 5);
+      // Overlay generated Kettle/Town structure prop
+      const bPropId = propByBuildingId[b.id];
+      const bPropCanvas = assets.loaded && bPropId ? assets.getFrameCanvas(bPropId, 0, false) : null;
+      if (bPropCanvas) {
+        ctx.drawImage(
+          bPropCanvas,
+          bx - (bPropCanvas.width >> 1),
+          by - bPropCanvas.height + 6
+        );
+      } else {
+        // Doorway & Warm Lanterns
+        ctx.fillStyle = PALETTE.soot;
+        ctx.fillRect(bx - 10, by - 14, 20, 18);
+        ctx.fillStyle = b.accentColor || '#D4AF37';
+        ctx.fillRect(bx - 24, by - 12, 4, 5);
+        ctx.fillRect(bx + 20, by - 12, 4, 5);
+      }
       drawDitheredGlowRings(ctx, bx - 22, by - 10, 6, b.accentColor || PALETTE.brass);
 
-      // Render Building's Chibi NPC Master out front using the 2-Head Chibi Base!
+      // Render Building's NPC Master out front (supports 64x64 manifest NPCs & 48x48 fallback)
       const npcRole = roleByBuildingId[b.id] || 'guild';
       const npcCanvas = getChibiNpcCanvas(npcRole, animFrame);
       if (npcCanvas) {
-        ctx.drawImage(npcCanvas, bx - 24, by - 16);
+        ctx.drawImage(
+          npcCanvas,
+          bx - (npcCanvas.width >> 1),
+          by - (npcCanvas.height === 64 ? 36 : 16)
+        );
       }
 
       drawPixelText(ctx, b.name.toUpperCase(), bx, by - 55, b.accentColor || '#E8DFD1', 'center');
@@ -565,7 +667,11 @@ export class World {
       drawBresenhamCircle(ctx, nx, ny + 8, 22, '#00F0FF', 0.6);
       const npcCanvas = getChibiNpcCanvas('pilgrim', animFrame);
       if (npcCanvas) {
-        ctx.drawImage(npcCanvas, nx - 24, ny - 28);
+        ctx.drawImage(
+          npcCanvas,
+          nx - (npcCanvas.width >> 1),
+          ny - (npcCanvas.height === 64 ? 48 : 28)
+        );
       }
       drawPixelText(ctx, npc.name.toUpperCase(), nx, ny - 32, '#00F0FF', 'center');
       drawPixelText(
@@ -586,7 +692,6 @@ export class World {
       const my = Math.round(m.y - camY);
 
       if (m.repellentActive && m.state === 'protected') {
-        // Shimmering 260px Mob-Repellent Sanctuary Ward where enemies cannot see or enter!
         drawBresenhamCircle(ctx, mx, my, m.repellentRadius, '#00F0FF', 0.75);
         drawBresenhamCircle(ctx, mx, my, m.repellentRadius - 6, '#D4AF37', 0.45);
       } else if (m.state === 'defending') {
@@ -594,14 +699,24 @@ export class World {
       }
 
       // Merchant Lantern Cart & Chibi Sprite
-      ctx.fillStyle = '#342D42';
-      ctx.fillRect(mx - 22, my - 12, 18, 16);
-      ctx.fillStyle = '#D4AF37';
-      ctx.fillRect(mx - 20, my - 10, 14, 3);
+      const tentCanvas = assets.loaded ? assets.getFrameCanvas('prop_kettle_tent', 0, false) : null;
+      if (tentCanvas) {
+        ctx.drawImage(tentCanvas, mx - 40, my - 38);
+      } else {
+        ctx.fillStyle = '#342D42';
+        ctx.fillRect(mx - 22, my - 12, 18, 16);
+        ctx.fillStyle = '#D4AF37';
+        ctx.fillRect(mx - 20, my - 10, 14, 3);
+      }
       const merchCanvas = getChibiNpcCanvas('merchant', animFrame);
       if (merchCanvas) {
-        ctx.drawImage(merchCanvas, mx - 16, my - 28);
+        ctx.drawImage(
+          merchCanvas,
+          mx - (merchCanvas.width >> 1),
+          my - (merchCanvas.height === 64 ? 48 : 28)
+        );
       }
+
 
       drawPixelText(ctx, `${m.name.toUpperCase()}`, mx, my - 36, '#FFC83D', 'center');
       if (m.state === 'defending') {

@@ -3,7 +3,9 @@ import path from 'node:path';
 import { encodePNG } from './process-assets.mjs';
 
 const OUT_DIR = path.join(process.cwd(), 'public', 'assets');
+const GEMINI_DIR = path.join(process.cwd(), 'geminigen');
 fs.mkdirSync(OUT_DIR, { recursive: true });
+fs.mkdirSync(GEMINI_DIR, { recursive: true });
 
 function hexToRgba(hex, alpha = 255) {
   const c = hex.replace('#', '');
@@ -63,6 +65,52 @@ class PixelCanvas {
 
   toPNG() {
     return encodePNG(this.width, this.height, this.buffer);
+  }
+
+  toSVG(id) {
+    const rects = [];
+    for (let y = 0; y < this.height; y++) {
+      let x = 0;
+      while (x < this.width) {
+        const idx = (y * this.width + x) * 4;
+        const r = this.buffer[idx];
+        const g = this.buffer[idx + 1];
+        const b = this.buffer[idx + 2];
+        const a = this.buffer[idx + 3];
+        if (a === 0) {
+          x++;
+          continue;
+        }
+        let runW = 1;
+        while (x + runW < this.width) {
+          const nIdx = (y * this.width + (x + runW)) * 4;
+          if (
+            this.buffer[nIdx] === r &&
+            this.buffer[nIdx + 1] === g &&
+            this.buffer[nIdx + 2] === b &&
+            this.buffer[nIdx + 3] === a
+          ) {
+            runW++;
+          } else {
+            break;
+          }
+        }
+        const hex =
+          '#' +
+          [r, g, b]
+            .map((v) => v.toString(16).padStart(2, '0'))
+            .join('')
+            .toUpperCase();
+        const op = a < 255 ? ` fill-opacity="${(a / 255).toFixed(2)}"` : '';
+        rects.push(`<rect x="${x}" y="${y}" width="${runW}" height="1" fill="${hex}"${op}/>`);
+        x += runW;
+      }
+    }
+    return [
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${this.width} ${this.height}" width="${this.width}" height="${this.height}" shape-rendering="crispEdges" data-asset-id="${id}">`,
+      ...rects,
+      `</svg>`,
+    ].join('\n');
   }
 }
 
@@ -164,7 +212,7 @@ function generateBackground() {
     cv.fillRect(px, py, 2, 2, color, 190);
   }
 
-  return cv.toPNG();
+  return cv;
 }
 
 // ----------------------------------------------------------------------------
@@ -233,7 +281,7 @@ function generateBridge() {
   // Electric power conduit running along the bottom with glowing cyan conduit lines
   cv.fillRect(0, bridgeY + bridgeH - 4, w, 2, '#00F0FF', 230);
 
-  return cv.toPNG();
+  return cv;
 }
 
 // ----------------------------------------------------------------------------
@@ -382,7 +430,7 @@ function generateHero() {
   // Ground contact shadow
   cv.fillRect(cx - 36, cy + 156, 76, 8, '#0B0D10', 210);
 
-  return cv.toPNG();
+  return cv;
 }
 
 // ----------------------------------------------------------------------------
@@ -554,7 +602,7 @@ function generateLogo() {
   cv.fillRect(boxX + 2, boxY + boxH + 12, 420, 22, '#0B0D10', 230);
   cv.fillRect(boxX + 2, boxY + boxH + 12, 4, 22, '#00F0FF');
 
-  return cv.toPNG();
+  return cv;
 }
 
 // ----------------------------------------------------------------------------
@@ -588,24 +636,27 @@ function generateCrest() {
   cv.fillRect(mx - 2, my - 4, 4, 8, '#D16B38');
   cv.fillRect(mx - 1, my - 2, 2, 4, '#FFC83D');
 
-  return cv.toPNG();
+  return cv;
 }
 
 // Execute batch generation
 console.log('Generating main menu visual assets...');
-fs.writeFileSync(path.join(OUT_DIR, 'main_menu_bg.png'), generateBackground());
-console.log('✓ public/assets/main_menu_bg.png generated (640x360)');
+const menuAssets = [
+  ['main_menu_bg', generateBackground()],
+  ['main_menu_bridge', generateBridge()],
+  ['main_menu_hero', generateHero()],
+  ['main_menu_logo', generateLogo()],
+  ['main_menu_crest', generateCrest()],
+];
 
-fs.writeFileSync(path.join(OUT_DIR, 'main_menu_bridge.png'), generateBridge());
-console.log('✓ public/assets/main_menu_bridge.png generated (640x180)');
-
-fs.writeFileSync(path.join(OUT_DIR, 'main_menu_hero.png'), generateHero());
-console.log('✓ public/assets/main_menu_hero.png generated (240x320)');
-
-fs.writeFileSync(path.join(OUT_DIR, 'main_menu_logo.png'), generateLogo());
-console.log('✓ public/assets/main_menu_logo.png generated (640x140)');
-
-fs.writeFileSync(path.join(OUT_DIR, 'main_menu_crest.png'), generateCrest());
-console.log('✓ public/assets/main_menu_crest.png generated (320x80)');
+for (const [id, cvOrPng] of menuAssets) {
+  const png = Buffer.isBuffer(cvOrPng) ? cvOrPng : cvOrPng.toPNG();
+  fs.writeFileSync(path.join(OUT_DIR, `${id}.png`), png);
+  fs.writeFileSync(path.join(GEMINI_DIR, `${id}.png`), png);
+  if (!Buffer.isBuffer(cvOrPng)) {
+    fs.writeFileSync(path.join(GEMINI_DIR, `${id}.svg`), cvOrPng.toSVG(id), 'utf8');
+  }
+  console.log(`✓ public/assets/${id}.png + geminigen/${id}.{png,svg} generated`);
+}
 
 console.log('All 5 modular main menu image assets successfully generated!');

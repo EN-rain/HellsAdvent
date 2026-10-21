@@ -2680,10 +2680,14 @@ export class Player {
       const key = `${ai.tier}${this.facingX >= 0 ? 'Right' : 'Left'}`;
       const frames = sheet[key];
       if (frames && frames[0]) {
+        const fw = frames[0].width;
+        const fh = frames[0].height;
+        const ax = fw >> 1;
+        const ay = fh === 64 ? 48 : 29;
         ctx.drawImage(
           frames[0],
-          Math.round(ai.x - camX - 24),
-          Math.round(ai.y - camY - 29)
+          Math.round(ai.x - camX - ax),
+          Math.round(ai.y - camY - ay)
         );
       }
     }
@@ -2729,7 +2733,11 @@ export class Player {
 
     if (frameCanvas) {
       const liftY = this.groundBreakState === 'raise' ? -5 : 0;
-      ctx.drawImage(frameCanvas, sx - 24, sy - 29 + liftY);
+      const fw = frameCanvas.width;
+      const fh = frameCanvas.height;
+      const ax = fw >> 1;
+      const ay = fh === 64 ? 48 : 29;
+      ctx.drawImage(frameCanvas, sx - ax, sy - ay + liftY);
     }
 
     // 5. Draw Class-Specific Extras (Rook traps/reload bar/aim line, Ines Scrap Orbit/Pull/Scrapfall, Sena Brace/DugIn)
@@ -2786,15 +2794,32 @@ export class Player {
 
       if (cutCanvas) {
         const bannerY = 58;
+        const isFullCutin = cutCanvas.width >= 160;
+        const bannerH = isFullCutin ? 56 : 38;
         ctx.fillStyle = PALETTE.soot;
-        ctx.fillRect(0, bannerY - 3, width, 38);
+        ctx.fillRect(0, bannerY - 3, width, bannerH);
         ctx.fillStyle = accent;
         ctx.fillRect(0, bannerY - 3, width, 2);
-        ctx.fillRect(0, bannerY + 33, width, 2);
-        ctx.drawImage(cutCanvas, 0, 0, 64, 16, 176, bannerY, 128, 32);
+        ctx.fillRect(0, bannerY + bannerH - 5, width, 2);
+        if (isFullCutin) {
+          ctx.drawImage(
+            cutCanvas,
+            0,
+            0,
+            cutCanvas.width,
+            cutCanvas.height,
+            Math.round((width - 240) / 2),
+            bannerY,
+            240,
+            50
+          );
+        } else {
+          ctx.drawImage(cutCanvas, 0, 0, cutCanvas.width, cutCanvas.height, 176, bannerY, 128, 32);
+        }
       }
     }
   }
+
 }
 
 export default Player;

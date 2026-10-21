@@ -24,6 +24,7 @@ import { ProjectilePool } from './Projectile.js';
 import { ParticleSystem } from './Particles.js';
 import { sound } from './Audio.js';
 import { spriteRegistry, drawPixelText } from './Sprites.js';
+import { assets } from './AssetLoader.js';
 import { bossMechanics } from './BossMechanics.js';
 import { fusionManager } from './FusionManager.js';
 import { tacticalSystem } from './TacticalAI.js';
@@ -50,6 +51,17 @@ export class GameEngine {
 
     // Pre-bake all procedural pixel-art sprites before first frame
     spriteRegistry.init();
+
+    // Preload all 150 generated manifest & atlas assets and hot-hydrate when ready
+    this._unsubAssets = assets.subscribe(({ loaded }) => {
+      if (loaded) {
+        spriteRegistry.hydrateFromManifest();
+        if (this.player) this.player.rebuildSprites();
+        if (this.world && this.world.chunkCache) this.world.chunkCache.clear();
+        this.notifyUi();
+      }
+    });
+    assets.preloadAll();
 
     // Offscreen 480x270 low-res pixel buffer
     this.offscreenCanvas = document.createElement('canvas');
@@ -123,6 +135,7 @@ export class GameEngine {
     this._migrateLegacySaveIfNeeded();
     this.loadProgress(0);
   }
+
 
   _migrateLegacySaveIfNeeded() {
     try {

@@ -535,6 +535,11 @@ const Minimap = memo(function Minimap({
           className="pixelated block cursor-crosshair rounded-xs"
           title={currentFloor > 0 ? 'Click to toggle 1x / 2x Radar Zoom' : 'Duskhollow Sanctuary Map'}
         />
+        <img
+          src="/assets/ui_minimap_frame.png"
+          alt=""
+          className="pixelated pointer-events-none absolute inset-0 w-full h-full object-fill opacity-75"
+        />
 
         {/* Cardinal Compass Ticks */}
         <span className="pointer-events-none absolute top-0.5 left-1/2 -translate-x-1/2 text-[8px] font-black text-[#9E9789]/70">
@@ -560,6 +565,7 @@ const Minimap = memo(function Minimap({
           </button>
         )}
       </div>
+
 
       {hoveredPoi && (
         <div
@@ -1458,10 +1464,12 @@ export function HUD({ snapshot, engine }) {
                 >
                   {snapshot.fullTitleLine}
                 </span>
-                <span className="font-bold text-[#FFC83D] tabular-nums shrink-0">
-                  {snapshot.gold.toLocaleString()} G
+                <span className="flex items-center gap-1 font-bold text-[#FFC83D] tabular-nums shrink-0">
+                  <PixelIcon itemId="coin" size={14} />
+                  <span>{snapshot.gold.toLocaleString()} G</span>
                 </span>
               </div>
+
 
               {/* HP BAR with Smooth Delayed Damage Trail & Fluid Replenishment */}
               <StatProgressBar

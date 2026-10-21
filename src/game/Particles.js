@@ -15,6 +15,7 @@ import {
   angleTo8Dir,
 } from './PixelArt.js';
 import { spriteRegistry } from './Sprites.js';
+import { assets } from './AssetLoader.js';
 
 export class ParticlePool {
   constructor(maxParticles = 500, maxNumbers = 140, maxSlashes = 32) {
@@ -882,11 +883,23 @@ export class ParticlePool {
       ctx.fillRect(sx - r, sy - Math.max(1, r - 2), r * 2, Math.max(2, r * 2 - 3));
     }
 
-    // 2. Ground Break 8 jagged crack lines in soot with signal glowing inside (fading over 600ms)
+    // 2. Ground Break 8 jagged crack lines + fx_ground_cracks sprite
     for (let i = 0; i < this.groundCracks.length; i++) {
       const gc = this.groundCracks[i];
       if (!gc.active) continue;
       const ratio = gc.life / gc.maxLife;
+
+      if (assets.loaded) {
+        const crackFrameIdx = Math.min(2, Math.floor((1 - ratio) * 3));
+        const crackCanvas = assets.getFrameCanvas('fx_ground_cracks', crackFrameIdx, false);
+        if (crackCanvas) {
+          ctx.drawImage(
+            crackCanvas,
+            Math.round(gc.cx - camX - crackCanvas.width / 2),
+            Math.round(gc.cy - camY - crackCanvas.height / 2)
+          );
+        }
+      }
 
       for (let a = 0; a < gc.arms.length; a++) {
         const arm = gc.arms[a];
@@ -914,6 +927,7 @@ export class ParticlePool {
       }
     }
   }
+
 
   // Drawn above entities
   draw(ctx, camera) {
@@ -961,29 +975,67 @@ export class ParticlePool {
 
       if (p.kind === 'ring') {
         const r = Math.max(2, Math.round(4 + (p.ringMaxRadius - 4) * stepProgress));
-        // 2px thick Bresenham ring: signal outer, bone inner + fake dithered glow rings
+        if (assets.loaded && p.ringMaxRadius >= 28) {
+          const ringFrame = Math.min(3, Math.floor(stepProgress * 4));
+          const ringCanvas = assets.getFrameCanvas('fx_shock_ring', ringFrame, false);
+          if (ringCanvas) {
+            const drawDiam = Math.max(16, r * 2);
+            ctx.drawImage(
+              ringCanvas,
+              0,
+              0,
+              ringCanvas.width,
+              ringCanvas.height,
+              Math.round(sx - drawDiam / 2),
+              Math.round(sy - drawDiam / 2),
+              drawDiam,
+              drawDiam
+            );
+          }
+        }
         drawBresenhamCircle(ctx, sx, sy, r, p.color, 1.0);
         if (r > 3) {
           drawBresenhamCircle(ctx, sx, sy, r - 1, p.color2 || PALETTE.bone, 1.0);
         }
         drawDitheredGlowRings(ctx, sx, sy, r, p.color);
       } else if (p.kind === 'crossFlash') {
-        // 2-frame white cross-cut flash on Lunge hit
+        if (assets.loaded) {
+          const crossFrame = Math.min(1, Math.floor(stepProgress * 2));
+          const crossCanvas = assets.getFrameCanvas('fx_hit_cross', crossFrame, false);
+          if (crossCanvas) {
+            ctx.drawImage(
+              crossCanvas,
+              Math.round(sx - crossCanvas.width / 2),
+              Math.round(sy - crossCanvas.height / 2)
+            );
+            continue;
+          }
+        }
         const arm = p.size;
         drawPixelLine(ctx, sx - arm, sy - arm, sx + arm, sy + arm, PALETTE.bone, 2);
         drawPixelLine(ctx, sx - arm, sy + arm, sx + arm, sy - arm, PALETTE.bone, 2);
       } else if (p.kind === 'rock') {
-        // Ground shade stays on ground while rock lifts and falls
         ctx.fillStyle = PALETTE.soot;
         ctx.fillRect(sx - 1, sy + 1, p.size, 2);
         const ry = Math.round(sy - p.z);
         ctx.fillStyle = p.color;
         ctx.fillRect(sx - 1, ry - 1, p.size, p.size);
-        ctx.fillStyle = p.color2; // top-left highlight pixel
+        ctx.fillStyle = p.color2;
         ctx.fillRect(sx - 1, ry - 1, 1, 1);
       } else if (p.kind === 'dust') {
         if (sx < -16 || sx > camera.width + 16 || sy < -16 || sy > camera.height + 16) continue;
-        // 3 sizes of integer pixel dust puffs (color shifts bone -> slag, dithered at end)
+        if (assets.loaded) {
+          const dustFrame = Math.min(3, Math.floor(stepProgress * 4));
+          const dustCanvas = assets.getFrameCanvas('fx_dust_puff', dustFrame, false);
+          if (dustCanvas) {
+            ctx.drawImage(
+              dustCanvas,
+              Math.round(sx - dustCanvas.width / 2),
+              Math.round(sy - dustCanvas.height / 2)
+            );
+            continue;
+          }
+        }
         const r = Math.max(1, p.size * 2 - Math.floor(stepProgress * p.size));
         const col = stepProgress < 0.45 ? PALETTE.bone : PALETTE.slag;
         ctx.fillStyle = col;
@@ -997,7 +1049,6 @@ export class ParticlePool {
           }
         }
       } else if (p.kind === 'splitHalf' && p.splitCanvas) {
-        // Enemy sprite split along its horizontal cut line sliding apart after Seven Cuts
         const w = p.splitCanvas.width;
         const h = p.splitCanvas.height;
         const halfH = Math.floor(h / 2);
@@ -1027,33 +1078,62 @@ export class ParticlePool {
           );
         }
       } else {
-        // Square pixel particle (trails bone -> rust -> gone, zero alpha)
         if (sx < -10 || sx > camera.width + 10 || sy < -10 || sy > camera.height + 10) continue;
+        if (assets.loaded && p.size >= 2) {
+          const sparkFrame = Math.min(2, Math.floor(stepProgress * 3));
+          const sparkCanvas = assets.getFrameCanvas('fx_spark', sparkFrame, false);
+          if (sparkCanvas) {
+            ctx.drawImage(sparkCanvas, sx - 4, sy - 4);
+            continue;
+          }
+        }
         ctx.fillStyle = stepProgress < 0.5 ? p.color : p.color2;
         ctx.fillRect(sx, sy, p.size, p.size);
       }
     }
 
-    // 3. Slash Lines:
-    // - 'lunge': 1px signal slash line along path for 150ms, shrinking from BOTH ends
-    // - 'sevenCuts': full-length tapered white slash line at cut angle
+    // 3. Slash Lines (with fx_dash_streak & fx_ult_slash overlays)
     for (let i = 0; i < this.slashes.length; i++) {
       const s = this.slashes[i];
       if (!s.active) continue;
       const progress = 1 - Math.max(0, s.life / s.maxLife);
 
       if (s.kind === 'lunge') {
-        // Shrink inward from both ends toward the midpoint
         const trim = progress * 0.48;
         const ax = s.x1 + (s.x2 - s.x1) * trim - camX;
         const ay = s.y1 + (s.y2 - s.y1) * trim - camY;
         const bx = s.x2 - (s.x2 - s.x1) * trim - camX;
         const by = s.y2 - (s.y2 - s.y1) * trim - camY;
+        if (assets.loaded) {
+          const dashFrame = Math.min(2, Math.floor(progress * 3));
+          const dashCanvas = assets.getFrameCanvas('fx_dash_streak', dashFrame, false);
+          if (dashCanvas) {
+            const mx = (ax + bx) * 0.5;
+            const my = (ay + by) * 0.5;
+            const ang = Math.atan2(by - ay, bx - ax);
+            ctx.save();
+            ctx.translate(mx, my);
+            ctx.rotate(ang);
+            ctx.drawImage(dashCanvas, -dashCanvas.width / 2, -dashCanvas.height / 2);
+            ctx.restore();
+          }
+        }
         drawPixelLine(ctx, ax, ay, bx, by, s.color, 1);
       } else {
-        // Tapered white slash line: 1px at tips, 3px in middle
         const mx = (s.x1 + s.x2) * 0.5;
         const my = (s.y1 + s.y2) * 0.5;
+        if (assets.loaded) {
+          const ultFrame = Math.min(1, Math.floor(progress * 2));
+          const ultCanvas = assets.getFrameCanvas('fx_ult_slash', ultFrame, false);
+          if (ultCanvas) {
+            const ang = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+            ctx.save();
+            ctx.translate(mx - camX, my - camY);
+            ctx.rotate(ang);
+            ctx.drawImage(ultCanvas, -ultCanvas.width / 2, -ultCanvas.height / 2);
+            ctx.restore();
+          }
+        }
         const q1x = (s.x1 + mx) * 0.5;
         const q1y = (s.y1 + my) * 0.5;
         const q2x = (s.x2 + mx) * 0.5;
@@ -1063,7 +1143,7 @@ export class ParticlePool {
       }
     }
 
-    // 3.2. Crescent Slashes (Sweeping high-velocity circular blade arcs)
+    // 3.2. Crescent Slashes (with fx_slash_smear overlay)
     if (this.crescentSlashes && this.crescentSlashes.length > 0) {
       for (let i = 0; i < this.crescentSlashes.length; i++) {
         const cs = this.crescentSlashes[i];
@@ -1071,6 +1151,19 @@ export class ParticlePool {
         const progress = 1 - Math.max(0, cs.life / cs.maxLife);
         const sx = Math.round(cs.x - camX);
         const sy = Math.round(cs.y - camY);
+
+        if (assets.loaded) {
+          const smearFrame = Math.min(2, Math.floor(progress * 3));
+          const smearCanvas = assets.getFrameCanvas('fx_slash_smear', smearFrame, false);
+          if (smearCanvas) {
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.rotate(cs.angle);
+            ctx.drawImage(smearCanvas, -smearCanvas.width / 2, -smearCanvas.height / 2);
+            ctx.restore();
+          }
+        }
+
         const rCur = cs.radius * (0.85 + progress * 0.25);
         const halfArc = cs.arc * 0.5;
         const segs = 16;
@@ -1104,7 +1197,6 @@ export class ParticlePool {
           prevCoreY = cy;
         }
 
-        // Star gleam at crescent apex
         const midA = cs.angle;
         const apexX = Math.round(sx + Math.cos(midA) * rCur);
         const apexY = Math.round(sy + Math.sin(midA) * rCur);
@@ -1113,6 +1205,7 @@ export class ParticlePool {
         ctx.fillRect(apexX - 1, apexY - 3, 3, 7);
       }
     }
+
 
     // 3.5. Colossal Anti-Materiel Rail Gun Beam Corridor (Multi-layered kinetic beam with Mach cones)
     if (this.railBeams && this.railBeams.length > 0) {
@@ -1309,12 +1402,20 @@ export class ParticlePool {
       if (pk.type === 'scrap') {
         const scrapCanvas = spriteRegistry.getScrapVariant(pk.variant || 0);
         if (scrapCanvas) {
-          ctx.drawImage(scrapCanvas, sx - 4, sy - 4);
+          ctx.drawImage(scrapCanvas, sx - (scrapCanvas.width >> 1), sy - (scrapCanvas.height >> 1));
         } else {
           ctx.fillStyle = PALETTE.verdigris;
           ctx.fillRect(sx - 2, sy - 2, 4, 4);
         }
       } else if (pk.type === 'gold') {
+        if (assets.loaded) {
+          const coinFrame = Math.floor(pk.life * 6) % 4;
+          const coinCanvas = assets.getFrameCanvas('ui_coin', coinFrame, false);
+          if (coinCanvas) {
+            ctx.drawImage(coinCanvas, sx - 8, sy - 8);
+            continue;
+          }
+        }
         ctx.fillStyle = PALETTE.soot;
         ctx.fillRect(sx - 3, sy - 3, 6, 6);
         ctx.fillStyle = PALETTE.brass;
@@ -1327,6 +1428,7 @@ export class ParticlePool {
       }
     }
   }
+
 
   drawParticlesAndText(ctx, camera) {
     this.draw(ctx, camera);

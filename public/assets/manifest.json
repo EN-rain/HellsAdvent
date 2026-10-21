@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-10-20T05:55:20.051Z",
+  "generatedAt": "2026-10-21T16:25:33.551Z",
   "internalResolution": {
     "width": 480,
     "height": 270
@@ -2828,6 +2828,492 @@
         0
       ],
       "fps": 1,
+      "atlas": null
+    },
+    "sena_sheet": {
+      "id": "sena_sheet",
+      "category": "player_sheet",
+      "area": null,
+      "src": "/assets/sena_sheet.png",
+      "frameCount": 6,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 384,
+      "stripHeight": 128,
+      "anchor": [
+        32,
+        60
+      ],
+      "fps": 10,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 364,
+        "y": 1732,
+        "w": 384,
+        "h": 128
+      }
+    },
+    "rook_sheet": {
+      "id": "rook_sheet",
+      "category": "player_sheet",
+      "area": null,
+      "src": "/assets/rook_sheet.png",
+      "frameCount": 6,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 384,
+      "stripHeight": 128,
+      "anchor": [
+        32,
+        60
+      ],
+      "fps": 10,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 750,
+        "y": 1732,
+        "w": 384,
+        "h": 128
+      }
+    },
+    "ines_sheet": {
+      "id": "ines_sheet",
+      "category": "player_sheet",
+      "area": null,
+      "src": "/assets/ines_sheet.png",
+      "frameCount": 6,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 384,
+      "stripHeight": 128,
+      "anchor": [
+        32,
+        60
+      ],
+      "fps": 10,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 1136,
+        "y": 1732,
+        "w": 384,
+        "h": 128
+      }
+    },
+    "kaelen_sheet": {
+      "id": "kaelen_sheet",
+      "category": "player_sheet",
+      "area": null,
+      "src": "/assets/kaelen_sheet.png",
+      "frameCount": 6,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 384,
+      "stripHeight": 128,
+      "anchor": [
+        32,
+        60
+      ],
+      "fps": 10,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 1522,
+        "y": 1732,
+        "w": 384,
+        "h": 128
+      }
+    },
+    "vespera_sheet": {
+      "id": "vespera_sheet",
+      "category": "player_sheet",
+      "area": null,
+      "src": "/assets/vespera_sheet.png",
+      "frameCount": 6,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 384,
+      "stripHeight": 128,
+      "anchor": [
+        32,
+        60
+      ],
+      "fps": 10,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 2,
+        "y": 1862,
+        "w": 384,
+        "h": 128
+      }
+    },
+    "rook_neutral": {
+      "id": "rook_neutral",
+      "category": "portrait",
+      "area": null,
+      "src": "/assets/rook_neutral.png",
+      "frameCount": 1,
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "stripWidth": 96,
+      "stripHeight": 96,
+      "anchor": [
+        48,
+        96
+      ],
+      "fps": 1,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 388,
+        "y": 1862,
+        "w": 96,
+        "h": 96
+      }
+    },
+    "ines_neutral": {
+      "id": "ines_neutral",
+      "category": "portrait",
+      "area": null,
+      "src": "/assets/ines_neutral.png",
+      "frameCount": 1,
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "stripWidth": 96,
+      "stripHeight": 96,
+      "anchor": [
+        48,
+        96
+      ],
+      "fps": 1,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 486,
+        "y": 1862,
+        "w": 96,
+        "h": 96
+      }
+    },
+    "kaelen_neutral": {
+      "id": "kaelen_neutral",
+      "category": "portrait",
+      "area": null,
+      "src": "/assets/kaelen_neutral.png",
+      "frameCount": 1,
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "stripWidth": 96,
+      "stripHeight": 96,
+      "anchor": [
+        48,
+        96
+      ],
+      "fps": 1,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 584,
+        "y": 1862,
+        "w": 96,
+        "h": 96
+      }
+    },
+    "vespera_neutral": {
+      "id": "vespera_neutral",
+      "category": "portrait",
+      "area": null,
+      "src": "/assets/vespera_neutral.png",
+      "frameCount": 1,
+      "frameWidth": 96,
+      "frameHeight": 96,
+      "stripWidth": 96,
+      "stripHeight": 96,
+      "anchor": [
+        48,
+        96
+      ],
+      "fps": 1,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 682,
+        "y": 1862,
+        "w": 96,
+        "h": 96
+      }
+    },
+    "rivet_tick": {
+      "id": "rivet_tick",
+      "category": "enemy_common",
+      "area": null,
+      "src": "/assets/rivet_tick.png",
+      "frameCount": 5,
+      "frameWidth": 40,
+      "frameHeight": 40,
+      "stripWidth": 200,
+      "stripHeight": 40,
+      "anchor": [
+        20,
+        36
+      ],
+      "fps": 8,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 780,
+        "y": 1862,
+        "w": 200,
+        "h": 40
+      }
+    },
+    "signal_mite": {
+      "id": "signal_mite",
+      "category": "enemy_common",
+      "area": null,
+      "src": "/assets/signal_mite.png",
+      "frameCount": 5,
+      "frameWidth": 40,
+      "frameHeight": 40,
+      "stripWidth": 200,
+      "stripHeight": 40,
+      "anchor": [
+        20,
+        34
+      ],
+      "fps": 8,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 982,
+        "y": 1862,
+        "w": 200,
+        "h": 40
+      }
+    },
+    "silt_mimic": {
+      "id": "silt_mimic",
+      "category": "enemy_common",
+      "area": null,
+      "src": "/assets/silt_mimic.png",
+      "frameCount": 5,
+      "frameWidth": 40,
+      "frameHeight": 40,
+      "stripWidth": 200,
+      "stripHeight": 40,
+      "anchor": [
+        20,
+        36
+      ],
+      "fps": 8,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 1184,
+        "y": 1862,
+        "w": 200,
+        "h": 40
+      }
+    },
+    "cinder_crow": {
+      "id": "cinder_crow",
+      "category": "enemy_common",
+      "area": null,
+      "src": "/assets/cinder_crow.png",
+      "frameCount": 5,
+      "frameWidth": 40,
+      "frameHeight": 40,
+      "stripWidth": 200,
+      "stripHeight": 40,
+      "anchor": [
+        20,
+        34
+      ],
+      "fps": 10,
+      "atlas": {
+        "atlas": "atlas_0.png",
+        "x": 1386,
+        "y": 1862,
+        "w": 200,
+        "h": 40
+      }
+    },
+    "plate_marshal": {
+      "id": "plate_marshal",
+      "category": "enemy_elite",
+      "area": null,
+      "src": "/assets/plate_marshal.png",
+      "frameCount": 7,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "stripWidth": 560,
+      "stripHeight": 80,
+      "anchor": [
+        40,
+        74
+      ],
+      "fps": 8,
+      "atlas": null
+    },
+    "switchback_driver": {
+      "id": "switchback_driver",
+      "category": "enemy_elite",
+      "area": null,
+      "src": "/assets/switchback_driver.png",
+      "frameCount": 7,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "stripWidth": 560,
+      "stripHeight": 80,
+      "anchor": [
+        40,
+        74
+      ],
+      "fps": 8,
+      "atlas": null
+    },
+    "sump_cantor": {
+      "id": "sump_cantor",
+      "category": "enemy_elite",
+      "area": null,
+      "src": "/assets/sump_cantor.png",
+      "frameCount": 7,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "stripWidth": 560,
+      "stripHeight": 80,
+      "anchor": [
+        40,
+        74
+      ],
+      "fps": 8,
+      "atlas": null
+    },
+    "bore_sentinel": {
+      "id": "bore_sentinel",
+      "category": "enemy_elite",
+      "area": null,
+      "src": "/assets/bore_sentinel.png",
+      "frameCount": 7,
+      "frameWidth": 80,
+      "frameHeight": 80,
+      "stripWidth": 560,
+      "stripHeight": 80,
+      "anchor": [
+        40,
+        74
+      ],
+      "fps": 8,
+      "atlas": null
+    },
+    "npc_vaelen": {
+      "id": "npc_vaelen",
+      "category": "npc",
+      "area": null,
+      "src": "/assets/npc_vaelen.png",
+      "frameCount": 2,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 128,
+      "stripHeight": 64,
+      "anchor": [
+        32,
+        58
+      ],
+      "fps": 2,
+      "atlas": null
+    },
+    "npc_isolde": {
+      "id": "npc_isolde",
+      "category": "npc",
+      "area": null,
+      "src": "/assets/npc_isolde.png",
+      "frameCount": 2,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 128,
+      "stripHeight": 64,
+      "anchor": [
+        32,
+        58
+      ],
+      "fps": 2,
+      "atlas": null
+    },
+    "npc_malakor": {
+      "id": "npc_malakor",
+      "category": "npc",
+      "area": null,
+      "src": "/assets/npc_malakor.png",
+      "frameCount": 2,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 128,
+      "stripHeight": 64,
+      "anchor": [
+        32,
+        58
+      ],
+      "fps": 2,
+      "atlas": null
+    },
+    "npc_solen": {
+      "id": "npc_solen",
+      "category": "npc",
+      "area": null,
+      "src": "/assets/npc_solen.png",
+      "frameCount": 2,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 128,
+      "stripHeight": 64,
+      "anchor": [
+        32,
+        58
+      ],
+      "fps": 2,
+      "atlas": null
+    },
+    "npc_maeve": {
+      "id": "npc_maeve",
+      "category": "npc",
+      "area": null,
+      "src": "/assets/npc_maeve.png",
+      "frameCount": 2,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 128,
+      "stripHeight": 64,
+      "anchor": [
+        32,
+        58
+      ],
+      "fps": 2,
+      "atlas": null
+    },
+    "npc_vex": {
+      "id": "npc_vex",
+      "category": "npc",
+      "area": null,
+      "src": "/assets/npc_vex.png",
+      "frameCount": 2,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 128,
+      "stripHeight": 64,
+      "anchor": [
+        32,
+        58
+      ],
+      "fps": 2,
+      "atlas": null
+    },
+    "npc_morwen": {
+      "id": "npc_morwen",
+      "category": "npc",
+      "area": null,
+      "src": "/assets/npc_morwen.png",
+      "frameCount": 2,
+      "frameWidth": 64,
+      "frameHeight": 64,
+      "stripWidth": 128,
+      "stripHeight": 64,
+      "anchor": [
+        32,
+        58
+      ],
+      "fps": 2,
       "atlas": null
     }
   }
