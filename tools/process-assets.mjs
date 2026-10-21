@@ -2315,34 +2315,36 @@ function runPipeline() {
 </html>`;
   fs.writeFileSync(path.join(OUT_DIR, 'contact-sheet.html'), html);
 
-  // Generate /ASSETS_NEEDED.md in project root
-  const mdLines = [
-    '# GRAVEL SKY — Asset Generation Prompts & Manifest Specification (`ASSETS_NEEDED.md`)',
-    '',
-    'Drop raw generated images into `/assets-src/raw/<id>.png` on a flat `#FF00FF` magenta background and run:',
-    '```bash',
-    'node tools/process-assets.mjs',
-    '```',
-    '',
-    '## Step 0: Global Style Lock (Prefixed to Every Prompt)',
-    `> ${STYLE_LOCK}`,
-    '',
-    '## Step 0: Global Negative Prompt',
-    `> avoid: ${NEGATIVE_PROMPT}`,
-    '',
-    '## Complete Asset List',
-    '',
-  ];
+  // Only regenerate /ASSETS_NEEDED.md if --regen-docs is explicitly passed
+  if (process.argv.includes('--regen-docs')) {
+    const mdLines = [
+      '# GRAVEL SKY — Asset Generation Prompts & Manifest Specification (`ASSETS_NEEDED.md`)',
+      '',
+      'Drop raw generated images into `/assets-src/raw/<id>.png` on a flat `#FF00FF` magenta background and run:',
+      '```bash',
+      'node tools/process-assets.mjs',
+      '```',
+      '',
+      '## Step 0: Global Style Lock (Prefixed to Every Prompt)',
+      `> ${STYLE_LOCK}`,
+      '',
+      '## Step 0: Global Negative Prompt',
+      `> avoid: ${NEGATIVE_PROMPT}`,
+      '',
+      '## Complete Asset List',
+      '',
+    ];
 
-  for (const spec of ASSET_CATALOG) {
-    mdLines.push(`### \`${spec.id}.png\``);
-    mdLines.push(`- **Category**: \`${spec.category}\``);
-    mdLines.push(`- **Frame Size**: \`${spec.frameWidth}x${spec.frameHeight}\` (${spec.frameCount} frame(s), strip \`${spec.frameWidth * spec.frameCount}x${spec.frameHeight}\`, ${spec.fps} fps)`);
-    mdLines.push(`- **Full Prompt**: \`${STYLE_LOCK} ${spec.prompt}. avoid: ${NEGATIVE_PROMPT}\``);
-    mdLines.push('');
+    for (const spec of ASSET_CATALOG) {
+      mdLines.push(`### \`${spec.id}.png\``);
+      mdLines.push(`- **Category**: \`${spec.category}\``);
+      mdLines.push(`- **Frame Size**: \`${spec.frameWidth}x${spec.frameHeight}\` (${spec.frameCount} frame(s), strip \`${spec.frameWidth * spec.frameCount}x${spec.frameHeight}\`, ${spec.fps} fps)`);
+      mdLines.push(`- **Full Prompt**: \`${STYLE_LOCK} ${spec.prompt}. avoid: ${NEGATIVE_PROMPT}\``);
+      mdLines.push('');
+    }
+
+    fs.writeFileSync(path.join(ROOT, 'ASSETS_NEEDED.md'), mdLines.join('\n'));
   }
-
-  fs.writeFileSync(path.join(ROOT, 'ASSETS_NEEDED.md'), mdLines.join('\n'));
   console.log(`Processed ${ASSET_CATALOG.length} asset strips into /public/assets/manifest.json and /public/assets/atlas_0.png.`);
 }
 
