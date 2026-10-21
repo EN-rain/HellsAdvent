@@ -42,8 +42,9 @@ function drawDiamond(ctx, cx, cy, r) {
 const StatProgressBar = memo(function StatProgressBar({
   pct,
   trailPct,
+  trailClassName = 'bg-[#FFC83D]/75',
   containerClassName = 'relative h-4 w-full bg-[#161A20] border border-[#3A3F47] overflow-hidden',
-  fillClassName = 'h-full transition-all duration-75',
+  fillClassName = 'h-full transition-[width,background-color,box-shadow,filter] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]',
   fillColor,
   fillBackground,
   children,
@@ -52,22 +53,58 @@ const StatProgressBar = memo(function StatProgressBar({
   const clampedTrail =
     trailPct !== undefined ? Math.max(clampedPct, Math.min(100, Number(trailPct) || 0)) : null;
 
+  const prevPctRef = useRef(clampedPct);
+  const [deltaMode, setDeltaMode] = useState(null);
+
+  useEffect(() => {
+    const diff = clampedPct - prevPctRef.current;
+    prevPctRef.current = clampedPct;
+    if (Math.abs(diff) < 0.25) return undefined;
+
+    setDeltaMode(diff > 0 ? 'replenish' : 'deplete');
+    const timer = setTimeout(() => {
+      setDeltaMode(null);
+    }, 260);
+    return () => clearTimeout(timer);
+  }, [clampedPct]);
+
   return (
     <div className={containerClassName}>
       {clampedTrail !== null && clampedTrail > clampedPct && (
         <div
-          className="absolute top-0 bottom-0 left-0 bg-[#FFC83D]/70 transition-all duration-300 pointer-events-none"
+          className={`absolute top-0 bottom-0 left-0 ${trailClassName} transition-[width,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] pointer-events-none`}
           style={{ width: `${clampedTrail}%` }}
         />
       )}
       <div
-        className={`relative ${fillClassName}`}
+        className={`relative ${fillClassName} ${
+          deltaMode === 'replenish'
+            ? 'brightness-115 duration-300'
+            : deltaMode === 'deplete'
+            ? 'brightness-110 duration-150'
+            : ''
+        }`}
         style={{
           width: `${clampedPct}%`,
           ...(fillColor ? { backgroundColor: fillColor } : null),
           ...(fillBackground ? { background: fillBackground } : null),
         }}
-      />
+      >
+        {/* Subtle top bevel sheen for depth */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[38%] bg-gradient-to-b from-white/20 to-transparent" />
+        {/* Fluid leading-edge pulse on value change */}
+        {clampedPct > 1 && clampedPct < 99.8 && (
+          <div
+            className={`pointer-events-none absolute top-0 bottom-0 right-0 w-1.5 transition-opacity duration-200 ${
+              deltaMode === 'replenish'
+                ? 'bg-white/80 shadow-[0_0_8px_rgba(255,255,255,0.85)] opacity-100'
+                : deltaMode === 'deplete'
+                ? 'bg-[#FFC83D]/90 shadow-[0_0_6px_rgba(255,200,61,0.8)] opacity-95'
+                : 'bg-white/30 opacity-50'
+            }`}
+          />
+        )}
+      </div>
       {children}
     </div>
   );
@@ -1184,12 +1221,16 @@ export function HUD({ snapshot, engine }) {
   const [hoveredStatus, setHoveredStatus] = useState(null);
   const [hoveredSkillId, setHoveredSkillId] = useState(null);
 
-  // Smooth delayed HP trail percentages for Player and Boss
+  // Smooth delayed trails for Player HP, Player Stamina, and Boss HP
   const [playerTrailPct, setPlayerTrailPct] = useState(100);
+  const [staminaTrailPct, setStaminaTrailPct] = useState(100);
   const [bossTrailPct, setBossTrailPct] = useState(100);
 
   const hpPct = snapshot
     ? Math.max(0, Math.min(100, (snapshot.hp / Math.max(1, snapshot.maxHp)) * 100))
+    : 100;
+  const stamPct = snapshot
+    ? Math.max(0, Math.min(100, (snapshot.stamina / Math.max(1, snapshot.maxStamina)) * 100))
     : 100;
   const bossHpPct = snapshot?.activeBoss
     ? Math.max(
@@ -1199,18 +1240,37 @@ export function HUD({ snapshot, engine }) {
     : 100;
 
   useEffect(() => {
+    if (hpPct >= playerTrailPct) {
+      setPlayerTrailPct(hpPct);
+      return undefined;
+    }
     const t = setTimeout(() => {
       setPlayerTrailPct(hpPct);
     }, 180);
     return () => clearTimeout(t);
-  }, [hpPct]);
+  }, [hpPct, playerTrailPct]);
 
   useEffect(() => {
+    if (stamPct >= staminaTrailPct) {
+      setStaminaTrailPct(stamPct);
+      return undefined;
+    }
+    const t = setTimeout(() => {
+      setStaminaTrailPct(stamPct);
+    }, 140);
+    return () => clearTimeout(t);
+  }, [stamPct, staminaTrailPct]);
+
+  useEffect(() => {
+    if (bossHpPct >= bossTrailPct) {
+      setBossTrailPct(bossHpPct);
+      return undefined;
+    }
     const t = setTimeout(() => {
       setBossTrailPct(bossHpPct);
     }, 180);
     return () => clearTimeout(t);
-  }, [bossHpPct]);
+  }, [bossHpPct, bossTrailPct]);
 
   const handleOpenQuestModal = useCallback(() => {
     engine.setUiState('quests');
@@ -1280,7 +1340,6 @@ export function HUD({ snapshot, engine }) {
   if (!snapshot) return null;
 
   const accent = snapshot.accentColor || PALETTE.signal;
-  const stamPct = Math.max(0, Math.min(100, (snapshot.stamina / snapshot.maxStamina) * 100));
   const xpPct =
     snapshot.xpToNext > 0
       ? Math.max(0, Math.min(100, (snapshot.xp / snapshot.xpToNext) * 100))
@@ -1404,12 +1463,17 @@ export function HUD({ snapshot, engine }) {
                 </span>
               </div>
 
-              {/* HP BAR with Smooth Delayed Damage Trail */}
+              {/* HP BAR with Smooth Delayed Damage Trail & Fluid Replenishment */}
               <StatProgressBar
                 pct={hpPct}
                 trailPct={playerTrailPct}
-                containerClassName="relative h-4 w-full bg-[#161A20] border border-[#3A3F47] overflow-hidden"
-                fillClassName="h-full bg-[#FF3B3B] transition-all duration-75"
+                trailClassName="bg-[#FFC83D]/75"
+                containerClassName={`relative h-4 w-full bg-[#161A20] border overflow-hidden transition-[border-color,box-shadow] duration-300 ${
+                  hpPct <= 25
+                    ? 'border-[#FF3B3B] shadow-[0_0_10px_rgba(255,59,59,0.45)]'
+                    : 'border-[#3A3F47]'
+                }`}
+                fillClassName="h-full bg-[#FF3B3B] transition-[width,background-color,box-shadow,filter] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
               >
                 <div className="absolute inset-0 flex items-center justify-between px-1.5 text-[10px] font-bold text-[#F5F2EB] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] tabular-nums">
                   <span>HP · {hpPct <= 25 ? 'CRITICAL' : 'VITALITY'}</span>
@@ -1419,11 +1483,13 @@ export function HUD({ snapshot, engine }) {
                 </div>
               </StatProgressBar>
 
-              {/* STAMINA BAR */}
+              {/* STAMINA BAR with Fluid Depletion Trail & Replenishment Glide */}
               <StatProgressBar
                 pct={stamPct}
-                containerClassName="relative h-3.5 w-full bg-[#161A20] border border-[#3A3F47] overflow-hidden"
-                fillClassName="h-full transition-all duration-75"
+                trailPct={staminaTrailPct}
+                trailClassName="bg-white/35"
+                containerClassName="relative h-3.5 w-full bg-[#161A20] border border-[#3A3F47] overflow-hidden transition-[border-color,box-shadow] duration-300"
+                fillClassName="h-full transition-[width,background-color,box-shadow,filter] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]"
                 fillColor={accent}
               >
                 <div className="absolute inset-0 flex items-center justify-between px-1.5 text-[9px] font-bold text-[#F5F2EB] drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)] tabular-nums">
