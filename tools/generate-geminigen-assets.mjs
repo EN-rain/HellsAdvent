@@ -848,59 +848,78 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
   const bob = f === 1 ? -2 : isAtk ? 2 : isHurt ? -1 : 0;
 
   if (id === 'tin_rat') {
+    // Shackled Crypt-Rat: feral plague-rat bound in a spiked wrought-iron torture gibbet collar & chain
     if (isDead) {
-      surf.ellipse(cx - 5, cy + 7, 7, 4, C.rust2);
-      surf.ellipse(cx + 6, cy + 8, 5, 2, C.slag2);
-      surf.line(cx - 11, cy + 9, cx - 2, cy + 10, C.bone2, 1);
+      surf.ellipse(cx - 4, cy + 7, 8, 4, C.coat1);
+      surf.rect(cx + 3, cy + 5, 6, 4, C.slag2); // broken iron gibbet collar
+      surf.line(cx - 12, cy + 9, cx - 3, cy + 10, C.skin1, 1);
     } else {
       surf.ellipse(cx, cy + 9, 11, 3, C.coat0);
-      surf.line(cx - 15, cy + 5, cx - 6, cy + 3 + bob, C.skin1, 2); // tail
-      // Rusted soup-can shell with ribbing
-      surf.rect(cx - 8, cy - 6 + bob, 15, 12, C.rust2);
-      surf.rect(cx - 7, cy - 6 + bob, 13, 4, C.rust3);
-      surf.line(cx - 3, cy - 6 + bob, cx - 3, cy + 5 + bob, C.rust0, 1);
-      surf.line(cx + 2, cy - 6 + bob, cx + 2, cy + 5 + bob, C.rust0, 1);
-      // Hinged can lid + skull-snout + blood eye
-      surf.line(cx + 7, cy - 6 + bob, cx + 12, cy - (isAtk ? 11 : 5) + bob, C.slag3, 2);
+      surf.line(cx - 16, cy + 5, cx - 6, cy + 3 + bob, C.skin1, 2); // segmented rat tail
+      // Hunched mange-furred rat body + exposed spine
+      surf.ellipse(cx - 2, cy + 1 + bob, 9, 6, C.coat1);
+      surf.ellipse(cx - 3, cy - 1 + bob, 6, 4, C.slag1);
+      for (const sx of [-6, -2, 2]) {
+        surf.pset(cx + sx, cy - 5 + bob, C.bone3); // dorsal bone spine ridges
+      }
+      // Spiked wrought-iron torture gibbet collar & trailing shackle chain
+      surf.rect(cx + 3, cy - 5 + bob, 5, 10, C.rust1);
+      surf.rect(cx + 4, cy - 7 + bob, 3, 2, C.slag3); // dorsal iron spike
+      surf.line(cx + 3, cy + 5 + bob, cx - 6, cy + 8, C.slag3, 1); // dragging chain
+      // Snarling skull-snout, bone incisors & glowing crimson eye
       surf.ellipse(cx + 10 + (isAtk ? 3 : 0), cy + 1 + bob, 5, 4, C.bone2);
-      surf.rect(cx + 11 + (isAtk ? 3 : 0), cy + bob, 2, 2, C.blood2);
+      surf.rect(cx + 11 + (isAtk ? 3 : 0), cy - 1 + bob, 2, 2, isAtk ? C.brass3 : C.blood2);
+      surf.line(cx + 13 + (isAtk ? 3 : 0), cy + 3 + bob, cx + 13 + (isAtk ? 3 : 0), cy + 5 + bob, C.bone3, 1);
     }
   } else if (id === 'dust_dog') {
+    // Flayed Grave-Hound: undead skeletal necro-hound with exposed ribcage & spiked executioner collar
     if (isDead) {
-      surf.ellipse(cx - 4, cy + 7, 8, 4, C.bone1);
-      surf.rect(cx + 5, cy + 6, 5, 3, C.brass2);
+      surf.ellipse(cx - 4, cy + 7, 9, 4, C.bone1);
+      surf.rect(cx + 5, cy + 6, 5, 3, C.rust1);
     } else {
       const stretch = isAtk ? 4 : f === 1 ? 2 : 0;
       surf.ellipse(cx, cy + 10, 12, 3, C.coat0);
-      surf.ellipse(cx - 2, cy + bob, 11 + stretch, 6, C.bone1);
-      // Exposed ribcage bars
+      surf.ellipse(cx - 2, cy + bob, 11 + stretch, 6, C.rust1); // flayed crimson muscle
+      // Exposed bleached ribcage bars & jagged dorsal vertebrae
       for (const rx of [-6, -3, 0, 3]) {
         surf.line(cx + rx, cy - 4 + bob, cx + rx, cy + 3 + bob, C.bone3, 1);
+        surf.pset(cx + rx, cy - 6 + bob, C.bone2);
       }
-      surf.line(cx - 9, cy + 4, cx - 12 - stretch, cy + 11, C.bone0, 2);
-      surf.line(cx + 6, cy + 4, cx + 9 + stretch, cy + 11, C.bone0, 2);
-      // Rag collar + dangling brass goggles
-      surf.rect(cx + 5, cy - 4 + bob, 3, 7, C.rust2);
-      surf.rect(cx + 6, cy + 2 + bob, 4, 3, C.brass3);
-      surf.ellipse(cx + 11 + stretch, cy + bob, 5, 4, C.bone2);
-      surf.rect(cx + 12 + stretch, cy - 1 + bob, 2, 2, C.blood2);
+      surf.line(cx - 9, cy + 4, cx - 12 - stretch, cy + 11, C.bone1, 2);
+      surf.line(cx + 6, cy + 4, cx + 9 + stretch, cy + 11, C.bone1, 2);
+      // Spiked dark-iron executioner collar & broken chain links
+      surf.rect(cx + 5, cy - 4 + bob, 4, 8, C.slag1);
+      surf.pset(cx + 7, cy - 6 + bob, C.brass3);
+      surf.line(cx + 6, cy + 4 + bob, cx + 3, cy + 9 + bob, C.slag3, 1);
+      // Elongated canine skull head & blazing crimson eye socket
+      surf.ellipse(cx + 11 + stretch, cy + bob, 6, 4, C.bone3);
+      surf.rect(cx + 12 + stretch, cy - 1 + bob, 2, 2, isAtk ? C.brass3 : C.blood2);
     }
   } else if (id === 'wire_kite') {
+    // Stone Gargoyle Imp: winged gothic cathedral gargoyle with demon oculus & spiked penance chain
     if (isDead) {
-      surf.line(cx - 9, cy + 6, cx + 9, cy + 10, C.wood, 2);
-      surf.ellipse(cx, cy + 8, 6, 3, C.slag2);
+      surf.ellipse(cx, cy + 8, 9, 4, C.slag1);
+      surf.ellipse(cx - 4, cy + 7, 4, 3, C.bone1);
     } else {
-      const wingY = f === 1 ? -9 : -3;
-      surf.line(cx - 14, cy + wingY, cx + 14, cy + wingY, C.wood, 2);
-      surf.line(cx, cy - 13 + bob, cx, cy + 4 + bob, C.wood, 2);
-      surf.ellipse(cx - 8, cy + wingY + 2, 6, 4, C.bone2);
-      surf.ellipse(cx + 8, cy + wingY + 2, 6, 4, C.bone2);
-      surf.ellipse(cx, cy - 6 + bob, 5, 5, C.slag1);
-      surf.rect(cx - 1, cy - 7 + bob, 3, 3, C.blood2);
-      surf.pset(cx - 1, cy - 7 + bob, C.bone3);
-      surf.line(cx, cy + 4 + bob, cx - 4 + (f % 2) * 5, cy + 12, C.slag3, 1);
+      const wingY = f === 1 ? -10 : -3;
+      // Leathery ribbed bat-gargoyle wings
+      surf.line(cx - 3, cy - 4 + bob, cx - 15, cy + wingY, C.slag2, 2);
+      surf.line(cx + 3, cy - 4 + bob, cx + 15, cy + wingY, C.slag2, 2);
+      surf.ellipse(cx - 9, cy + wingY + 3, 6, 4, C.coat2);
+      surf.ellipse(cx + 9, cy + wingY + 3, 6, 4, C.coat2);
+      // Horned gargoyle torso & head with glowing crimson demon oculus
+      surf.ellipse(cx, cy - 4 + bob, 6, 6, C.slag1);
+      surf.line(cx - 4, cy - 9 + bob, cx - 7, cy - 13 + bob, C.bone2, 2); // left horn
+      surf.line(cx + 4, cy - 9 + bob, cx + 7, cy - 13 + bob, C.bone2, 2); // right horn
+      surf.rect(cx - 2, cy - 6 + bob, 4, 4, isAtk ? C.brass3 : C.blood2);
+      surf.pset(cx - 1, cy - 6 + bob, C.bone3);
+      // Whipping iron penance chain tail with spiked plumb weight
+      const tailX = cx - 4 + (f % 2) * 6;
+      surf.line(cx, cy + 2 + bob, tailX, cy + 11, C.slag3, 1);
+      surf.rect(tailX - 1, cy + 10, 3, 3, C.rust2);
     }
   } else if (id === 'lye_leech') {
+    // Bloated Blood-Leech: translucent venom-green mire parasite with circular lamprey maw
     if (isDead) {
       surf.ellipse(cx, cy + 8, 11, 3, C.bile1);
     } else {
@@ -916,21 +935,26 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
       surf.pset(cx + w, cy + 7, C.bone3);
     }
   } else if (id === 'sump_bat') {
+    // Vampiric Crypt-Bat: nosferatu strigoi bat with clawed wing-thumbs & glowing venom sac
     if (isDead) {
       surf.ellipse(cx, cy + 7, 10, 4, C.bog1);
     } else {
       const wingY = f === 1 ? -9 : 3;
-      surf.line(cx, cy - 3, cx - 15, cy + wingY, C.slag3, 2);
-      surf.line(cx, cy - 3, cx + 15, cy + wingY, C.slag3, 2);
+      surf.line(cx, cy - 3, cx - 15, cy + wingY, C.rust1, 2);
+      surf.line(cx, cy - 3, cx + 15, cy + wingY, C.rust1, 2);
+      surf.pset(cx - 15, cy + wingY - 1, C.bone3); // wing-thumb bone claw
+      surf.pset(cx + 15, cy + wingY - 1, C.bone3);
       surf.ellipse(cx - 8, cy + (wingY >> 1), 6, 4, C.bog2);
       surf.ellipse(cx + 8, cy + (wingY >> 1), 6, 4, C.bog2);
       surf.ellipse(cx, cy + 3, 6, 6, C.bile2); // swollen venom sac
       surf.ellipse(cx, cy - 3, 5, 4, C.coat1);
+      surf.line(cx - 3, cy - 6, cx - 5, cy - 10, C.coat2, 1); // vampire bat ear
+      surf.line(cx + 3, cy - 6, cx + 5, cy - 10, C.coat2, 1);
       surf.pset(cx - 2, cy - 4, C.blood2);
       surf.pset(cx + 2, cy - 4, C.blood2);
     }
   } else if (id === 'rivet_tick') {
-    // Ossuary Skitter: skull-shelled 6-legged iron spider
+    // Skull-Carapace Bone-Spider: 6-legged catacomb arachnid carrying a horned skull shell
     if (isDead) {
       surf.ellipse(cx, cy + 8, 8, 4, C.bone1);
     } else {
@@ -939,10 +963,10 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
       }
       surf.ellipse(cx, cy + bob, 8, 7, C.bone2);
       surf.ellipse(cx - 2, cy - 2 + bob, 5, 4, C.bone3);
-      surf.rect(cx - 4, cy + 1 + bob, 8, 2, C.blood2); // crimson eye slit
+      surf.rect(cx - 4, cy + 1 + bob, 8, 2, C.blood2); // crimson eye cluster
     }
   } else if (id === 'signal_mite') {
-    // Cursed Wisp: floating iron lantern-skull wreathed in signal-cyan soulfire
+    // Will-o'-Wisp Soul-Lantern: floating wrought-iron cage skull wreathed in soulfire-cyan
     if (isDead) {
       surf.ellipse(cx, cy + 8, 6, 3, C.slag2);
     } else {
@@ -953,13 +977,14 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
       surf.line(cx, cy - 14 + bob, cx, cy - 8 + bob, C.brass3, 2);
     }
   } else if (id === 'silt_mimic') {
-    // Cursed Mimic: bog-crusted iron coffer splitting open with jagged bone teeth
+    // Ossuary Coffer Mimic: gothic iron-and-bone reliquary chest with snapping fangs & bile tongue
     if (isDead) {
       surf.rect(cx - 9, cy + 4, 18, 6, C.rust1);
     } else {
       const open = isAtk ? 5 : f === 1 ? 2 : 0;
       surf.rect(cx - 10, cy + 1, 20, 9, C.rust1);
       surf.rect(cx - 10, cy - 6 - open, 20, 7, C.slag2);
+      surf.rect(cx - 2, cy - 2 - open, 4, 4, C.brass2); // skull clasp
       if (open > 0) {
         surf.rect(cx - 8, cy - open, 16, open + 1, C.soot);
         for (let tx = -7; tx <= 7; tx += 4) {
@@ -969,7 +994,7 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
       }
     }
   } else if (id === 'cinder_crow') {
-    // Carrion Crow: soot-black undead raven with bone beak and ember wingtips
+    // Ashen Carrion-Crow: undead raven with exposed bone-skull beak and hellfire-ember feathers
     if (isDead) {
       surf.ellipse(cx, cy + 8, 8, 3, C.coat0);
     } else {
@@ -999,101 +1024,145 @@ function drawEliteEnemyFrame(surf, ox, oy, id, f) {
   const bob = f === 1 ? -2 : 0;
 
   if (id === 'cleaver_hauler') {
+    // Chained Crypt-Executioner Brute: horned iron-masked headsman dragging a spiked Iron-Maiden Coffin Reliquary (NO WHEELS)
     if (isDead) {
-      surf.ellipse(cx - 12, cy + 16, 14, 8, C.rust1);
-      surf.rect(cx + 4, cy + 18, 20, 7, C.slag3);
+      surf.rect(cx - 26, cy + 12, 22, 10, C.slag1); // fallen coffin reliquary
+      surf.rect(cx + 4, cy + 16, 22, 8, C.slag3); // fallen guillotine cleaver
     } else {
-      surf.rect(cx - 32, cy - 4, 18, 16, C.rust1);
-      surf.ellipse(cx - 24, cy + 14, 6, 6, C.slag1);
-      surf.line(cx - 14, cy + 4, cx - 4, cy + 2, C.slag3, 2);
-      surf.ellipse(cx + 2, cy - 4 + bob, 14, 17, C.coat1);
-      surf.ellipse(cx + 5, cy - 19 + bob, 8, 8, C.bone2);
-      surf.rect(cx + 7, cy - 20 + bob, 2, 2, C.blood2);
-      const cleaverY = isTell ? cy - 30 : isAtk ? cy + 8 : cy - 8;
-      surf.rect(cx + 12, cleaverY, 20, 10, C.slag3);
-      surf.rect(cx + 12, cleaverY + 8, 20, 2, isTell ? C.brass3 : C.bone3);
+      // Spiked Iron-Maiden Coffin Reliquary dragged on ground (no wheels) + heavy dungeon chain
+      surf.rect(cx - 32, cy - 10, 16, 28, C.slag1);
+      surf.rect(cx - 30, cy - 8, 12, 24, C.rust1);
+      surf.ellipse(cx - 24, cy - 2, 4, 5, C.bone3); // skull relief on coffin door
+      surf.line(cx - 16, cy + 4, cx - 6, cy + 2, C.brass2, 2); // heavy chain
+      // Towering hunched executioner brute in crimson leather & spiked pauldrons
+      surf.ellipse(cx + 2, cy - 4 + bob, 14, 17, C.rust1);
+      surf.ellipse(cx + 2, cy - 8 + bob, 12, 10, C.slag1);
+      // Horned executioner iron mask head + glowing blood eyes
+      surf.ellipse(cx + 5, cy - 20 + bob, 8, 8, C.slag2);
+      surf.line(cx + 1, cy - 26 + bob, cx - 3, cy - 32 + bob, C.bone3, 2); // left horn
+      surf.line(cx + 9, cy - 26 + bob, cx + 13, cy - 32 + bob, C.bone3, 2); // right horn
+      surf.rect(cx + 7, cy - 21 + bob, 3, 2, C.blood2);
+      // Colossal notched Guillotine Butcher's Cleaver
+      const cleaverY = isTell ? cy - 30 : isAtk ? cy + 6 : cy - 10;
+      surf.rect(cx + 13, cleaverY, 20, 12, C.slag3);
+      surf.rect(cx + 13, cleaverY + 9, 20, 3, isTell ? C.brass3 : C.bone3);
     }
   } else if (id === 'lye_strider') {
+    // Stilted Plague-Alchemist Cenobite: bone-stilt walker with glowing Bile-Alembic Censer & plague-doctor beak mask
     if (isDead) {
-      surf.line(cx - 22, cy + 20, cx + 20, cy + 24, C.slag2, 3);
+      surf.line(cx - 22, cy + 20, cx + 20, cy + 24, C.bone2, 3);
       surf.ellipse(cx, cy + 16, 12, 8, C.bog2);
     } else {
       const stride = f === 1 ? 5 : 0;
-      surf.line(cx - 6 - stride, cy - 6, cx - 12 - stride, cy + 26, C.slag2, 3);
-      surf.line(cx + 6 + stride, cy - 6, cx + 12 + stride, cy + 26, C.slag2, 3);
-      surf.rect(cx - 14, cy - 26 + bob, 14, 20, C.bog2);
-      surf.rect(cx - 12, cy - 22 + bob, 10, 9, isTell ? C.sig2 : C.bile2);
-      surf.ellipse(cx + 2, cy - 14 + bob, 9, 11, C.rust1);
-      surf.ellipse(cx + 6, cy - 28 + bob, 7, 5, C.slag3);
+      // Tall bound bone-and-wrought-iron stilts
+      surf.line(cx - 6 - stride, cy - 6, cx - 12 - stride, cy + 26, C.bone2, 3);
+      surf.line(cx + 6 + stride, cy - 6, cx + 12 + stride, cy + 26, C.bone2, 3);
+      // Dorsal glass Bile-Alembic Reliquary Censer on back
+      surf.ellipse(cx - 8, cy - 18 + bob, 8, 11, C.bog2);
+      surf.ellipse(cx - 8, cy - 16 + bob, 6, 7, isTell ? C.brass3 : C.bile2);
+      // Robed torso & curved plague-doctor beak mask
+      surf.ellipse(cx + 2, cy - 14 + bob, 9, 11, C.bog1);
+      surf.ellipse(cx + 5, cy - 27 + bob, 6, 6, C.bone3); // skull cowl
+      surf.line(cx + 9, cy - 27 + bob, cx + 19, cy - 24 + bob, C.bone2, 3); // curved plague beak
+      surf.pset(cx + 8, cy - 28 + bob, C.blood2);
       if (isAtk) {
-        surf.ellipse(cx + 21, cy - 24, 9, 5, C.bile2);
+        surf.ellipse(cx + 23, cy - 22, 8, 5, C.bile2);
       }
     }
   } else if (id === 'flats_harvester') {
+    // Bone-Scythe Reaver Wraith: four-armed horned skeletal reaper grafted onto skittering bone-centipede legs (NO TREADS/DRUM)
     if (isDead) {
-      surf.ellipse(cx, cy + 14, 22, 10, C.rust1);
+      surf.ellipse(cx, cy + 14, 22, 9, C.bone1);
+      surf.line(cx - 16, cy + 12, cx + 16, cy + 16, C.blood2, 2);
     } else {
-      surf.rect(cx - 24, cy + 4, 42, 16, C.rust1);
-      surf.rect(cx - 20, cy + 16, 36, 8, C.slag1);
-      surf.ellipse(cx - 6, cy - 8 + bob, 10, 12, C.coat2);
-      surf.ellipse(cx - 4, cy - 20 + bob, 6, 6, C.bone2);
-      const drumX = cx + 18 + (isAtk ? 6 : 0);
-      surf.ellipse(drumX, cy + 6, 13, 13, C.slag2);
-      surf.ellipse(drumX, cy + 6, 9, 9, C.rust2);
+      // Articulated bone-centipede lower body & skittering scythe-talons
+      surf.ellipse(cx, cy + 10, 20, 8, C.slag1);
+      for (let lx = -16; lx <= 16; lx += 8) {
+        const legLift = ((f + (lx >> 3)) & 1) * 3;
+        surf.line(cx + lx, cy + 12, cx + lx - 3, cy + 24 - legLift, C.bone2, 2);
+      }
+      // Horned skeletal wraith-lord upper torso in tattered crimson mantle
+      surf.ellipse(cx - 2, cy - 6 + bob, 11, 13, C.rust1);
+      surf.ellipse(cx - 1, cy - 20 + bob, 7, 7, C.bone3); // skull head
+      surf.rect(cx - 5, cy - 27 + bob, 9, 3, C.brass3); // crown
+      surf.pset(cx + 2, cy - 20 + bob, C.blood2);
+      // Four whirling blood-stained crescent war-scythes
+      const spin = isAtk ? 8 : isTell ? -5 : 0;
       const bladeCol = isTell ? C.brass3 : C.blood2;
-      surf.line(drumX - 14, cy + 6, drumX + 14, cy + 6, bladeCol, 3);
-      surf.line(drumX, cy - 8, drumX, cy + 20, bladeCol, 3);
+      surf.line(cx + 4, cy - 10, cx + 26 + spin, cy - 22, C.bone3, 2);
+      surf.line(cx + 22 + spin, cy - 24, cx + 30 + spin, cy - 8, bladeCol, 3); // upper front scythe
+      surf.line(cx + 4, cy + 2, cx + 28 + spin, cy + 6, C.bone3, 2);
+      surf.line(cx + 24 + spin, cy + 2, cx + 30 + spin, cy + 18, bladeCol, 3); // lower front scythe
+      surf.line(cx - 6, cy - 8, cx - 24, cy - 20 - spin, C.bone2, 2);
+      surf.line(cx - 22, cy - 22 - spin, cx - 28, cy - 8 - spin, bladeCol, 2); // back scythe
     }
   } else if (id === 'plate_marshal') {
-    // Dread Templar: towering undead knight with tower shield and rusted broadsword
+    // Dread Cathedral Templar: towering undead fallen paladin with skull-embossed tower shield & broadsword
     if (isDead) {
       surf.rect(cx - 18, cy + 16, 36, 8, C.slag2);
     } else {
       surf.ellipse(cx - 2, cy - 4 + bob, 14, 18, C.slag1);
-      surf.ellipse(cx - 2, cy - 22 + bob, 8, 8, C.slag3); // greathelm
+      surf.ellipse(cx - 2, cy - 22 + bob, 8, 8, C.slag3); // horned greathelm
+      surf.line(cx - 8, cy - 26 + bob, cx - 12, cy - 33 + bob, C.bone3, 2);
+      surf.line(cx + 4, cy - 26 + bob, cx + 8, cy - 33 + bob, C.bone3, 2);
       surf.rect(cx - 1, cy - 22 + bob, 5, 2, isTell ? C.brass3 : C.blood2);
-      // Tower Shield in front
-      surf.rect(cx + 8 + (isAtk ? 6 : 0), cy - 18, 12, 34, C.slag2);
-      surf.rect(cx + 10 + (isAtk ? 6 : 0), cy - 14, 8, 26, C.rust1);
-      // Broadsword
+      // Skull-Embossed Cathedral Tower Shield in front
+      const shX = cx + 8 + (isAtk ? 6 : 0);
+      surf.rect(shX, cy - 18, 12, 34, C.slag2);
+      surf.rect(shX + 2, cy - 14, 8, 26, C.rust1);
+      surf.ellipse(shX + 6, cy - 2, 3, 4, C.bone3); // shield skull boss
+      // Runed Broadsword
       surf.line(cx - 8, cy - 12, cx - 22, cy - (isTell ? 34 : 26), C.slag3, 4);
     }
   } else if (id === 'switchback_driver') {
-    // Hell-Steed Outrider: bone-plated monowheel steed with twin brass exhausts
+    // Nightmare Hell-Steed Outrider: Death-Knight cavalier on a 4-legged Skeletal Nightmare Warhorse (NO WHEELS)
     if (isDead) {
-      surf.ellipse(cx, cy + 14, 20, 9, C.slag1);
+      surf.ellipse(cx, cy + 14, 22, 9, C.bone1);
     } else {
       const shift = isAtk ? 8 : 0;
-      surf.ellipse(cx + shift, cy + 8, 16, 16, C.coat0);
-      surf.ellipse(cx + shift, cy + 8, 10, 10, C.bone2);
-      surf.ellipse(cx - 2 + shift, cy - 10 + bob, 10, 12, C.rust2);
-      surf.line(cx - 10 + shift, cy - 6, cx - 24 + shift, cy - 18, C.brass2, 3); // exhaust pipes
-      if (isTell) surf.ellipse(cx - 26, cy - 20, 5, 5, C.rust3);
-      surf.line(cx + 12 + shift, cy + 8, cx + 28 + shift, cy + 8, C.slag3, 4); // spiked ram prow
+      const gallop = f % 2 === 0 ? -4 : 4;
+      // 4 skeletal warhorse legs with hellfire-orange hooves
+      for (const lx of [-14, -5, 6, 15]) {
+        const legX = cx + lx + shift + (lx < 0 ? -gallop : gallop);
+        surf.line(cx + lx + shift, cy + 6, legX, cy + 23, C.bone2, 2);
+        surf.rect(legX - 2, cy + 21, 4, 3, C.rust3); // hellfire hoof
+      }
+      // Armored Skeletal Nightmare Warhorse body & horned skull head
+      surf.ellipse(cx + shift, cy + 2, 18, 9, C.slag1);
+      surf.ellipse(cx + shift, cy + 1, 14, 6, C.rust1); // crimson barding
+      surf.ellipse(cx + 18 + shift, cy - 8 + bob, 7, 5, C.bone3); // horse skull
+      surf.pset(cx + 20 + shift, cy - 9 + bob, C.rust3); // blazing eye
+      // Death-Knight rider torso & couched barbed war-lance
+      surf.ellipse(cx - 2 + shift, cy - 12 + bob, 8, 11, C.coat2);
+      surf.ellipse(cx - 1 + shift, cy - 23 + bob, 6, 6, C.slag3);
+      surf.line(cx - 10 + shift, cy - 8, cx + 32 + shift, cy - 8, isTell ? C.brass3 : C.bone3, 3); // war-lance
     }
   } else if (id === 'sump_cantor') {
-    // Hex Chanter: hunched fen-priest swinging corroded brass plague-bell staff
+    // Mire Hex-Chanter: antler-crowned swamp high priest swinging a 3-bell Plague Carillon Crozier
     if (isDead) {
       surf.ellipse(cx, cy + 16, 18, 7, C.bog1);
     } else {
       surf.ellipse(cx - 2, cy - 2 + bob, 14, 18, C.bog1);
-      surf.ellipse(cx, cy - 18 + bob, 8, 8, C.bog2);
-      surf.line(cx + 12, cy + 18, cx + 16, cy - 26, C.wood, 3); // bell staff
+      surf.ellipse(cx, cy - 18 + bob, 8, 8, C.bone3); // stag-skull mask
+      surf.line(cx - 4, cy - 24 + bob, cx - 10, cy - 32 + bob, C.bone2, 2); // left antler
+      surf.line(cx + 4, cy - 24 + bob, cx + 10, cy - 32 + bob, C.bone2, 2); // right antler
+      surf.line(cx + 12, cy + 18, cx + 16, cy - 26, C.wood, 3); // crozier staff
       surf.ellipse(cx + 20, cy - 22, 6, 7, isTell ? C.sig2 : C.brass3); // plague bell
       if (isAtk) {
         surf.ellipse(cx + 20, cy - 22, 12, 12, C.bile2);
       }
     }
   } else if (id === 'bore_sentinel') {
-    // Crypt Wyrmling: segmented iron-and-bone burrowing drake emerging from ash collar
+    // Ash-Burrower Wyrmling: subterranean obsidian-and-bone drake bursting from crimson ash collar
     if (isDead) {
       surf.ellipse(cx, cy + 16, 22, 8, C.rust1);
     } else {
-      surf.ellipse(cx, cy + 18, 24, 8, C.rust2); // ash collar
+      surf.ellipse(cx, cy + 18, 24, 8, C.rust2); // crimson ash crater
       for (let s = 0; s < 3; s++) {
-        surf.ellipse(cx - 4 + s * 4, cy + 8 - s * 10 + bob, 12 - s, 9, s % 2 === 0 ? C.slag2 : C.bone2);
+        surf.ellipse(cx - 4 + s * 4, cy + 8 - s * 10 + bob, 12 - s, 9, s % 2 === 0 ? C.slag1 : C.bone2);
       }
       surf.ellipse(cx + 8, cy - 18 + bob, 9, 7, isTell || isAtk ? C.brass3 : C.rust3);
+      surf.line(cx + 4, cy - 24 + bob, cx - 2, cy - 30 + bob, C.bone3, 2); // drake horn
     }
   }
 
@@ -1101,7 +1170,7 @@ function drawEliteEnemyFrame(surf, ox, oy, id, f) {
 }
 
 // ============================================================================
-// 5. BOSSES (9 Frames Each)
+// 5. BOSSES (9 Frames Each — 100% Pure Gothic Dark Fantasy Sovereign Entities)
 // ============================================================================
 function drawBossFrame(surf, ox, oy, w, h, id, f) {
   const cx = ox + (w >> 1);
@@ -1110,79 +1179,194 @@ function drawBossFrame(surf, ox, oy, w, h, id, f) {
   const isPhase = f === 6;
   const isAtkA = f === 2 || f === 3;
   const isAtkB = f === 4 || f === 5;
+  const bob = f % 2 === 1 ? -2 : 0;
 
   if (id === 'the_foreman') {
-    surf.rect(cx - 56, cy + 26, 112, 28, C.slag1);
-    surf.rect(cx - 50, cy + 32, 100, 16, C.slag0);
+    // High Executioner Malgorth: Gargantuan Undead Ossuary Bone-Colossus & Cathedral Executioner Lord (NO EXCAVATOR/TREADS)
     if (!isDead) {
-      surf.rect(cx - 46, cy - 24, 88, 52, C.rust2);
-      surf.rect(cx - 42, cy - 20, 76, 22, C.rust3);
-      // Bone ribs reinforcing boiler
-      for (let rx = -34; rx <= 22; rx += 14) {
-        surf.rect(cx + rx, cy - 18, 6, 38, C.bone2);
+      // Shadow & two massive armored obsidian-and-bone pillar legs with clawed sabatons
+      surf.ellipse(cx, cy + 44, 62, 12, C.coat0);
+      surf.rect(cx - 38, cy + 10, 24, 34, C.slag1);
+      surf.rect(cx + 14, cy + 10, 24, 34, C.slag1);
+      surf.rect(cx - 42, cy + 36, 30, 10, C.bone2); // left bone-claw sabaton
+      surf.rect(cx + 12, cy + 36, 30, 10, C.bone2); // right bone-claw sabaton
+      // Tattered crimson inquisitor banner-fauld between legs
+      surf.rect(cx - 14, cy + 12, 28, 28, C.rust1);
+      surf.rect(cx - 10, cy + 14, 20, 22, C.rust2);
+
+      // Gargantuan Ossuary Reliquary Torso & Giant Bleached Titan Ribcage
+      surf.ellipse(cx, cy - 12 + bob, 48, 32, C.slag1);
+      surf.ellipse(cx, cy - 12 + bob, 36, 24, isPhase ? C.sig2 : C.rust1); // necromantic soul-furnace core
+      for (let ry = -28; ry <= 4; ry += 8) {
+        surf.line(cx - 38, cy + ry + bob, cx - 8, cy + ry + 3 + bob, C.bone3, 4); // left titan ribs
+        surf.line(cx + 8, cy + ry + 3 + bob, cx + 38, cy + ry + bob, C.bone3, 4); // right titan ribs
       }
-      // Cab + Skeletal Executioner Lord in brass crown-helm
-      surf.rect(cx - 10, cy - 52, 36, 30, C.slag2);
-      surf.ellipse(cx + 8, cy - 36, 8, 8, C.bone3);
-      surf.ellipse(cx + 8, cy - 43, 10, 4, C.brass3);
-      surf.pset(cx + 6, cy - 36, C.blood2);
-      surf.pset(cx + 10, cy - 36, C.blood2);
-      // Articulated guillotine bucket arm
-      const armDrop = isAtkA ? 26 : isPhase ? -16 : 0;
-      surf.line(cx + 30, cy - 18, cx + 68, cy - 48 + armDrop, C.rust2, 10);
-      surf.rect(cx + 58, cy - 22 + armDrop, 26, 22, C.slag3);
-      // Wrecking ball thurible on chain
-      const swingX = isAtkB ? 24 : 0;
-      surf.line(cx - 42, cy - 24, cx - 68 + swingX, cy + 12, C.slag3, 3);
-      surf.ellipse(cx - 68 + swingX, cy + 20, 16, 16, C.slag1);
+      // Spiked gothic cathedral pauldrons & dorsal ossuary spires
+      surf.ellipse(cx - 44, cy - 28 + bob, 16, 12, C.slag2);
+      surf.ellipse(cx + 44, cy - 28 + bob, 16, 12, C.slag2);
+      surf.line(cx - 48, cy - 36 + bob, cx - 56, cy - 52 + bob, C.bone3, 4);
+      surf.line(cx + 48, cy - 36 + bob, cx + 56, cy - 52 + bob, C.bone3, 4);
+
+      // Crowned Horned Skull Head of High Executioner Malgorth
+      surf.ellipse(cx, cy - 48 + bob, 15, 14, C.bone3);
+      surf.rect(cx - 14, cy - 62 + bob, 28, 7, C.brass2); // jagged sanctum-gold crown
+      surf.pset(cx - 10, cy - 65 + bob, C.brass3);
+      surf.pset(cx, cy - 67 + bob, C.brass3);
+      surf.pset(cx + 10, cy - 65 + bob, C.brass3);
+      surf.rect(cx - 7, cy - 49 + bob, 4, 4, isPhase ? C.sig2 : C.blood2); // left blazing eye
+      surf.rect(cx + 3, cy - 49 + bob, 4, 4, isPhase ? C.sig2 : C.blood2); // right blazing eye
+
+      // Right Arm: Colossal Rune-Carved Cathedral Guillotine Greataxe
+      const axeDrop = isAtkA ? 28 : isPhase ? -14 : 0;
+      surf.line(cx + 36, cy - 24 + bob, cx + 68, cy - 44 + axeDrop, C.slag3, 6);
+      surf.rect(cx + 54, cy - 48 + axeDrop, 28, 32, C.slag2);
+      surf.rect(cx + 76, cy - 48 + axeDrop, 6, 32, isPhase ? C.sig2 : C.bone3); // razor guillotine edge
+
+      // Left Arm: Chained Spiked Iron-Maiden Censer Flail
+      const swingX = isAtkB ? -22 : 0;
+      surf.line(cx - 38, cy - 24 + bob, cx - 66 + swingX, cy + 8, C.brass2, 3);
+      surf.ellipse(cx - 66 + swingX, cy + 20, 15, 16, C.slag1);
+      surf.ellipse(cx - 66 + swingX, cy + 20, 9, 10, isPhase ? C.sig2 : C.blood2);
     } else {
-      surf.ellipse(cx, cy + 12, 52, 22, C.rust1);
+      // Shattered bone-colossus ribcage and fallen gold crown
+      surf.ellipse(cx, cy + 24, 56, 18, C.bone1);
+      surf.rect(cx - 12, cy + 14, 24, 6, C.brass2);
     }
   } else if (id === 'big_axle') {
+    // Dread Cavalier Varkos: Gargantuan Six-Legged Skeletal Nightmare Centaur-Archfiend (ZERO WHEELS / ZERO TRUCK)
     const shift = isAtkA ? 14 : 0;
-    surf.rect(cx - 96 + shift, cy - 18, 48, 42, C.rust1);
-    surf.rect(cx - 42 + shift, cy - 22, 52, 46, C.rust2);
-    surf.rect(cx + 16 + shift, cy - 30, 68, 56, C.slag2);
-    surf.rect(cx + 22 + shift, cy - 26, 52, 24, C.rust3);
-    surf.rect(cx + 72 + shift, cy - 12, 14, 32, C.slag3);
-    surf.ellipse(cx + 82 + shift, cy - 16, 5, 5, isPhase ? C.blood2 : C.brass3);
-    surf.ellipse(cx + 82 + shift, cy + 8, 5, 5, isPhase ? C.blood2 : C.brass3);
-    for (const wx of [-80, -56, -26, 0, 32, 66]) {
-      surf.ellipse(cx + wx + shift, cy + 28, 12, 12, C.coat0);
-      surf.ellipse(cx + wx + shift, cy + 28, 5, 5, C.slag3);
+    if (!isDead) {
+      surf.ellipse(cx + shift, cy + 36, 86, 12, C.coat0); // ground shadow
+
+      // 6 Articulated Skeletal Nightmare Warhorse Legs with Blazing Hellfire Cloven Hooves (NO WHEELS)
+      const legOffsets = [-68, -44, -18, 8, 34, 58];
+      for (let i = 0; i < legOffsets.length; i++) {
+        const lx = cx + legOffsets[i] + shift;
+        const stride = ((f + i) % 2 === 0 ? -6 : 6) * (isAtkA ? 1.5 : 1);
+        const kneeX = lx + Math.round(stride * 0.5);
+        const hoofX = lx + Math.round(stride);
+        surf.line(lx, cy + 6, kneeX, cy + 22, C.bone2, 5); // upper femur bone
+        surf.line(kneeX, cy + 22, hoofX, cy + 36, C.bone3, 4); // lower cannon bone
+        // Cloven iron hoof wreathed in hellfire-orange flames
+        surf.rect(hoofX - 5, cy + 33, 10, 6, C.rust2);
+        surf.rect(hoofX - 4, cy + 35, 8, 4, isPhase ? C.blood2 : C.brass3);
+      }
+
+      // Whipping Skeletal Tail with Crimson Hellfire Plume on Rear Left
+      surf.line(cx - 74 + shift, cy - 8 + bob, cx - 98 + shift, cy + 8 - bob, C.bone2, 4);
+      surf.ellipse(cx - 98 + shift, cy + 8 - bob, 8, 5, C.rust3);
+
+      // Elongated Six-Legged Nightmare Stallion Body Armored in Spiked Black-Iron & Crimson Cataphract Barding
+      surf.ellipse(cx - 14 + shift, cy - 4 + bob, 66, 20, C.slag1);
+      surf.ellipse(cx - 14 + shift, cy - 6 + bob, 58, 15, C.rust1);
+      // Exposed giant bleached rib-arches along the beast's flank
+      for (let rx = -58; rx <= 26; rx += 14) {
+        surf.line(cx + rx + shift, cy - 18 + bob, cx + rx - 3 + shift, cy + 8 + bob, C.bone3, 3);
+      }
+      // Horned Demon-Skull Breast-Ram at the Centaur Prow (front right)
+      surf.ellipse(cx + 54 + shift, cy - 6 + bob, 16, 15, C.slag2);
+      surf.ellipse(cx + 58 + shift, cy - 6 + bob, 11, 10, C.bone2);
+      surf.line(cx + 62 + shift, cy - 14 + bob, cx + 82 + shift, cy - 24 + bob, C.bone3, 4); // prow tusk-horn
+      surf.line(cx + 62 + shift, cy + 2 + bob, cx + 82 + shift, cy + 10 + bob, C.bone3, 4);
+      surf.rect(cx + 62 + shift, cy - 9 + bob, 5, 5, isPhase ? C.blood2 : C.brass3); // blazing demon-prow eye
+
+      // Varkos's Towering Horned Death-Knight Sovereign Upper Torso rising from the Centaur Shoulders
+      surf.ellipse(cx + 32 + shift, cy - 32 + bob, 22, 20, C.slag2);
+      // Flowing tattered crimson war-cape behind Varkos
+      surf.ellipse(cx + 6 + shift, cy - 30 + bob, 24, 12, C.rust2);
+      // Overheated Exposed Hellfire Soul-Furnace Heart in Varkos's Chest
+      surf.ellipse(cx + 36 + shift, cy - 30 + bob, isPhase ? 12 : 7, isPhase ? 12 : 7, isPhase ? C.blood2 : C.rust3);
+      if (isPhase) {
+        surf.ellipse(cx + 36 + shift, cy - 30 + bob, 6, 6, C.brass3);
+      }
+      // Crowned Winged-Horn Death-Knight Greathelm
+      surf.ellipse(cx + 34 + shift, cy - 54 + bob, 12, 11, C.slag3);
+      surf.line(cx + 26 + shift, cy - 60 + bob, cx + 12 + shift, cy - 72 + bob, C.bone3, 4); // great curved horn
+      surf.line(cx + 42 + shift, cy - 60 + bob, cx + 56 + shift, cy - 72 + bob, C.bone3, 4);
+      surf.rect(cx + 34 + shift, cy - 55 + bob, 8, 3, C.blood2); // glowing visor slit
+
+      // Colossal Executioner's Dread-Halberd couched forward & Chained Skull-Flail
+      const lanceReach = isAtkA ? 98 : 86;
+      surf.line(cx + 12 + shift, cy - 28 + bob, cx + lanceReach + shift, cy - 26 + bob, C.bone3, 4);
+      surf.ellipse(cx + lanceReach - 8 + shift, cy - 26 + bob, 12, 9, isPhase ? C.blood2 : C.brass3); // crescent halberd blade
+      if (isAtkB) {
+        surf.line(cx + 18 + shift, cy - 34 + bob, cx - 48 + shift, cy - 48, C.brass2, 3);
+        surf.ellipse(cx - 52 + shift, cy - 48, 12, 12, C.bone3);
+      }
+    } else {
+      // Defeated collapsed skeletal centaur-archfiend bones & broken halberd
+      surf.ellipse(cx, cy + 20, 72, 16, C.bone1);
+      surf.ellipse(cx + 24, cy + 16, 26, 12, C.rust1);
     }
   } else if (id === 'mother_sump') {
-    surf.ellipse(cx, cy + 32, 78, 22, C.bog1);
+    // Bog-Matriarch Hagra: Eldritch Swamp Hag-Queen & Translucent Leech-Brood Mother (NO CHEMICAL DRUMS)
+    surf.ellipse(cx, cy + 32, 78, 22, C.bog1); // dark bubbling mire pool
     if (!isDead) {
-      surf.ellipse(cx, cy + 2, 62, 44, C.bog2);
-      surf.rect(cx - 48, cy - 12, 24, 32, C.rust2);
-      surf.rect(cx + 26, cy - 8, 24, 32, C.rust1);
-      const sacR = isAtkA || isPhase ? 28 : 22;
-      surf.ellipse(cx, cy - 4, sacR, sacR - 4, C.bile2);
-      surf.ellipse(cx - 6, cy - 8, sacR - 8, sacR - 10, C.bone3);
+      // Writhing lamprey-leech tentacles radiating from the mire
+      for (const tx of [-58, -38, 38, 58]) {
+        const waveY = ((f + (tx > 0 ? 1 : 0)) % 2 === 0 ? -8 : 6);
+        surf.line(cx + (tx >> 1), cy + 16, cx + tx, cy - 6 + waveY, C.bog2, 6);
+        surf.ellipse(cx + tx, cy - 6 + waveY, 6, 6, C.soot);
+        surf.pset(cx + tx - 2, cy - 8 + waveY, C.bone3); // lamprey teeth
+        surf.pset(cx + tx + 2, cy - 4 + waveY, C.bone3);
+      }
+      // Colossal pulsing translucent Bile-Green Brood-Sac Abdomen
+      const sacR = isAtkA || isPhase ? 38 : 32;
+      surf.ellipse(cx + 10, cy + 6 + bob, sacR + 8, sacR - 4, C.bog2);
+      surf.ellipse(cx + 12, cy + 4 + bob, sacR, sacR - 8, C.bile1);
+      surf.ellipse(cx + 14, cy + 2 + bob, sacR - 8, sacR - 14, isPhase ? C.blood2 : C.bile2);
+      surf.ellipse(cx + 8, cy - 2 + bob, 10, 8, C.bone3); // glowing brood embryos inside sac
+
+      // Upper Torso: Four-Armed Antler-Crowned Swamp Hag-Queen in Moss Shawls & Skull Fetishes
+      surf.ellipse(cx - 18, cy - 16 + bob, 22, 26, C.bog1);
+      surf.ellipse(cx - 18, cy - 42 + bob, 13, 12, C.bone3); // bleached stag-skull crone mask
+      // Giant twisted bone antlers & hanging gold coven talismans
+      surf.line(cx - 26, cy - 48 + bob, cx - 52, cy - 68 + bob, C.bone2, 4);
+      surf.line(cx - 10, cy - 48 + bob, cx + 16, cy - 68 + bob, C.bone2, 4);
+      surf.ellipse(cx - 46, cy - 56 + bob, 4, 5, C.brass3);
+      surf.ellipse(cx + 10, cy - 56 + bob, 4, 5, C.brass3);
+      surf.rect(cx - 23, cy - 43 + bob, 4, 4, C.bile2); // glowing witch eyes
+      surf.rect(cx - 15, cy - 43 + bob, 4, 4, C.bile2);
     } else {
       surf.ellipse(cx, cy + 24, 68, 16, C.bile1);
     }
   } else if (id === 'the_long_dry') {
-    surf.ellipse(cx, cy + 44, 96, 18, C.rust2);
+    // Catacomb Elder-Wyrm Skarath: Subterranean Undead Bone-And-Obsidian Elder Dragon Wyrm (NO PIPES/DRILLS)
+    surf.ellipse(cx, cy + 44, 96, 18, C.rust1); // crimson catacomb ash crater
     if (!isDead) {
       const arch = isAtkA ? -16 : isAtkB ? 12 : 0;
+      // Sinuous dragon-wyrm spine of giant bleached vertebrae & 3 obsidian-and-gold carapace plates
       for (let seg = 0; seg < 6; seg++) {
         const sx = cx - 68 + seg * 26;
         const sy = cy + 26 - Math.sin((seg / 5) * Math.PI) * (64 - arch);
-        surf.ellipse(sx, sy, 24, 22, seg % 2 === 0 ? C.rust2 : C.slag2);
-        surf.ellipse(sx - 4, sy - 4, 18, 15, C.rust3);
+        // Bleached dragon vertebra segment & curved rib-horns
+        surf.ellipse(sx, sy, 22, 20, C.bone2);
+        surf.ellipse(sx - 3, sy - 3, 15, 13, C.bone3);
+        surf.line(sx, sy - 18, sx - 10, sy - 32, C.bone3, 4); // dorsal dragon spine-fin
+        // 3 Breakable Obsidian-and-Gold Carapace Plates on segments 1, 2, 3
+        if (seg >= 1 && seg <= 3 && !isPhase) {
+          surf.ellipse(sx, sy - 6, 18, 12, C.slag1);
+          surf.rect(sx - 6, sy - 10, 12, 4, C.brass3); // sanctum-gold rune seal
+        }
       }
+      // Horned Draconic Skull with 4 Splitting Mandibles & Blazing Hellfire Gullet
       const hx = cx + 64;
       const hy = cy - 10 + arch;
-      surf.ellipse(hx, hy, 26, 26, C.slag1);
-      surf.ellipse(hx + 4, hy, 16, 16, C.soot);
+      surf.ellipse(hx, hy, 26, 22, C.bone3);
+      surf.ellipse(hx - 6, hy - 4, 18, 14, C.slag1); // armored dragon brow
+      // Swept-back elder dragon horns
+      surf.line(hx - 8, hy - 14, hx - 36, hy - 34, C.bone3, 5);
+      surf.line(hx - 4, hy + 14, hx - 28, hy + 28, C.bone2, 4);
+      // Gaping molten hellfire dragon maw & jagged bone fangs
+      surf.ellipse(hx + 8, hy + 2, 14, 14, C.soot);
+      surf.ellipse(hx + 8, hy + 2, 9, 9, isPhase ? C.blood2 : C.rust3);
+      surf.ellipse(hx + 8, hy + 2, 5, 5, C.brass3);
       for (let a = 0; a < 8; a++) {
         const ang = (a / 8) * Math.PI * 2;
-        surf.ellipse(hx + 4 + Math.cos(ang) * 18, hy + Math.sin(ang) * 18, 5, 4, C.brass3);
+        surf.ellipse(hx + 8 + Math.cos(ang) * 15, hy + 2 + Math.sin(ang) * 15, 4, 3, C.bone3); // dragon fangs
       }
     } else {
-      surf.ellipse(cx, cy + 36, 86, 14, C.slag2);
+      surf.ellipse(cx, cy + 36, 86, 14, C.bone1);
     }
   }
   surf.outlineRegion(ox, oy, w, h, C.brass3);

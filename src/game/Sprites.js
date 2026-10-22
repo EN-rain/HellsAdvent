@@ -1041,100 +1041,83 @@ export function bakePlayerSprites(equipped = {}, classId = 'sena', stage = 1, br
 export function buildEnemyFrameGrid(id, frameIdx = 0, isTell = false) {
   switch (id) {
     case 'tinRat': {
-      // 28x22 canvas: Rat with a soup can fused over its back like a shell.
-      // Lid flaps on a hinge at the front when running; red pinprick eyes.
+      // Shackled Crypt-Rat: feral plague-rat bound in a spiked wrought-iron torture gibbet collar & chain
       const g = new PixelGrid(28, 22);
       const scurry = frameIdx % 2;
       const twitchY = isTell ? (frameIdx % 2 === 0 ? -1 : 1) : 0;
-      // Long rat tail trailing left
-      g.line(2, 15 + scurry, 8, 15, 'rust', 2, 1);
-      // Cylindrical soup can shell fused over back
-      g.shadedRect(8, 8 + twitchY, 11, 8, 'steel');
-      g.rect(10, 9 + twitchY, 6, 5, 'rust', 2); // Soup label band
-      // Hinged soup can lid flapping up/down at x=19
-      const lidAngleY = isTell ? -5 : scurry === 0 ? -4 : -1;
-      g.line(18, 8 + twitchY, 21, 8 + lidAngleY + twitchY, 'steel', 3, 2);
-      // Pointed rat snout & red pinprick eye
-      g.shadedRect(18, 11 + twitchY, 6, 5, 'coat');
-      g.set(22, 12 + twitchY, 'blood', 3); // Red pinprick eye
-      // Little clawed feet
-      g.rect(9 + scurry * 2, 16, 3, 3, 'skin', 1);
-      g.rect(16 - scurry * 2, 16, 3, 3, 'skin', 1);
+      g.line(2, 15 + scurry, 8, 15, 'skin', 1, 1); // rat tail
+      g.shadedRect(7, 9 + twitchY, 11, 7, 'coat'); // mange-furred rat body
+      g.line(9, 8 + twitchY, 15, 8 + twitchY, 'bone', 3, 1); // exposed dorsal spine
+      // Spiked wrought-iron torture gibbet collar & trailing chain
+      g.shadedRect(14, 7 + twitchY, 4, 9, 'rust');
+      g.rect(15, 5 + twitchY, 2, 2, 'steel', 3); // dorsal iron spike
+      g.line(14, 16 + twitchY, 8, 19, 'steel', 2, 1); // dragging shackle chain
+      // Snarling skull-snout & crimson eye
+      g.shadedRect(18, 10 + twitchY, 6, 5, 'bone');
+      g.set(22, 11 + twitchY, isTell ? 'brass' : 'blood', 3);
+      g.rect(9 + scurry * 2, 16, 3, 3, 'bone', 2);
+      g.rect(16 - scurry * 2, 16, 3, 3, 'bone', 2);
       return g;
     }
 
     case 'dustDog': {
-      // 32x26 canvas: Starved hound, ribs showing, rag collar with a dead person's welding goggles
-      // hanging from it. Head carried low, loping gait. Pale bone fur, rust stains.
+      // Flayed Grave-Hound: undead skeletal necro-hound with exposed ribcage & spiked executioner collar
       const g = new PixelGrid(32, 26);
       const stride = [-2, 0, 2, 0][frameIdx % 4];
       const lowHeadY = isTell ? 13 : 11;
-      // Arched starved spine & gaunt hindquarters
-      g.shadedRect(6, 9, 14, 7, 'bone');
-      // Visible dark ribs on flank
-      g.line(9, 10, 9, 14, 'coat', 1, 1);
-      g.line(12, 10, 12, 14, 'coat', 1, 1);
-      g.line(15, 10, 15, 14, 'coat', 1, 1);
-      // Rust stains on haunch
-      g.rect(7, 10, 3, 3, 'rust', 2);
-      // Rag collar + dangling welding goggles under neck
-      g.rect(18, 10, 3, 6, 'rust', 2);
-      g.rect(18, 16, 4, 3, 'brass', 3); // Hanging goggles
-      g.set(19, 17, 'signal', 2);
-      // Low-slung hound head & jaws
+      g.shadedRect(6, 9, 14, 7, 'rust'); // flayed muscle torso
+      g.line(9, 9, 9, 15, 'bone', 3, 1); // exposed white ribs
+      g.line(12, 9, 12, 15, 'bone', 3, 1);
+      g.line(15, 9, 15, 15, 'bone', 3, 1);
+      // Spiked dark-iron executioner collar & chain
+      g.shadedRect(18, 9, 3, 7, 'steel');
+      g.set(19, 7, 'brass', 3);
+      g.line(19, 16, 16, 20, 'steel', 2, 1);
+      // Canine skull head & blazing crimson eye
       g.shadedRect(20, lowHeadY, 8, 5, 'bone');
-      g.set(25, lowHeadY + 1, 'blood', 3);
-      // 4 loping legs
-      g.line(8, 16, 7 + stride, 22, 'bone', 1, 2);
+      g.set(25, lowHeadY + 1, isTell ? 'brass' : 'blood', 3);
+      g.line(8, 16, 7 + stride, 22, 'bone', 2, 2);
       g.line(12, 16, 12 - stride, 22, 'bone', 2, 2);
-      g.line(17, 16, 18 + stride, 22, 'bone', 1, 2);
+      g.line(17, 16, 18 + stride, 22, 'bone', 2, 2);
       g.line(20, 16, 21 - stride, 22, 'bone', 2, 2);
-      // Thin tail
-      g.line(6, 10, 2, 14, 'bone', 1, 1);
+      g.line(6, 10, 2, 14, 'bone', 2, 1);
       return g;
     }
 
     case 'wireKite': {
-      // 28x28 canvas: Drone built from a kite frame (two crossed sticks) with torn plastic sheet wings,
-      // one camera-lens eye that glows blood red, and a long whipping wire tail.
+      // Stone Gargoyle Imp: winged gothic cathedral gargoyle with demon oculus & spiked penance chain
       const g = new PixelGrid(28, 28);
       const bob = [-1, 0, 1, 0][frameIdx % 4];
       const cy = 11 + bob;
-      // Torn plastic sheet diamond wings (asymmetric tattered right wing)
-      g.line(6, cy, 15, cy - 6, 'bone', 2, 3);
-      g.line(15, cy - 6, 23, cy + 1, 'bone', 2, 3);
-      g.line(6, cy, 15, cy + 6, 'bone', 1, 2);
-      g.line(15, cy + 6, 21, cy + 2, 'bone', 1, 2);
-      // Two crossed wooden/metal kite sticks
-      g.line(4, cy, 25, cy, 'rust', 3, 1);
-      g.line(15, cy - 8, 15, cy + 8, 'rust', 3, 1);
-      // Central camera-lens housing + glowing blood-red lens eye
-      g.shadedRect(12, cy - 3, 6, 6, 'steel');
-      g.rect(14, cy - 1, 3, 3, 'blood', 3);
-      // Long whipping copper wire tail below
+      // Leathery ribbed gargoyle bat wings
+      g.line(4, cy - 3, 13, cy, 'steel', 2, 3);
+      g.line(15, cy, 24, cy - 3, 'steel', 2, 3);
+      // Horned gargoyle head & glowing crimson demon oculus
+      g.shadedRect(11, cy - 4, 7, 7, 'steel');
+      g.line(11, cy - 4, 8, cy - 8, 'bone', 3, 1);
+      g.line(17, cy - 4, 20, cy - 8, 'bone', 3, 1);
+      g.rect(13, cy - 2, 3, 3, isTell ? 'brass' : 'blood', 3);
+      // Whipping iron penance chain tail
       const whip = [-2, 1, 2, -1][frameIdx % 4];
-      g.line(14, cy + 6, 11 + whip, cy + 11, 'brass', 2, 1);
-      g.line(11 + whip, cy + 11, 7 - whip, cy + 15, 'brass', 3, 1);
+      g.line(14, cy + 4, 11 + whip, cy + 12, 'steel', 2, 1);
+      g.rect(10 + whip, cy + 12, 3, 3, 'rust', 3);
       return g;
     }
 
     case 'lyeLeech': {
-      // 28x20 canvas: Fat, half-translucent yellow-green slug with a ring mouth of tiny teeth.
-      // Moves by stretching and contracting (inchworm).
+      // Bloated Blood-Leech: translucent venom-green mire parasite with circular lamprey maw
       const g = new PixelGrid(28, 20);
-      const stretch = frameIdx % 3; // 0: bunched hump, 1: mid, 2: stretched flat
+      const stretch = frameIdx % 3;
       if (stretch === 0) {
         g.shadedRect(7, 7, 13, 9, 'bog');
-        g.rect(9, 5, 8, 4, 'bog', 3);
-        g.rect(10, 8, 6, 4, 'brass', 2); // Translucent internal yellow-green core
+        g.rect(10, 8, 6, 4, 'lye', 3);
       } else if (stretch === 1) {
         g.shadedRect(5, 9, 17, 7, 'bog');
-        g.rect(9, 10, 9, 4, 'brass', 2);
+        g.rect(9, 10, 9, 4, 'lye', 3);
       } else {
         g.shadedRect(3, 11, 21, 5, 'bog');
-        g.rect(8, 12, 10, 3, 'brass', 2);
+        g.rect(8, 12, 10, 3, 'lye', 3);
       }
-      // Ring mouth of tiny bone teeth on front right
       const mx = stretch === 0 ? 19 : stretch === 1 ? 21 : 23;
       const my = stretch === 0 ? 10 : 11;
       g.rect(mx, my, 3, 5, 'coat', 0);
@@ -1146,326 +1129,282 @@ export function buildEnemyFrameGrid(id, frameIdx = 0, isTell = false) {
     }
 
     case 'sumpBat': {
-      // 30x26 canvas: Wings made of torn hazmat plastic on bent umbrella ribs,
-      // a swollen pale sac under its belly that pulses. Erratic flap on 3 frames.
+      // Vampiric Crypt-Bat: nosferatu strigoi bat with clawed wing-thumbs & glowing venom sac
       const g = new PixelGrid(30, 26);
       const flapY = [-6, 0, 5][frameIdx % 3];
-      // Swollen pulsing pale sac under belly
       const sacR = frameIdx % 3 === 1 ? 5 : 4;
-      g.circle(15, 16, sacR, 'bone', 3);
-      g.rect(13, 15, 4, 3, 'brass', 3);
-      // Bent steel umbrella ribs + hazmat yellow/bog plastic wings
-      g.line(14, 12, 3, 12 + flapY, 'steel', 3, 1);
-      g.line(16, 12, 27, 12 + flapY, 'steel', 3, 1);
-      // Tattered hazmat wing webs
-      g.line(4, 13 + flapY, 12, 15, 'brass', 2, 3);
-      g.line(26, 13 + flapY, 18, 15, 'brass', 2, 3);
-      // Asymmetric head & sensor eye
-      g.shadedRect(13, 9, 5, 5, 'coat');
-      g.set(16, 11, 'blood', 3);
+      g.circle(15, 16, sacR, 'lye', 3);
+      g.line(14, 12, 3, 12 + flapY, 'rust', 2, 2);
+      g.line(16, 12, 27, 12 + flapY, 'rust', 2, 2);
+      g.line(4, 13 + flapY, 12, 15, 'bog', 2, 3);
+      g.line(26, 13 + flapY, 18, 15, 'bog', 2, 3);
+      g.shadedRect(13, 8, 5, 5, 'coat');
+      g.set(16, 10, 'blood', 3);
       return g;
     }
 
     case 'cleaverHauler': {
-      // ELITE (48x48): Hunched man-sized figure dragging a wheeled cart of scrap by a chain,
-      // a butcher's cleaver welded in place of its right hand.
+      // Chained Crypt-Executioner Brute dragging a spiked Iron-Maiden Coffin Reliquary (NO WHEELS)
       const g = new PixelGrid(48, 48);
       const crouch = isTell ? 4 : frameIdx % 2;
-      // Wheeled cart of scrap on left (x=2..16, y=24..40)
-      g.shadedRect(3, 25, 13, 9, 'rust');
-      g.rect(5, 22, 4, 4, 'steel', 2); // Scrap pile in cart
-      g.rect(10, 21, 5, 5, 'brass', 1);
-      g.circle(6, 36, 4, 'steel', 1); // Cart wheel
-      g.set(6, 36, 'bone', 3);
-      // Iron chain linking cart to hauler's left arm (drops slack on charge tell)
-      if (!isTell) {
-        g.line(16, 29, 24, 26, 'steel', 2, 2);
-      } else {
-        g.line(16, 34, 24, 36, 'steel', 1, 2);
-      }
-      // Hunched brute body (x=22..35, y=14+crouch..38)
-      g.shadedRect(23, 30, 4, 9, 'coat'); // Left leg
-      g.shadedRect(30, 30, 4, 9, 'coat'); // Right leg
-      g.shadedRect(21, 15 + crouch, 14, 16, 'rust'); // Hunched torso
-      g.shadedRect(27, 11 + crouch, 7, 6, 'steel'); // Welded iron mask head
-      g.rect(31, 13 + crouch, 2, 2, 'blood', 3);
-      // Welded giant Butcher's Cleaver in place of right hand
+      // Spiked Iron-Maiden Coffin Reliquary dragged behind (no wheels)
+      g.shadedRect(3, 18, 12, 22, 'steel');
+      g.shadedRect(5, 20, 8, 18, 'rust');
+      g.rect(7, 23, 4, 4, 'bone', 3); // skull relief on coffin
+      g.line(15, 29, 23, 27, 'brass', 2, 2); // heavy chain
+      // Towering hunched executioner brute in crimson leather & horned iron mask
+      g.shadedRect(23, 30, 4, 9, 'coat');
+      g.shadedRect(30, 30, 4, 9, 'coat');
+      g.shadedRect(21, 15 + crouch, 14, 16, 'rust');
+      g.shadedRect(27, 10 + crouch, 7, 6, 'steel');
+      g.line(27, 10 + crouch, 24, 6 + crouch, 'bone', 3, 2); // horn
+      g.line(33, 10 + crouch, 36, 6 + crouch, 'bone', 3, 2);
+      g.rect(31, 12 + crouch, 2, 2, 'blood', 3);
+      // Colossal Guillotine Butcher's Cleaver
       if (isTell) {
-        // Scraping cleaver along the ground throwing sparks!
         g.shadedRect(34, 26, 12, 11, 'steel');
         g.line(34, 36, 45, 36, 'bone', 3, 2);
-        g.rect(44, 35, 3, 3, 'brass', 3); // Scrape sparks
+        g.rect(44, 35, 3, 3, 'brass', 3);
       } else {
         g.shadedRect(35, 14 + crouch, 10, 14, 'steel');
         g.line(44, 14 + crouch, 44, 27 + crouch, 'bone', 3, 2);
-        g.rect(37, 16 + crouch, 2, 2, 'coat', 0); // Cleaver hanging hole
       }
       return g;
     }
 
     case 'lyeStrider': {
-      // ELITE (48x48): Tall, stilt-legged, built from bent pipes, a chemical tank on its back
-      // with a cracked gauge. Its head is an upturned funnel.
+      // Stilted Plague-Alchemist Cenobite on bound bone stilts with glowing Bile-Alembic Censer & beak mask
       const g = new PixelGrid(48, 48);
       const step = frameIdx % 2 === 0 ? -3 : 3;
-      // Tall bent-pipe stilt legs (y=22..44)
-      g.line(18, 22, 13 + step, 33, 'steel', 2, 2);
-      g.line(13 + step, 33, 15 + step, 44, 'steel', 3, 2);
-      g.line(28, 22, 33 - step, 33, 'steel', 2, 2);
-      g.line(33 - step, 33, 30 - step, 44, 'steel', 3, 2);
-      // Chemical tank on back (x=13..28, y=8..23)
-      g.shadedRect(13, 8, 15, 15, 'bog');
-      // Cracked circular pressure gauge on tank
-      g.circle(20, 15, 4, 'bone', 3);
-      if (isTell) {
-        // Gauge needle swings to red!
-        g.line(20, 15, 23, 12, 'blood', 3, 2);
-      } else {
-        g.line(20, 15, 18, 12, 'coat', 0, 1);
-      }
-      // Funnel head on right (tips down during spit tell)
-      const tipY = isTell ? 5 : 0;
-      g.shadedRect(27, 12 + tipY, 6, 5, 'brass');
-      g.line(33, 13 + tipY, 41, 10 + tipY * 2, 'brass', 3, 3);
-      g.line(33, 16 + tipY, 41, 19 + tipY * 2, 'brass', 2, 3);
-      if (isTell) {
-        g.rect(41, 20, 3, 4, 'bog', 3); // Dripping lye acid
-      }
+      g.line(18, 22, 13 + step, 33, 'bone', 2, 2);
+      g.line(13 + step, 33, 15 + step, 44, 'bone', 3, 2);
+      g.line(28, 22, 33 - step, 33, 'bone', 2, 2);
+      g.line(33 - step, 33, 30 - step, 44, 'bone', 3, 2);
+      // Glowing glass Bile-Alembic Censer on back
+      g.shadedRect(13, 9, 13, 14, 'bog');
+      g.circle(19, 16, 4, isTell ? 'brass' : 'lye', 3);
+      // Robed torso & curved plague-doctor skull beak mask
+      const tipY = isTell ? 4 : 0;
+      g.shadedRect(25, 11 + tipY, 8, 9, 'bone');
+      g.line(33, 14 + tipY, 42, 17 + tipY, 'bone', 2, 3);
+      g.set(30, 13 + tipY, 'blood', 3);
       return g;
     }
 
     case 'flatsHarvester': {
-      // ELITE (48x48): Half-human operator fused into the front of a small harvester blade drum.
+      // Bone-Scythe Reaver Wraith: four-armed horned skeletal reaper on skittering bone-centipede legs (NO TREADS/DRUM)
       const g = new PixelGrid(48, 48);
-      const revShift = isTell ? frameIdx % 3 : frameIdx % 2;
-      // Heavy tracked chassis & engine housing on left
-      g.shadedRect(6, 20, 18, 16, 'rust');
-      g.shadedRect(5, 34, 22, 7, 'coat'); // Treads
-      // Fused half-human operator torso & helmeted head wired into top
-      g.shadedRect(16, 10, 9, 11, 'coat');
-      g.shadedRect(18, 5, 7, 6, 'brass');
-      g.rect(22, 7, 3, 2, 'blood', 3);
-      // Rotary Harvester Blade Drum in front (x=24..44, y=16..38)
-      g.circle(34, 27, 10, 'steel', 2);
-      g.circle(34, 27, 5, 'rust', 2);
-      // Jagged rotary teeth spinning around the drum
-      for (let i = 0; i < 6; i++) {
-        const ang = (i / 6) * Math.PI * 2 + revShift * 0.7;
-        const tx = 34 + Math.round(Math.cos(ang) * 11);
-        const ty = 27 + Math.round(Math.sin(ang) * 11);
-        g.rect(tx - 2, ty - 2, 4, 4, isTell ? 'blood' : 'bone', 3);
+      const spin = isTell ? frameIdx % 3 : frameIdx % 2;
+      // Articulated bone-centipede lower body & skittering legs
+      g.shadedRect(10, 26, 26, 10, 'steel');
+      for (let lx = 12; lx <= 34; lx += 7) {
+        g.line(lx, 35, lx - 2 + (spin % 2) * 3, 44, 'bone', 3, 2);
       }
+      // Horned skeletal wraith-lord upper torso in crimson mantle
+      g.shadedRect(18, 12, 12, 15, 'rust');
+      g.shadedRect(20, 5, 8, 7, 'bone');
+      g.rect(20, 3, 8, 2, 'brass', 3); // crown
+      g.rect(25, 7, 2, 2, 'blood', 3);
+      // Four whirling blood-stained crescent war-scythes
+      const bladeMat = isTell ? 'brass' : 'blood';
+      g.line(28, 16, 42, 8 + spin * 3, 'bone', 3, 2);
+      g.line(38, 6 + spin * 3, 44, 18 + spin * 2, bladeMat, 3, 3);
+      g.line(28, 22, 43, 28 - spin * 2, 'bone', 3, 2);
+      g.line(39, 24 - spin * 2, 44, 36 - spin * 2, bladeMat, 3, 3);
       return g;
     }
 
     case 'theForeman': {
-      // BOSS 1 (96x96): Excavator rig with a dead operator in a yellow hard hat in the cab,
-      // articulated hydraulic arm on right, and chained wrecking ball on left.
+      // BOSS 1 (96x96): High Executioner Malgorth — Undead Ossuary Bone-Colossus & Cathedral Executioner Lord (NO EXCAVATOR)
       const g = new PixelGrid(96, 96);
-      const rumble = frameIdx % 2;
-      // Heavy caterpillar tracks at base
-      g.shadedRect(18, 66, 56, 18, 'coat');
-      for (let wx = 24; wx <= 64; wx += 12) {
-        g.circle(wx, 75, 5, 'steel', 2);
+      const bob = frameIdx % 2;
+      // Two massive armored obsidian-and-bone pillar legs with clawed sabatons
+      g.shadedRect(22, 60, 18, 26, 'steel');
+      g.shadedRect(56, 60, 18, 26, 'steel');
+      g.shadedRect(18, 80, 24, 8, 'bone');
+      g.shadedRect(54, 80, 24, 8, 'bone');
+      g.shadedRect(40, 62, 16, 20, 'rust'); // crimson inquisitor banner-fauld
+      // Gargantuan Ossuary Reliquary Torso & Bleached Titan Ribcage
+      g.shadedRect(20, 26 + bob, 56, 36, 'steel');
+      g.shadedRect(28, 30 + bob, 40, 26, isTell ? 'signal' : 'rust');
+      for (let ry = 32; ry <= 52; ry += 7) {
+        g.line(22, ry + bob, 42, ry + 2 + bob, 'bone', 3, 3);
+        g.line(54, ry + 2 + bob, 74, ry + bob, 'bone', 3, 3);
       }
-      // Excavator cab body
-      g.shadedRect(22, 34 + rumble, 44, 33, 'brass');
-      g.rect(26, 38 + rumble, 22, 18, 'coat', 0); // Cab window opening
-      // Operator skull in yellow hard hat inside cab
-      g.shadedRect(33, 44 + rumble, 8, 8, 'bone');
-      g.rect(31, 41 + rumble, 12, 4, 'brass', 3); // Yellow hard hat
-      g.set(38, 47 + rumble, 'blood', 3);
-      // Left counterweight & swinging wrecking ball
+      // Crowned Horned Skull Head of High Executioner Malgorth
+      g.shadedRect(38, 12 + bob, 20, 15, 'bone');
+      g.rect(36, 7 + bob, 24, 5, 'brass', 3); // jagged gold crown
+      g.rect(42, 17 + bob, 4, 4, 'blood', 3);
+      g.rect(51, 17 + bob, 4, 4, 'blood', 3);
+      // Left Chained Spiked Iron-Maiden Censer Flail
       const swingX = isTell ? 6 : 12;
-      g.line(22, 40, swingX, 62, 'steel', 2, 2);
-      g.circle(swingX, 68, 9, 'steel', 1);
-      // Right articulated hydraulic excavator boom arm + toothed bucket
-      const armDrop = isTell ? 12 : 0;
-      g.line(64, 44 + rumble, 78, 22 + armDrop, 'rust', 2, 6);
-      g.line(78, 22 + armDrop, 88, 52 + armDrop, 'brass', 2, 5);
-      g.shadedRect(80, 52 + armDrop, 14, 14, 'steel');
-      // Bucket teeth
-      g.rect(80, 66 + armDrop, 3, 5, 'bone', 3);
-      g.rect(85, 66 + armDrop, 3, 5, 'bone', 3);
-      g.rect(90, 66 + armDrop, 3, 5, 'bone', 3);
+      g.line(20, 34, swingX, 58, 'brass', 3, 2);
+      g.circle(swingX, 66, 9, 'steel', 2);
+      g.circle(swingX, 66, 4, 'blood', 3);
+      // Right Colossal Rune-Carved Cathedral Guillotine Greataxe
+      const axeDrop = isTell ? 12 : 0;
+      g.line(74, 34 + bob, 86, 18 + axeDrop, 'steel', 3, 4);
+      g.shadedRect(76, 22 + axeDrop, 16, 24, 'steel');
+      g.rect(89, 22 + axeDrop, 3, 24, isTell ? 'signal' : 'bone', 3);
       return g;
     }
 
     case 'bigAxle': {
-      // BOSS 2 (96x96): Armored highway truck cab dragging two chained trailer sections.
-      // Headlights are its glaring eyes.
+      // BOSS 2 (96x96): Dread Cavalier Varkos — Six-Legged Skeletal Nightmare Centaur-Archfiend (ZERO WHEELS / ZERO TRUCK)
       const g = new PixelGrid(96, 96);
       const sway = frameIdx % 2 === 0 ? -2 : 2;
-      // Trailer section 2 (rear left)
-      g.shadedRect(4, 42 + sway, 20, 24, 'rust');
-      g.circle(10, 68 + sway, 5, 'coat', 1);
-      g.circle(20, 68 + sway, 5, 'coat', 1);
-      // Chain 2
-      g.line(24, 54 + sway, 32, 54 - sway, 'steel', 3, 2);
-      // Trailer section 1 (mid)
-      g.shadedRect(31, 38 - sway, 22, 28, 'steel');
-      g.circle(37, 68 - sway, 5, 'coat', 1);
-      g.circle(47, 68 - sway, 5, 'coat', 1);
-      // Chain 1
-      g.line(53, 52 - sway, 60, 52, 'steel', 3, 3);
-      // Main Diesel Truck Cab (front right, x=58..90, y=26..72)
-      g.shadedRect(58, 28, 30, 38, 'rust');
-      g.shadedRect(62, 32, 16, 12, 'coat'); // Armored windshield slit
-      // Twin smokestacks belching soot
-      g.shadedRect(60, 14, 5, 16, 'steel');
-      g.shadedRect(68, 12, 5, 18, 'steel');
-      // Spiked cattle-catcher ram grill on front
-      g.shadedRect(86, 36, 7, 28, 'steel');
-      // Glaring Headlight Eyes
-      g.rect(84, 40, 5, 6, isTell ? 'blood' : 'brass', 3);
-      g.rect(84, 52, 5, 6, isTell ? 'blood' : 'brass', 3);
-      // Heavy front wheels
-      g.circle(66, 70, 7, 'coat', 1);
-      g.circle(82, 70, 7, 'coat', 1);
+      // 6 Articulated Skeletal Nightmare Warhorse Legs with Blazing Hellfire Cloven Hooves (NO WHEELS)
+      const legXs = [14, 26, 38, 52, 66, 78];
+      for (let i = 0; i < legXs.length; i++) {
+        const lx = legXs[i];
+        const stepX = (i % 2 === 0 ? sway : -sway) * 2;
+        g.line(lx, 56, lx + stepX, 78, 'bone', 3, 3);
+        g.rect(lx + stepX - 3, 76, 6, 5, isTell ? 'blood' : 'ember', 3); // blazing cloven hoof
+      }
+      // Skeletal Nightmare Centaur Body in Spiked Black-Iron & Crimson Cataphract Barding
+      g.shadedRect(12, 38 + sway, 68, 22, 'steel');
+      g.shadedRect(16, 40 + sway, 58, 16, 'rust');
+      for (let rx = 20; rx <= 64; rx += 11) {
+        g.line(rx, 38 + sway, rx - 2, 56 + sway, 'bone', 3, 2); // exposed rib-arches
+      }
+      // Horned Demon-Skull Breast-Ram at Centaur Prow (front right)
+      g.shadedRect(74, 38, 14, 18, 'bone');
+      g.line(82, 38, 93, 30, 'bone', 3, 3); // prow horn
+      g.line(82, 54, 93, 60, 'bone', 3, 3);
+      g.rect(82, 44, 4, 4, isTell ? 'blood' : 'brass', 3);
+      // Varkos's Towering Horned Death-Knight Sovereign Torso & Exposed Hellfire Soul-Heart
+      g.shadedRect(48, 16, 24, 24, 'steel');
+      g.shadedRect(30, 18, 18, 12, 'rust'); // flowing crimson war-cape
+      g.circle(62, 28, isTell ? 6 : 4, isTell ? 'blood' : 'ember', 3); // Hellfire Soul-Heart
+      // Winged-Horn Death-Knight Greathelm & Dread-Halberd
+      g.shadedRect(52, 6, 14, 11, 'steel');
+      g.line(52, 8, 42, 1, 'bone', 3, 2);
+      g.line(66, 8, 76, 1, 'bone', 3, 2);
+      g.rect(60, 10, 5, 2, 'blood', 3);
+      g.line(44, 24, 92, 22, 'bone', 3, 3); // couched Dread-Halberd
+      g.shadedRect(82, 16, 10, 12, isTell ? 'blood' : 'brass');
       return g;
     }
 
     case 'motherSump': {
-      // BOSS 3 (96x96): Heaving asymmetric mass of rusted chemical drums and tarp,
-      // with a pulsing pale sac that sheds Lye Leeches.
+      // BOSS 3 (96x96): Bog-Matriarch Hagra — Eldritch Swamp Hag-Queen & Leech-Brood Mother (NO DRUMS)
       const g = new PixelGrid(96, 96);
       const heave = frameIdx % 2 === 0 ? 0 : 3;
-      // Tarp mound & sludge base
-      g.shadedRect(14, 54 + heave, 68, 26, 'bog');
-      g.shadedRect(20, 34 + heave, 54, 28, 'coat');
-      // Jutting rusted chemical 55-gallon drums fused at odd angles
-      g.shadedRect(16, 38 + heave, 18, 24, 'rust');
-      g.line(16, 46 + heave, 34, 46 + heave, 'brass', 2, 2);
-      g.shadedRect(32, 20 + heave, 20, 26, 'rust');
-      g.line(32, 28 + heave, 52, 28 + heave, 'brass', 2, 2);
-      // Giant pulsing brood sac on the right side
-      const sacRadius = isTell ? 19 : 16 + (frameIdx % 2);
-      g.circle(64, 50 + heave, sacRadius, 'bone', 2);
-      g.circle(66, 48 + heave, sacRadius - 5, 'brass', 3);
-      // Leeches wriggling on the surface
-      g.rect(58, 44 + heave, 8, 4, 'bog', 2);
-      g.rect(64, 56 + heave, 9, 4, 'bog', 2);
+      g.shadedRect(12, 60 + heave, 72, 20, 'bog'); // bubbling mire pool
+      // Colossal pulsing translucent Bile-Green Brood-Sac Abdomen
+      const sacRadius = isTell ? 22 : 19 + (frameIdx % 2);
+      g.circle(58, 48 + heave, sacRadius, 'lye', 2);
+      g.circle(60, 46 + heave, sacRadius - 6, isTell ? 'blood' : 'brass', 3);
+      // Antler-Crowned Swamp Hag-Queen Upper Torso & Stag-Skull Mask
+      g.shadedRect(20, 28 + heave, 24, 32, 'bog');
+      g.shadedRect(24, 16 + heave, 16, 13, 'bone'); // stag-skull crone mask
+      g.line(24, 16 + heave, 12, 4 + heave, 'bone', 3, 3); // left bone antler
+      g.line(40, 16 + heave, 52, 4 + heave, 'bone', 3, 3); // right bone antler
+      g.rect(28, 21 + heave, 3, 3, 'lye', 3);
+      g.rect(35, 21 + heave, 3, 3, 'lye', 3);
       return g;
     }
 
     case 'rivetTick': {
-      // COMMON (24x20): Scrap-plated parasite with riveted carapace and spring-loaded hind legs
+      // Skull-Carapace Bone-Spider
       const g = new PixelGrid(24, 20);
       const crouch = isTell ? 2 : frameIdx % 2;
-      g.shadedRect(5, 7 + crouch, 13, 8, 'steel');
-      g.rect(7, 8 + crouch, 3, 2, 'brass', 3); // Rivet studs
-      g.rect(12, 8 + crouch, 3, 2, 'brass', 3);
-      g.rect(16, 10 + crouch, 3, 3, isTell ? 'signal' : 'blood', 3); // Mandible / eye
-      // 6 skittering legs
-      g.line(6, 14, 4, 18, 'rust', 2, 1);
-      g.line(11, 14, 11, 18, 'rust', 2, 1);
-      g.line(16, 14, 18, 18, 'rust', 2, 1);
+      g.shadedRect(5, 6 + crouch, 13, 8, 'bone');
+      g.rect(15, 9 + crouch, 3, 3, isTell ? 'signal' : 'blood', 3);
+      g.line(6, 14, 4, 18, 'steel', 2, 1);
+      g.line(11, 14, 11, 18, 'steel', 2, 1);
+      g.line(16, 14, 18, 18, 'steel', 2, 1);
       return g;
     }
 
     case 'signalMite': {
-      // COMMON (24x24): Fragile tripod scout carrying a copper dish and blinking signal antenna
+      // Will-o'-Wisp Soul-Lantern
       const g = new PixelGrid(24, 24);
       const pulse = frameIdx % 2;
-      g.shadedRect(7, 10, 10, 7, 'coat');
-      g.circle(12, 10, 4, 'brass', 2); // Copper dish
-      // Antenna spire
-      g.line(12, 9, 12, 2, 'steel', 3, 1);
-      g.rect(10, 1, 5, 3, isTell || pulse === 1 ? 'signal' : 'brass', 3);
-      // Tripod wire legs
-      g.line(8, 16, 5, 22, 'steel', 2, 1);
-      g.line(12, 16, 12, 22, 'steel', 2, 1);
-      g.line(16, 16, 19, 22, 'steel', 2, 1);
+      g.circle(12, 12, 7, 'signal', 2);
+      g.shadedRect(8, 8, 8, 8, 'bone');
+      g.rect(9, 10, 2, 2, isTell || pulse === 1 ? 'signal' : 'brass', 3);
+      g.rect(13, 10, 2, 2, isTell || pulse === 1 ? 'signal' : 'brass', 3);
       return g;
     }
 
     case 'siltMimic': {
-      // COMMON (28x22): Hermit crab-like scrap lurker hiding under a dented oil drum lid
+      // Ossuary Coffer Mimic
       const g = new PixelGrid(28, 22);
       const collapse = isTell ? 3 : frameIdx % 2;
-      g.shadedRect(4, 6 + collapse, 18, 10, 'bog');
-      g.shadedRect(6, 4 + collapse, 14, 5, 'rust'); // Dented drum lid shell
-      // Hidden pincer & glaring eye underneath
-      g.rect(19, 11 + collapse, 5, 4, 'steel', 3);
-      g.set(18, 10 + collapse, isTell ? 'blood' : 'brass', 3);
+      g.shadedRect(4, 8 + collapse, 18, 9, 'rust');
+      g.shadedRect(4, 3 + collapse, 18, 5, 'steel');
+      g.rect(18, 9 + collapse, 5, 4, 'bone', 3);
+      g.set(17, 8 + collapse, isTell ? 'blood' : 'brass', 3);
       return g;
     }
 
     case 'cinderCrow': {
-      // COMMON (28x26): Sheet-metal scavenger bird with glowing furnace belly and razor pinions
+      // Ashen Carrion-Crow
       const g = new PixelGrid(28, 26);
       const flap = frameIdx % 2 === 0 ? -4 : 4;
       g.shadedRect(9, 10, 10, 7, 'coat');
-      g.rect(11, 12, 5, 3, isTell ? 'blood' : 'rust', 3); // Furnace ember belly
-      g.line(10, 11, 3, 10 + flap, 'steel', 2, 2); // Left wing
-      g.line(17, 11, 25, 10 + flap, 'steel', 3, 2); // Right wing
-      g.rect(19, 10, 5, 3, 'bone', 3); // Iron beak
-      g.set(17, 10, 'brass', 3);
+      g.rect(11, 12, 5, 3, isTell ? 'blood' : 'ember', 3);
+      g.line(10, 11, 3, 10 + flap, 'coat', 2, 2);
+      g.line(17, 11, 25, 10 + flap, 'coat', 3, 2);
+      g.rect(19, 10, 5, 3, 'bone', 3);
+      g.set(17, 10, 'blood', 3);
       return g;
     }
 
     case 'plateMarshal': {
-      // ELITE (48x48): Heavy commander carrying a towering riveted boiler-door riot shield & signal baton
+      // Dread Cathedral Templar
       const g = new PixelGrid(48, 48);
       const march = frameIdx % 2;
-      g.shadedRect(14, 14 + march, 16, 22, 'rust');
-      g.shadedRect(17, 8 + march, 10, 7, 'steel');
-      g.rect(22, 10 + march, 4, 2, 'signal', 3); // Visor slit
-      // Towering frontal scrap shield on right side (x=30..41, y=10..42)
+      g.shadedRect(14, 14 + march, 16, 22, 'steel');
+      g.shadedRect(17, 7 + march, 10, 8, 'steel');
+      g.line(17, 7 + march, 13, 2 + march, 'bone', 3, 2);
+      g.line(27, 7 + march, 31, 2 + march, 'bone', 3, 2);
+      g.rect(22, 10 + march, 4, 2, 'blood', 3);
       g.shadedRect(30, 10, 10, 32, 'steel');
-      g.shadedRect(32, 13, 6, 26, 'coat');
-      g.rect(38, 14, 2, 24, isTell ? 'signal' : 'brass', 3);
-      // Command baton raised on tell
-      if (isTell) {
-        g.line(18, 14, 10, 4, 'signal', 3, 3);
-      }
+      g.shadedRect(32, 13, 6, 26, 'rust');
+      g.rect(34, 22, 3, 4, 'bone', 3);
       return g;
     }
 
     case 'switchbackDriver': {
-      // ELITE (48x48): Twin-wheeled gyro-cycle raider with dual exhaust pipes and ramming prow
+      // Nightmare Hell-Steed Outrider on 4 skeletal warhorse legs (NO WHEELS)
       const g = new PixelGrid(48, 48);
-      const rev = frameIdx % 2;
-      g.circle(14, 34, 8, 'coat', 1); // Rear wheel
-      g.circle(34, 34, 8, 'coat', 1); // Front wheel
-      g.shadedRect(12, 20 + rev, 24, 12, 'rust'); // Engine chassis
-      g.shadedRect(18, 11 + rev, 10, 10, 'steel'); // Rider torso
-      g.rect(36, 22, 8, 8, isTell ? 'blood' : 'brass', 3); // Ramming prow
-      // Exhaust pipes
-      g.line(12, 22, 4, 16, 'steel', 2, 3);
-      if (isTell) {
-        g.rect(2, 13, 5, 5, 'signal', 3);
-      }
+      const gallop = frameIdx % 2 === 0 ? -2 : 2;
+      g.line(14, 28, 12 + gallop, 42, 'bone', 3, 2);
+      g.line(20, 28, 20 - gallop, 42, 'bone', 2, 2);
+      g.line(30, 28, 30 + gallop, 42, 'bone', 3, 2);
+      g.line(36, 28, 38 - gallop, 42, 'bone', 2, 2);
+      g.rect(11 + gallop, 40, 3, 3, 'ember', 3);
+      g.rect(37 - gallop, 40, 3, 3, 'ember', 3);
+      g.shadedRect(12, 20, 24, 10, 'rust'); // barded warhorse torso
+      g.shadedRect(34, 14, 9, 7, 'bone'); // horse skull head
+      g.shadedRect(18, 9, 10, 12, 'steel'); // Death-Knight rider
+      g.line(14, 16, 45, 16, isTell ? 'brass' : 'bone', 3, 2); // couched war-lance
       return g;
     }
 
     case 'sumpCantor': {
-      // ELITE (48x48): Hooded marsh figure carrying a swinging corroded iron dive-bell on a gantry pole
+      // Mire Hex-Chanter with stag-skull mask & plague-bell crozier
       const g = new PixelGrid(48, 48);
       const sway = frameIdx % 2 === 0 ? -2 : 2;
       g.shadedRect(14, 16, 14, 26, 'bog');
-      g.shadedRect(16, 9, 10, 8, 'brass'); // Brass diving helmet head
-      g.rect(20, 12, 4, 3, 'signal', 3);
-      // Gantry pole & swinging bell on right
-      g.line(26, 38, 28, 8, 'steel', 2, 2);
-      g.line(28, 8, 38, 8, 'steel', 2, 2);
-      g.shadedRect(33 + sway, 16, 10, 12, isTell ? 'brass' : 'rust');
-      if (isTell) {
-        g.circle(38 + sway, 22, 9, 'signal', 3);
-      }
+      g.shadedRect(16, 9, 10, 8, 'bone'); // stag-skull mask
+      g.line(16, 9, 11, 3, 'bone', 3, 2);
+      g.line(26, 9, 31, 3, 'bone', 3, 2);
+      g.line(28, 38, 30, 8, 'rust', 2, 2);
+      g.shadedRect(33 + sway, 16, 9, 11, isTell ? 'brass' : 'steel');
       return g;
     }
 
     case 'boreSentinel': {
-      // ELITE (48x48): Vertical industrial rock-drill automaton with glowing cooling vents
+      // Ash-Burrower Wyrmling
       const g = new PixelGrid(48, 48);
-      const spin = frameIdx % 2;
-      g.shadedRect(14, 10, 20, 22, 'rust');
-      g.shadedRect(16, 14, 16, 10, isTell ? 'blood' : 'brass'); // Vent core
-      // Conical drill base
-      g.shadedRect(16, 32, 16, 5, 'steel');
-      g.shadedRect(19 + spin, 37, 10, 5, 'bone');
-      g.rect(22, 42, 4, 4, 'steel', 3);
+      const sway = frameIdx % 2;
+      g.shadedRect(10, 36, 28, 7, 'rust'); // crimson ash crater
+      g.shadedRect(16, 18, 16, 18, 'steel');
+      g.shadedRect(18 + sway, 8, 14, 11, 'bone'); // horned drake skull
+      g.rect(22 + sway, 12, 8, 5, isTell ? 'blood' : 'ember', 3);
       return g;
     }
 
@@ -1478,7 +1417,7 @@ export function buildEnemyFrameGrid(id, frameIdx = 0, isTell = false) {
     case 'relayColossus':
     case 'dredgeHusk':
     case 'blackwingFurnace': {
-      // FUSION MID-BOSSES (64x64): Towering 10-unit amalgamated wasteland monstrosities
+      // FUSION MID-BOSSES (64x64): Towering 10-unit Gothic Dark Fantasy Ossuary & Eldritch Abominations
       const g = new PixelGrid(64, 64);
       const pulse = frameIdx % 2 === 0 ? -2 : 2;
       const primaryMat =
@@ -1490,28 +1429,22 @@ export function buildEnemyFrameGrid(id, frameIdx = 0, isTell = false) {
           ? 'bone'
           : 'rust';
 
-      // Massive amalgamated chassis (x=12..52, y=14..54)
       g.shadedRect(14, 18 + pulse, 36, 32, primaryMat);
       g.shadedRect(10, 26 - pulse, 44, 20, 'steel');
-      // Welded crown of 10 glowing eyes / sensors across the amalgam
       for (let i = 0; i < 5; i++) {
         const ex = 16 + i * 7;
         const ey = 22 + ((i % 2) * 5) + pulse;
         g.rect(ex, ey, 4, 4, isTell ? 'blood' : 'signal', 3);
       }
-      // Heavy protruding weapon/maw on front right
-      g.shadedRect(46, 24 + pulse, 14, 18, isTell ? 'blood' : 'brass');
-      g.rect(54, 28 + pulse, 5, 10, 'bone', 3);
+      g.shadedRect(46, 24 + pulse, 14, 18, isTell ? 'blood' : 'bone');
       return g;
     }
 
     case 'theLongDry':
     default: {
-      // BOSS 4 (96x96): Giant worm built from stacked iron pipe rings,
-      // mouth ringed with rotary drill bits.
+      // BOSS 4 (96x96): Catacomb Elder-Wyrm Skarath — Undead Bone-And-Obsidian Elder Dragon Wyrm (NO PIPES/DRILLS)
       const g = new PixelGrid(96, 96);
       const wave = frameIdx % 2 === 0 ? -3 : 3;
-      // Coiled stacked pipe segments from tail (left) to maw (upper right)
       const segs = [
         { x: 16, y: 68, r: 10 },
         { x: 28, y: 62 + wave, r: 12 },
@@ -1521,18 +1454,13 @@ export function buildEnemyFrameGrid(id, frameIdx = 0, isTell = false) {
       ];
       for (let i = 0; i < segs.length; i++) {
         const s = segs[i];
-        g.circle(s.x, s.y, s.r, i % 2 === 0 ? 'rust' : 'steel', 2);
-        // Riveted pipe flange collar
-        g.line(s.x - 4, s.y - s.r, s.x + 4, s.y + s.r, 'brass', 2, 2);
+        g.circle(s.x, s.y, s.r, i % 2 === 0 ? 'bone' : 'steel', 2);
+        g.line(s.x, s.y - s.r, s.x - 5, s.y - s.r - 8, 'bone', 3, 2); // dorsal dragon spine
       }
-      // Gaping Maw at (74, 32) ringed with industrial drill bits
-      g.circle(74, 32, 12, 'coat', 0);
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2 + (frameIdx * 0.4);
-        const bx = 74 + Math.round(Math.cos(a) * 14);
-        const by = 32 + Math.round(Math.sin(a) * 14);
-        g.rect(bx - 3, by - 3, 6, 6, isTell ? 'blood' : 'bone', 3);
-      }
+      // Horned Dragon Skull & Blazing Hellfire Maw
+      g.circle(74, 32, 13, 'bone', 3);
+      g.line(70, 20, 54, 8, 'bone', 3, 3); // swept dragon horn
+      g.circle(78, 34, 9, isTell ? 'blood' : 'ember', 3);
       return g;
     }
   }

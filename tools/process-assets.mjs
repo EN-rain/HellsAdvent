@@ -1322,60 +1322,62 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
   const cx = ox + 20;
   const cy = oy + 24;
   const isDead = f === 4;
+  const isAtk = f === 2;
   const bob = f === 1 ? -1 : f === 2 ? 2 : 0;
 
   if (id === 'tin_rat') {
+    // Shackled Crypt-Rat: feral plague-rat bound in a spiked wrought-iron torture gibbet collar & chain
     if (isDead) {
-      surf.ellipse(cx - 5, cy + 6, 6, 4, C.rust2); // soup can half
-      surf.ellipse(cx + 6, cy + 8, 4, 2, C.slag2); // lid
-      surf.line(cx - 10, cy + 9, cx - 2, cy + 10, C.rust1, 1);
+      surf.ellipse(cx - 4, cy + 7, 8, 4, C.coat1);
+      surf.rect(cx + 3, cy + 5, 6, 4, C.slag2);
+      surf.line(cx - 12, cy + 9, cx - 3, cy + 10, C.skin1, 1);
     } else {
-      // Tail & paws
-      surf.line(cx - 14, cy + 6, cx - 6, cy + 4 + bob, C.skin1, 2);
-      // Rusted soup can shell
-      surf.rect(cx - 8, cy - 5 + bob, 15, 11, C.rust2);
-      surf.rect(cx - 7, cy - 5 + bob, 12, 4, C.rust3);
-      surf.line(cx - 3, cy - 5 + bob, cx - 3, cy + 5 + bob, C.rust0, 1);
-      // Hinged can lid flapping + pointy snout + red eye
-      surf.line(cx + 7, cy - 5 + bob, cx + 11, cy - (f === 2 ? 9 : 4) + bob, C.slag3, 2);
-      surf.ellipse(cx + 10, cy + 2 + bob, 5, 4, C.slag2);
-      surf.pset(cx + 11, cy + 1 + bob, C.blood2);
+      surf.ellipse(cx, cy + 9, 11, 3, C.coat0);
+      surf.line(cx - 16, cy + 5, cx - 6, cy + 3 + bob, C.skin1, 2);
+      surf.ellipse(cx - 2, cy + 1 + bob, 9, 6, C.coat1);
+      surf.ellipse(cx - 3, cy - 1 + bob, 6, 4, C.slag1);
+      for (const sx of [-6, -2, 2]) {
+        surf.pset(cx + sx, cy - 5 + bob, C.bone3);
+      }
+      surf.rect(cx + 3, cy - 5 + bob, 5, 10, C.rust1);
+      surf.rect(cx + 4, cy - 7 + bob, 3, 2, C.slag3);
+      surf.line(cx + 3, cy + 5 + bob, cx - 6, cy + 8, C.slag3, 1);
+      surf.ellipse(cx + 10 + (isAtk ? 3 : 0), cy + 1 + bob, 5, 4, C.bone2);
+      surf.rect(cx + 11 + (isAtk ? 3 : 0), cy - 1 + bob, 2, 2, isAtk ? C.brass3 : C.blood2);
     }
   } else if (id === 'dust_dog') {
+    // Flayed Grave-Hound: undead skeletal necro-hound with exposed ribcage & spiked executioner collar
     if (isDead) {
-      surf.ellipse(cx - 4, cy + 6, 7, 4, C.bone1);
-      surf.rect(cx + 4, cy + 5, 5, 3, C.brass2); // fallen goggles
+      surf.ellipse(cx - 4, cy + 6, 8, 4, C.bone1);
+      surf.rect(cx + 4, cy + 5, 5, 3, C.rust1);
     } else {
-      const stretch = f === 2 ? 3 : 0;
-      // Starved ribcage body
-      surf.ellipse(cx - 2, cy + bob, 11 + stretch, 6, C.bone1);
-      surf.line(cx - 5, cy - 3 + bob, cx - 5, cy + 3 + bob, C.rust1, 1);
-      surf.line(cx - 2, cy - 3 + bob, cx - 2, cy + 3 + bob, C.rust1, 1);
-      surf.line(cx + 1, cy - 3 + bob, cx + 1, cy + 3 + bob, C.rust1, 1);
-      // Legs
-      surf.line(cx - 9, cy + 4, cx - 11 - stretch, cy + 11, C.bone0, 2);
-      surf.line(cx + 6, cy + 4, cx + 9 + stretch, cy + 11, C.bone0, 2);
-      // Rag collar + hanging welding goggles
-      surf.rect(cx + 5, cy - 3 + bob, 3, 7, C.rust2);
-      surf.rect(cx + 6, cy + 3 + bob, 4, 3, C.brass3);
-      // Low-slung hound head
-      surf.ellipse(cx + 11 + stretch, cy + 1 + bob, 5, 4, C.bone2);
+      const stretch = isAtk ? 3 : 0;
+      surf.ellipse(cx - 2, cy + bob, 11 + stretch, 6, C.rust1);
+      for (const rx of [-6, -3, 0, 3]) {
+        surf.line(cx + rx, cy - 3 + bob, cx + rx, cy + 3 + bob, C.bone3, 1);
+      }
+      surf.line(cx - 9, cy + 4, cx - 11 - stretch, cy + 11, C.bone1, 2);
+      surf.line(cx + 6, cy + 4, cx + 9 + stretch, cy + 11, C.bone1, 2);
+      surf.rect(cx + 5, cy - 3 + bob, 4, 7, C.slag1);
+      surf.pset(cx + 7, cy - 5 + bob, C.brass3);
+      surf.ellipse(cx + 11 + stretch, cy + 1 + bob, 5, 4, C.bone3);
       surf.pset(cx + 13 + stretch, cy + bob, C.blood2);
     }
   } else if (id === 'wire_kite') {
+    // Stone Gargoyle Imp: winged gothic cathedral gargoyle with demon oculus & spiked penance chain
     if (isDead) {
-      surf.line(cx - 8, cy + 6, cx + 8, cy + 10, C.wood, 2);
-      surf.ellipse(cx, cy + 8, 5, 3, C.slag2);
+      surf.ellipse(cx, cy + 8, 8, 4, C.slag1);
     } else {
-      // Crossed sticks + torn plastic wings + blood camera lens + trailing wire
-      surf.line(cx - 13, cy - 6 + bob, cx + 13, cy - 6 + bob, C.wood, 2);
-      surf.line(cx, cy - 12 + bob, cx, cy + 4 + bob, C.wood, 2);
-      surf.ellipse(cx - 7, cy - 6 + bob, 6, 4, C.bone1);
-      surf.ellipse(cx + 7, cy - 6 + bob, 6, 4, C.bone1);
-      surf.ellipse(cx, cy - 6 + bob, 4, 4, C.slag1);
-      surf.rect(cx - 1, cy - 7 + bob, 3, 3, C.blood2);
-      // Trailing wire tail
-      surf.line(cx, cy + 4 + bob, cx - 4 + (f % 2) * 3, cy + 12, C.slag3, 1);
+      const wingY = f === 1 ? -9 : -3;
+      surf.line(cx - 3, cy - 4 + bob, cx - 14, cy + wingY, C.slag2, 2);
+      surf.line(cx + 3, cy - 4 + bob, cx + 14, cy + wingY, C.slag2, 2);
+      surf.ellipse(cx - 8, cy + wingY + 3, 6, 4, C.coat2);
+      surf.ellipse(cx + 8, cy + wingY + 3, 6, 4, C.coat2);
+      surf.ellipse(cx, cy - 5 + bob, 5, 5, C.slag1);
+      surf.line(cx - 4, cy - 9 + bob, cx - 6, cy - 12 + bob, C.bone2, 2);
+      surf.line(cx + 4, cy - 9 + bob, cx + 6, cy - 12 + bob, C.bone2, 2);
+      surf.rect(cx - 1, cy - 6 + bob, 3, 3, C.blood2);
+      surf.line(cx, cy + 2 + bob, cx - 4 + (f % 2) * 5, cy + 12, C.slag3, 1);
     }
   } else if (id === 'lye_leech') {
     if (isDead) {
@@ -1384,7 +1386,6 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
       const w = f === 1 ? 13 : f === 2 ? 15 : 11;
       surf.ellipse(cx, cy + 5, w, 6, C.bile1);
       surf.ellipse(cx - 2, cy + 3, w - 3, 4, C.bile2);
-      // Ring mouth of tiny bone teeth
       surf.ellipse(cx + w - 2, cy + 5, 4, 4, C.soot);
       surf.pset(cx + w - 4, cy + 3, C.bone3);
       surf.pset(cx + w, cy + 3, C.bone3);
@@ -1396,15 +1397,63 @@ function drawCommonEnemyFrame(surf, ox, oy, id, f) {
       surf.ellipse(cx, cy + 7, 9, 4, C.bog1);
     } else {
       const wingY = f === 1 ? -8 : 2;
-      // Bent umbrella rib wings + swollen pale belly sac
-      surf.line(cx, cy - 2, cx - 15, cy + wingY, C.slag3, 2);
-      surf.line(cx, cy - 2, cx + 15, cy + wingY, C.slag3, 2);
+      surf.line(cx, cy - 2, cx - 15, cy + wingY, C.rust1, 2);
+      surf.line(cx, cy - 2, cx + 15, cy + wingY, C.rust1, 2);
       surf.ellipse(cx - 8, cy + (wingY >> 1), 6, 4, C.bog2);
       surf.ellipse(cx + 8, cy + (wingY >> 1), 6, 4, C.bog2);
-      surf.ellipse(cx, cy + 3, 6, 6, C.bile2); // swollen pale sac
+      surf.ellipse(cx, cy + 3, 6, 6, C.bile2);
       surf.ellipse(cx, cy - 3, 4, 4, C.coat1);
       surf.pset(cx - 2, cy - 4, C.blood2);
       surf.pset(cx + 2, cy - 4, C.blood2);
+    }
+  } else if (id === 'rivet_tick') {
+    if (isDead) {
+      surf.ellipse(cx, cy + 8, 8, 4, C.bone1);
+    } else {
+      for (const lx of [-10, -4, 4, 10]) {
+        surf.line(cx + (lx >> 1), cy + 2, cx + lx, cy + 10 + ((f + lx) % 2), C.slag3, 2);
+      }
+      surf.ellipse(cx, cy + bob, 8, 7, C.bone2);
+      surf.ellipse(cx - 2, cy - 2 + bob, 5, 4, C.bone3);
+      surf.rect(cx - 4, cy + 1 + bob, 8, 2, C.blood2);
+    }
+  } else if (id === 'signal_mite') {
+    if (isDead) {
+      surf.ellipse(cx, cy + 8, 6, 3, C.slag2);
+    } else {
+      surf.ellipse(cx, cy - 4 + bob, 9, 10, C.sig1);
+      surf.ellipse(cx, cy - 2 + bob, 6, 6, C.bone2);
+      surf.rect(cx - 3, cy - 3 + bob, 2, 2, C.sig2);
+      surf.rect(cx + 1, cy - 3 + bob, 2, 2, C.sig2);
+      surf.line(cx, cy - 14 + bob, cx, cy - 8 + bob, C.brass3, 2);
+    }
+  } else if (id === 'silt_mimic') {
+    if (isDead) {
+      surf.rect(cx - 9, cy + 4, 18, 6, C.rust1);
+    } else {
+      const open = isAtk ? 5 : f === 1 ? 2 : 0;
+      surf.rect(cx - 10, cy + 1, 20, 9, C.rust1);
+      surf.rect(cx - 10, cy - 6 - open, 20, 7, C.slag2);
+      if (open > 0) {
+        surf.rect(cx - 8, cy - open, 16, open + 1, C.soot);
+        for (let tx = -7; tx <= 7; tx += 4) {
+          surf.pset(cx + tx, cy - open + 1, C.bone3);
+        }
+        surf.line(cx, cy, cx + 8, cy - 3, C.bile2, 2);
+      }
+    }
+  } else if (id === 'cinder_crow') {
+    if (isDead) {
+      surf.ellipse(cx, cy + 8, 8, 3, C.coat0);
+    } else {
+      const wingY = f === 1 ? -10 : 2;
+      surf.line(cx, cy - 2, cx - 14, cy + wingY, C.coat1, 3);
+      surf.line(cx, cy - 2, cx + 14, cy + wingY, C.coat1, 3);
+      surf.rect(cx - 15, cy + wingY - 1, 3, 3, C.rust3);
+      surf.rect(cx + 13, cy + wingY - 1, 3, 3, C.rust3);
+      surf.ellipse(cx, cy, 5, 5, C.coat0);
+      surf.ellipse(cx + 5, cy - 2, 4, 3, C.bone3);
+      surf.pset(cx + 3, cy - 3, C.blood2);
     }
   }
   surf.outlineRegion(ox, oy, 40, 40, C.soot);
@@ -1419,59 +1468,107 @@ function drawEliteEnemyFrame(surf, ox, oy, id, f) {
   const bob = f === 1 ? -2 : 0;
 
   if (id === 'cleaver_hauler') {
+    // Chained Crypt-Executioner Brute dragging a spiked Iron-Maiden Coffin Reliquary (NO WHEELS)
     if (isDead) {
-      surf.ellipse(cx - 12, cy + 16, 12, 8, C.rust1); // overturned cart
-      surf.rect(cx + 4, cy + 18, 18, 6, C.slag3); // fallen cleaver
+      surf.rect(cx - 26, cy + 12, 22, 10, C.slag1);
+      surf.rect(cx + 4, cy + 16, 20, 7, C.slag3);
     } else {
-      // Wheeled scrap cart dragged behind + chain
-      surf.rect(cx - 32, cy - 4, 18, 16, C.rust1);
-      surf.ellipse(cx - 24, cy + 14, 6, 6, C.slag1);
-      surf.line(cx - 14, cy + 4, cx - 4, cy + 2, C.slag3, 2);
-      // Hunched scavenger body
-      surf.ellipse(cx + 2, cy - 4 + bob, 13, 16, C.coat1);
-      surf.ellipse(cx + 5, cy - 18 + bob, 7, 7, C.bone1); // rag-wrapped head
+      surf.rect(cx - 32, cy - 10, 16, 28, C.slag1);
+      surf.rect(cx - 30, cy - 8, 12, 24, C.rust1);
+      surf.ellipse(cx - 24, cy - 2, 4, 5, C.bone3);
+      surf.line(cx - 16, cy + 4, cx - 6, cy + 2, C.brass2, 2);
+      surf.ellipse(cx + 2, cy - 4 + bob, 13, 16, C.rust1);
+      surf.ellipse(cx + 5, cy - 19 + bob, 8, 8, C.slag2);
+      surf.line(cx + 1, cy - 25 + bob, cx - 3, cy - 31 + bob, C.bone3, 2);
+      surf.line(cx + 9, cy - 25 + bob, cx + 13, cy - 31 + bob, C.bone3, 2);
       surf.pset(cx + 8, cy - 19 + bob, C.blood2);
-      // Welded butcher's cleaver right arm
       const cleaverY = isTell ? cy - 28 : isAtk ? cy + 8 : cy - 8;
-      surf.rect(cx + 12, cleaverY, 18, 9, C.slag3);
-      surf.rect(cx + 12, cleaverY + 7, 18, 2, isTell ? C.brass3 : C.boneHi);
+      surf.rect(cx + 12, cleaverY, 18, 10, C.slag3);
+      surf.rect(cx + 12, cleaverY + 8, 18, 2, isTell ? C.brass3 : C.boneHi);
     }
   } else if (id === 'lye_strider') {
     if (isDead) {
-      surf.line(cx - 22, cy + 20, cx + 20, cy + 24, C.slag2, 3);
+      surf.line(cx - 22, cy + 20, cx + 20, cy + 24, C.bone2, 3);
       surf.ellipse(cx, cy + 16, 12, 8, C.bog2);
     } else {
-      // Tall pipe stilts
       const stride = f === 1 ? 5 : 0;
-      surf.line(cx - 6 - stride, cy - 6, cx - 12 - stride, cy + 26, C.slag2, 3);
-      surf.line(cx + 6 + stride, cy - 6, cx + 12 + stride, cy + 26, C.slag2, 3);
-      // Chemical tank on back
-      surf.rect(cx - 14, cy - 26 + bob, 14, 20, C.bog2);
-      surf.rect(cx - 12, cy - 22 + bob, 10, 8, isTell ? C.sig2 : C.bile2);
-      // Torso & funnel head
-      surf.ellipse(cx + 2, cy - 14 + bob, 9, 11, C.rust1);
-      surf.ellipse(cx + 6, cy - 28 + bob, 7, 5, C.slag3); // funnel head
+      surf.line(cx - 6 - stride, cy - 6, cx - 12 - stride, cy + 26, C.bone2, 3);
+      surf.line(cx + 6 + stride, cy - 6, cx + 12 + stride, cy + 26, C.bone2, 3);
+      surf.ellipse(cx - 8, cy - 18 + bob, 8, 11, C.bog2);
+      surf.ellipse(cx - 8, cy - 16 + bob, 6, 7, isTell ? C.brass3 : C.bile2);
+      surf.ellipse(cx + 2, cy - 14 + bob, 9, 11, C.bog1);
+      surf.ellipse(cx + 5, cy - 27 + bob, 6, 6, C.bone3);
+      surf.line(cx + 9, cy - 27 + bob, cx + 18, cy - 24 + bob, C.bone2, 3);
       if (isAtk) {
         surf.ellipse(cx + 20, cy - 24, 8, 5, C.bile2);
       }
     }
   } else if (id === 'flats_harvester') {
+    // Bone-Scythe Reaver Wraith on skittering bone-centipede legs with 4 war-scythes (NO TREADS/DRUM)
     if (isDead) {
-      surf.ellipse(cx, cy + 14, 22, 10, C.rust1);
+      surf.ellipse(cx, cy + 14, 22, 9, C.bone1);
     } else {
-      // Tracked chassis + operator torso + spinning red-stained blade drum
-      surf.rect(cx - 24, cy + 4, 42, 16, C.rust1);
-      surf.rect(cx - 20, cy + 16, 36, 8, C.slag1);
-      surf.ellipse(cx - 6, cy - 8 + bob, 10, 12, C.coat2);
-      surf.ellipse(cx - 4, cy - 20 + bob, 6, 6, C.skin1);
-      // Front harvester drum
-      const drumX = cx + 18 + (isAtk ? 6 : 0);
-      surf.ellipse(drumX, cy + 6, 13, 13, C.slag2);
-      surf.ellipse(drumX, cy + 6, 9, 9, C.rust2);
-      // Blades
+      surf.ellipse(cx, cy + 10, 20, 8, C.slag1);
+      for (let lx = -16; lx <= 16; lx += 8) {
+        const legLift = ((f + (lx >> 3)) & 1) * 3;
+        surf.line(cx + lx, cy + 12, cx + lx - 3, cy + 24 - legLift, C.bone2, 2);
+      }
+      surf.ellipse(cx - 2, cy - 6 + bob, 11, 13, C.rust1);
+      surf.ellipse(cx - 1, cy - 20 + bob, 7, 7, C.bone3);
+      surf.rect(cx - 5, cy - 27 + bob, 9, 3, C.brass3);
+      const spin = isAtk ? 8 : isTell ? -5 : 0;
       const bladeCol = isTell ? C.brass3 : C.blood2;
-      surf.line(drumX - 14, cy + 6, drumX + 14, cy + 6, bladeCol, 3);
-      surf.line(drumX, cy - 8, drumX, cy + 20, bladeCol, 3);
+      surf.line(cx + 4, cy - 10, cx + 26 + spin, cy - 22, C.bone3, 2);
+      surf.line(cx + 22 + spin, cy - 24, cx + 30 + spin, cy - 8, bladeCol, 3);
+      surf.line(cx + 4, cy + 2, cx + 28 + spin, cy + 6, C.bone3, 2);
+      surf.line(cx + 24 + spin, cy + 2, cx + 30 + spin, cy + 18, bladeCol, 3);
+    }
+  } else if (id === 'plate_marshal') {
+    if (isDead) {
+      surf.rect(cx - 18, cy + 16, 36, 8, C.slag2);
+    } else {
+      surf.ellipse(cx - 2, cy - 4 + bob, 14, 18, C.slag1);
+      surf.ellipse(cx - 2, cy - 22 + bob, 8, 8, C.slag3);
+      surf.rect(cx + 8 + (isAtk ? 6 : 0), cy - 18, 12, 34, C.slag2);
+      surf.rect(cx + 10 + (isAtk ? 6 : 0), cy - 14, 8, 26, C.rust1);
+      surf.line(cx - 8, cy - 12, cx - 22, cy - (isTell ? 34 : 26), C.slag3, 4);
+    }
+  } else if (id === 'switchback_driver') {
+    // Nightmare Hell-Steed Outrider on 4 skeletal warhorse legs (NO WHEELS)
+    if (isDead) {
+      surf.ellipse(cx, cy + 14, 22, 9, C.bone1);
+    } else {
+      const shift = isAtk ? 8 : 0;
+      const gallop = f % 2 === 0 ? -4 : 4;
+      for (const lx of [-14, -5, 6, 15]) {
+        const legX = cx + lx + shift + (lx < 0 ? -gallop : gallop);
+        surf.line(cx + lx + shift, cy + 6, legX, cy + 23, C.bone2, 2);
+        surf.rect(legX - 2, cy + 21, 4, 3, C.rust3);
+      }
+      surf.ellipse(cx + shift, cy + 2, 18, 9, C.slag1);
+      surf.ellipse(cx + shift, cy + 1, 14, 6, C.rust1);
+      surf.ellipse(cx + 18 + shift, cy - 8 + bob, 7, 5, C.bone3);
+      surf.ellipse(cx - 2 + shift, cy - 12 + bob, 8, 11, C.coat2);
+      surf.line(cx - 10 + shift, cy - 8, cx + 32 + shift, cy - 8, isTell ? C.brass3 : C.bone3, 3);
+    }
+  } else if (id === 'sump_cantor') {
+    if (isDead) {
+      surf.ellipse(cx, cy + 16, 18, 7, C.bog1);
+    } else {
+      surf.ellipse(cx - 2, cy - 2 + bob, 14, 18, C.bog1);
+      surf.ellipse(cx, cy - 18 + bob, 8, 8, C.bone3);
+      surf.line(cx + 12, cy + 18, cx + 16, cy - 26, C.wood, 3);
+      surf.ellipse(cx + 20, cy - 22, 6, 7, isTell ? C.sig2 : C.brass3);
+    }
+  } else if (id === 'bore_sentinel') {
+    if (isDead) {
+      surf.ellipse(cx, cy + 16, 22, 8, C.rust1);
+    } else {
+      surf.ellipse(cx, cy + 18, 24, 8, C.rust2);
+      for (let s = 0; s < 3; s++) {
+        surf.ellipse(cx - 4 + s * 4, cy + 8 - s * 10 + bob, 12 - s, 9, s % 2 === 0 ? C.slag1 : C.bone2);
+      }
+      surf.ellipse(cx + 8, cy - 18 + bob, 9, 7, isTell || isAtk ? C.brass3 : C.rust3);
     }
   }
   surf.outlineRegion(ox, oy, 80, 80, C.blood2);
@@ -1484,84 +1581,153 @@ function drawBossFrame(surf, ox, oy, w, h, id, f) {
   const isPhase = f === 6;
   const isAtkA = f === 2 || f === 3;
   const isAtkB = f === 4 || f === 5;
+  const bob = f % 2 === 1 ? -2 : 0;
 
   if (id === 'the_foreman') {
-    // 192x192 Excavator rig with skeleton in yellow hard hat, rusted bucket arm, wrecking ball
-    surf.rect(cx - 56, cy + 26, 112, 28, C.slag1); // caterpillar tracks
-    surf.rect(cx - 50, cy + 32, 100, 16, C.slag0);
+    // High Executioner Malgorth: Gargantuan Undead Ossuary Bone-Colossus & Cathedral Executioner Lord (NO EXCAVATOR/TREADS)
     if (!isDead) {
-      surf.rect(cx - 46, cy - 24, 88, 52, C.rust2); // excavator housing
-      surf.rect(cx - 42, cy - 20, 76, 22, C.rust3);
-      // Cab + skeleton in yellow/brass hard hat
-      surf.rect(cx - 10, cy - 52, 36, 30, C.slag2);
-      surf.ellipse(cx + 8, cy - 36, 7, 7, C.bone3); // skull
-      surf.ellipse(cx + 8, cy - 42, 9, 4, C.brass3); // yellow hard hat
-      // Articulated rusted bucket arm
-      const armDrop = isAtkA ? 26 : isPhase ? -16 : 0;
-      surf.line(cx + 30, cy - 18, cx + 68, cy - 48 + armDrop, C.rust2, 10);
-      surf.rect(cx + 58, cy - 22 + armDrop, 26, 22, C.slag3); // toothed bucket
-      // Wrecking ball on chain
-      const swingX = isAtkB ? 24 : 0;
-      surf.line(cx - 42, cy - 24, cx - 68 + swingX, cy + 12, C.slag3, 3);
-      surf.ellipse(cx - 68 + swingX, cy + 20, 16, 16, C.slag1);
+      surf.ellipse(cx, cy + 44, 62, 12, C.coat0);
+      surf.rect(cx - 38, cy + 10, 24, 34, C.slag1);
+      surf.rect(cx + 14, cy + 10, 24, 34, C.slag1);
+      surf.rect(cx - 42, cy + 36, 30, 10, C.bone2);
+      surf.rect(cx + 12, cy + 36, 30, 10, C.bone2);
+      surf.rect(cx - 14, cy + 12, 28, 28, C.rust1);
+      surf.rect(cx - 10, cy + 14, 20, 22, C.rust2);
+
+      surf.ellipse(cx, cy - 12 + bob, 48, 32, C.slag1);
+      surf.ellipse(cx, cy - 12 + bob, 36, 24, isPhase ? C.sig2 : C.rust1);
+      for (let ry = -28; ry <= 4; ry += 8) {
+        surf.line(cx - 38, cy + ry + bob, cx - 8, cy + ry + 3 + bob, C.bone3, 4);
+        surf.line(cx + 8, cy + ry + 3 + bob, cx + 38, cy + ry + bob, C.bone3, 4);
+      }
+      surf.ellipse(cx - 44, cy - 28 + bob, 16, 12, C.slag2);
+      surf.ellipse(cx + 44, cy - 28 + bob, 16, 12, C.slag2);
+      surf.line(cx - 48, cy - 36 + bob, cx - 56, cy - 52 + bob, C.bone3, 4);
+      surf.line(cx + 48, cy - 36 + bob, cx + 56, cy - 52 + bob, C.bone3, 4);
+
+      surf.ellipse(cx, cy - 48 + bob, 15, 14, C.bone3);
+      surf.rect(cx - 14, cy - 62 + bob, 28, 7, C.brass2);
+      surf.rect(cx - 7, cy - 49 + bob, 4, 4, isPhase ? C.sig2 : C.blood2);
+      surf.rect(cx + 3, cy - 49 + bob, 4, 4, isPhase ? C.sig2 : C.blood2);
+
+      const axeDrop = isAtkA ? 28 : isPhase ? -14 : 0;
+      surf.line(cx + 36, cy - 24 + bob, cx + 68, cy - 44 + axeDrop, C.slag3, 6);
+      surf.rect(cx + 54, cy - 48 + axeDrop, 28, 32, C.slag2);
+      surf.rect(cx + 76, cy - 48 + axeDrop, 6, 32, isPhase ? C.sig2 : C.bone3);
+
+      const swingX = isAtkB ? -22 : 0;
+      surf.line(cx - 38, cy - 24 + bob, cx - 66 + swingX, cy + 8, C.brass2, 3);
+      surf.ellipse(cx - 66 + swingX, cy + 20, 15, 16, C.slag1);
+      surf.ellipse(cx - 66 + swingX, cy + 20, 9, 10, isPhase ? C.sig2 : C.blood2);
     } else {
-      surf.ellipse(cx, cy + 12, 52, 22, C.rust1);
+      surf.ellipse(cx, cy + 24, 56, 18, C.bone1);
+      surf.rect(cx - 12, cy + 14, 24, 6, C.brass2);
     }
   } else if (id === 'big_axle') {
-    // 224x160 Armored semi-truck cab dragging two chained trailer sections, headlights glowing
+    // Dread Cavalier Varkos: Gargantuan Six-Legged Skeletal Nightmare Centaur-Archfiend (ZERO WHEELS / ZERO TRUCK)
     const shift = isAtkA ? 14 : 0;
-    // Two chained trailer sections behind
-    surf.rect(cx - 96 + shift, cy - 18, 48, 42, C.rust1);
-    surf.rect(cx - 42 + shift, cy - 22, 52, 46, C.rust2);
-    // Main armored cab
-    surf.rect(cx + 16 + shift, cy - 30, 68, 56, C.slag2);
-    surf.rect(cx + 22 + shift, cy - 26, 52, 24, C.rust3);
-    // Dented jaw grille & glowing headlights
-    surf.rect(cx + 72 + shift, cy - 12, 14, 32, C.slag3);
-    surf.ellipse(cx + 82 + shift, cy - 16, 5, 5, isPhase ? C.blood2 : C.brass3);
-    surf.ellipse(cx + 82 + shift, cy + 8, 5, 5, isPhase ? C.blood2 : C.brass3);
-    // 6 heavy wheels
-    for (const wx of [-80, -56, -26, 0, 32, 66]) {
-      surf.ellipse(cx + wx + shift, cy + 28, 12, 12, C.coat0);
-      surf.ellipse(cx + wx + shift, cy + 28, 5, 5, C.slag3);
+    if (!isDead) {
+      surf.ellipse(cx + shift, cy + 36, 86, 12, C.coat0);
+      const legOffsets = [-68, -44, -18, 8, 34, 58];
+      for (let i = 0; i < legOffsets.length; i++) {
+        const lx = cx + legOffsets[i] + shift;
+        const stride = ((f + i) % 2 === 0 ? -6 : 6) * (isAtkA ? 1.5 : 1);
+        const kneeX = lx + Math.round(stride * 0.5);
+        const hoofX = lx + Math.round(stride);
+        surf.line(lx, cy + 6, kneeX, cy + 22, C.bone2, 5);
+        surf.line(kneeX, cy + 22, hoofX, cy + 36, C.bone3, 4);
+        surf.rect(hoofX - 5, cy + 33, 10, 6, C.rust2);
+        surf.rect(hoofX - 4, cy + 35, 8, 4, isPhase ? C.blood2 : C.brass3);
+      }
+      surf.line(cx - 74 + shift, cy - 8 + bob, cx - 98 + shift, cy + 8 - bob, C.bone2, 4);
+      surf.ellipse(cx - 98 + shift, cy + 8 - bob, 8, 5, C.rust3);
+
+      surf.ellipse(cx - 14 + shift, cy - 4 + bob, 66, 20, C.slag1);
+      surf.ellipse(cx - 14 + shift, cy - 6 + bob, 58, 15, C.rust1);
+      for (let rx = -58; rx <= 26; rx += 14) {
+        surf.line(cx + rx + shift, cy - 18 + bob, cx + rx - 3 + shift, cy + 8 + bob, C.bone3, 3);
+      }
+      surf.ellipse(cx + 54 + shift, cy - 6 + bob, 16, 15, C.slag2);
+      surf.ellipse(cx + 58 + shift, cy - 6 + bob, 11, 10, C.bone2);
+      surf.line(cx + 62 + shift, cy - 14 + bob, cx + 82 + shift, cy - 24 + bob, C.bone3, 4);
+      surf.line(cx + 62 + shift, cy + 2 + bob, cx + 82 + shift, cy + 10 + bob, C.bone3, 4);
+      surf.rect(cx + 62 + shift, cy - 9 + bob, 5, 5, isPhase ? C.blood2 : C.brass3);
+
+      surf.ellipse(cx + 32 + shift, cy - 32 + bob, 22, 20, C.slag2);
+      surf.ellipse(cx + 6 + shift, cy - 30 + bob, 24, 12, C.rust2);
+      surf.ellipse(cx + 36 + shift, cy - 30 + bob, isPhase ? 12 : 7, isPhase ? 12 : 7, isPhase ? C.blood2 : C.rust3);
+      if (isPhase) {
+        surf.ellipse(cx + 36 + shift, cy - 30 + bob, 6, 6, C.brass3);
+      }
+      surf.ellipse(cx + 34 + shift, cy - 54 + bob, 12, 11, C.slag3);
+      surf.line(cx + 26 + shift, cy - 60 + bob, cx + 12 + shift, cy - 72 + bob, C.bone3, 4);
+      surf.line(cx + 42 + shift, cy - 60 + bob, cx + 56 + shift, cy - 72 + bob, C.bone3, 4);
+      surf.rect(cx + 34 + shift, cy - 55 + bob, 8, 3, C.blood2);
+
+      const lanceReach = isAtkA ? 98 : 86;
+      surf.line(cx + 12 + shift, cy - 28 + bob, cx + lanceReach + shift, cy - 26 + bob, C.bone3, 4);
+      surf.ellipse(cx + lanceReach - 8 + shift, cy - 26 + bob, 12, 9, isPhase ? C.blood2 : C.brass3);
+    } else {
+      surf.ellipse(cx, cy + 20, 72, 16, C.bone1);
+      surf.ellipse(cx + 24, cy + 16, 26, 12, C.rust1);
     }
   } else if (id === 'mother_sump') {
-    // 192x192 Heaving mass of rusted drums and torn tarp with pulsing pale sac in toxic water
-    surf.ellipse(cx, cy + 32, 78, 22, C.bog1); // toxic water puddle
+    // Bog-Matriarch Hagra: Eldritch Swamp Hag-Queen & Translucent Leech-Brood Mother (NO CHEMICAL DRUMS)
+    surf.ellipse(cx, cy + 32, 78, 22, C.bog1);
     if (!isDead) {
-      surf.ellipse(cx, cy + 2, 62, 44, C.bog2); // torn tarp mound
-      // Rusted chemical drums embedded
-      surf.rect(cx - 48, cy - 12, 24, 32, C.rust2);
-      surf.rect(cx + 26, cy - 8, 24, 32, C.rust1);
-      // Pulsing pale sac
-      const sacR = isAtkA || isPhase ? 28 : 22;
-      surf.ellipse(cx, cy - 4, sacR, sacR - 4, C.bile2);
-      surf.ellipse(cx - 6, cy - 8, sacR - 8, sacR - 10, C.bone3);
+      for (const tx of [-58, -38, 38, 58]) {
+        const waveY = ((f + (tx > 0 ? 1 : 0)) % 2 === 0 ? -8 : 6);
+        surf.line(cx + (tx >> 1), cy + 16, cx + tx, cy - 6 + waveY, C.bog2, 6);
+        surf.ellipse(cx + tx, cy - 6 + waveY, 6, 6, C.soot);
+        surf.pset(cx + tx - 2, cy - 8 + waveY, C.bone3);
+        surf.pset(cx + tx + 2, cy - 4 + waveY, C.bone3);
+      }
+      const sacR = isAtkA || isPhase ? 38 : 32;
+      surf.ellipse(cx + 10, cy + 6 + bob, sacR + 8, sacR - 4, C.bog2);
+      surf.ellipse(cx + 12, cy + 4 + bob, sacR, sacR - 8, C.bile1);
+      surf.ellipse(cx + 14, cy + 2 + bob, sacR - 8, sacR - 14, isPhase ? C.blood2 : C.bile2);
+      surf.ellipse(cx + 8, cy - 2 + bob, 10, 8, C.bone3);
+
+      surf.ellipse(cx - 18, cy - 16 + bob, 22, 26, C.bog1);
+      surf.ellipse(cx - 18, cy - 42 + bob, 13, 12, C.bone3);
+      surf.line(cx - 26, cy - 48 + bob, cx - 52, cy - 68 + bob, C.bone2, 4);
+      surf.line(cx - 10, cy - 48 + bob, cx + 16, cy - 68 + bob, C.bone2, 4);
+      surf.rect(cx - 23, cy - 43 + bob, 4, 4, C.bile2);
+      surf.rect(cx - 15, cy - 43 + bob, 4, 4, C.bile2);
     } else {
       surf.ellipse(cx, cy + 24, 68, 16, C.bile1);
     }
   } else if (id === 'the_long_dry') {
-    // 256x192 Giant worm built from stacked rusted pipe rings, mouth ringed with drill bits, bursting from red sand
-    surf.ellipse(cx, cy + 44, 96, 18, C.rust2); // red sand mound
+    // Catacomb Elder-Wyrm Skarath: Subterranean Undead Bone-And-Obsidian Elder Dragon Wyrm (NO PIPES/DRILLS)
+    surf.ellipse(cx, cy + 44, 96, 18, C.rust1);
     if (!isDead) {
       const arch = isAtkA ? -16 : isAtkB ? 12 : 0;
       for (let seg = 0; seg < 6; seg++) {
         const sx = cx - 68 + seg * 26;
         const sy = cy + 26 - Math.sin((seg / 5) * Math.PI) * (64 - arch);
-        surf.ellipse(sx, sy, 24, 22, seg % 2 === 0 ? C.rust2 : C.slag2);
-        surf.ellipse(sx - 4, sy - 4, 18, 15, C.rust3);
+        surf.ellipse(sx, sy, 22, 20, C.bone2);
+        surf.ellipse(sx - 3, sy - 3, 15, 13, C.bone3);
+        surf.line(sx, sy - 18, sx - 10, sy - 32, C.bone3, 4);
+        if (seg >= 1 && seg <= 3 && !isPhase) {
+          surf.ellipse(sx, sy - 6, 18, 12, C.slag1);
+          surf.rect(sx - 6, sy - 10, 12, 4, C.brass3);
+        }
       }
-      // Mouth ringed with drill bits on head segment
       const hx = cx + 64;
       const hy = cy - 10 + arch;
-      surf.ellipse(hx, hy, 26, 26, C.slag1);
-      surf.ellipse(hx + 4, hy, 16, 16, C.soot);
+      surf.ellipse(hx, hy, 26, 22, C.bone3);
+      surf.ellipse(hx - 6, hy - 4, 18, 14, C.slag1);
+      surf.line(hx - 8, hy - 14, hx - 36, hy - 34, C.bone3, 5);
+      surf.line(hx - 4, hy + 14, hx - 28, hy + 28, C.bone2, 4);
+      surf.ellipse(hx + 8, hy + 2, 14, 14, C.soot);
+      surf.ellipse(hx + 8, hy + 2, 9, 9, isPhase ? C.blood2 : C.rust3);
+      surf.ellipse(hx + 8, hy + 2, 5, 5, C.brass3);
       for (let a = 0; a < 8; a++) {
         const ang = (a / 8) * Math.PI * 2;
-        surf.ellipse(hx + 4 + Math.cos(ang) * 18, hy + Math.sin(ang) * 18, 5, 4, C.brass3);
+        surf.ellipse(hx + 8 + Math.cos(ang) * 15, hy + 2 + Math.sin(ang) * 15, 4, 3, C.bone3);
       }
     } else {
-      surf.ellipse(cx, cy + 36, 86, 14, C.slag2);
+      surf.ellipse(cx, cy + 36, 86, 14, C.bone1);
     }
   }
   surf.outlineRegion(ox, oy, w, h, C.brass3);
